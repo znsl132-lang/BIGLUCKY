@@ -306,7 +306,7 @@ function load(){
     return s;
   }catch(e){ return null; }
 }
-function offTarget(e){ return (e.offN>=8&&e.offN<=20)?e.offN:(e.type==='정규직'?10:8); }
+function offTarget(e){ if(e.role==='교육') return 8; return (e.offN>=8&&e.offN<=20)?e.offN:(e.type==='정규직'?10:8); }
 function monthKey(){ return document.getElementById('monthPick').value; }
 
 // ---------- UI: 탭 ----------
@@ -935,21 +935,53 @@ function genOnce(y,m,nDays,reqs,mk,seed){
     for(let d=0;d<nDays;d++){ if(!isRestV(arr[d])) run++; else run=0; if(run>mx)mx=run; }
     if(mx>5) warns.push(`${e.name}: ${mx}일 연속 근무 발생`);
   });
-  // 7) 교육생: 팀장 근무에 동행 (같은 소속 팀장 우선, 인원 산정 미포함, 풀타임 라벨 없음)
+  // 7) 교육생: 휴무 8일 고정, 나머지는 전부 근무. 팀장(들)을 따라가되 가급적 인천공항 회피.
   S.emps.filter(isTrainee).forEach(tr=>{
     const arr=cells[tr.name];
-    const mentor=S.emps.find(o=>!isTrainee(o)&&o.title==='팀장'&&o.home===tr.home)
-              ||S.emps.find(o=>!isTrainee(o)&&o.title==='팀장');
-    if(!mentor){
+    const mentors=S.emps.filter(o=>!isTrainee(o)&&o.title==='팀장');
+    if(!mentors.length){
       warns.push(`${tr.name}: 직책이 '팀장'인 직원이 없어 교육생 동행 편성을 못 했습니다`);
       for(let d=0;d<nDays;d++) if(arr[d]===null) arr[d]=OFF;
       return;
     }
-    const ma=cells[mentor.name];
+    // 날짜별 동행 매장: 근무 중인 팀장의 매장, 인천공항은 다른 팀장이 있으면 회피
+    const target=Array(nDays).fill(null);
     for(let d=0;d<nDays;d++){
-      if(arr[d]!==null) continue; // 휴무요청·휴가 등 개별 요청은 유지
-      const v=ma[d];
-      arr[d]=isWork(v)?baseOf(v):(isHol[d]?'전휴무':OFF);
+      if(isHol[d]) continue;
+      const opts=mentors.map(o=>cells[o.name][d]).filter(v=>isWork(v)).map(v=>baseOf(v));
+      if(opts.length) target[d]=opts.find(s2=>s2!=='인천공항')||opts[0];
+    }
+    // 휴무 8일 배치 (요청 휴무 포함): 팀장 전원 부재일 > 인천공항만 가능한 날 > 주별 균형 순
+    let need=8-arr.filter(v=>v===OFF).length;
+    if(need<0) warns.push(`${tr.name}: 휴무 요청이 8일을 초과했습니다`);
+    let guard=200;
+    while(need>0&&guard-->0){
+      let best=-1,bs=1e9;
+      for(let d=0;d<nDays;d++){
+        if(arr[d]!==null||isHol[d]) continue;
+        const rank=target[d]===null?0:(target[d]==='인천공항'?1:2);
+        const wk=Math.floor(d/7);
+        let offW=0; for(let k2=0;k2<nDays;k2++) if(Math.floor(k2/7)===wk&&arr[k2]===OFF) offW++;
+        let run=1; for(let k2=d-1;k2>=0&&arr[k2]===OFF;k2--)run++; for(let k2=d+1;k2<nDays&&arr[k2]===OFF;k2++)run++;
+        const sc=rank*100+offW*10+(run>=3?40:0)+rng();
+        if(sc<bs){ bs=sc; best=d; }
+      }
+      if(best<0) break;
+      arr[best]=OFF; need--;
+    }
+    // 나머지는 전부 근무
+    for(let d=0;d<nDays;d++){
+      if(arr[d]!==null) continue;
+      if(target[d]){ arr[d]=target[d]; continue; }
+      // 팀장 전원 부재일: 그날 인원이 가장 많은 매장으로 (인천공항은 최후)
+      let bestSt=null,bc=-1e9;
+      S.stores.forEach(st=>{
+        const c=S.emps.reduce((a,o)=>a+((!isTrainee(o)&&isWork(cells[o.name][d])&&baseOf(cells[o.name][d])===st.n)?1:0),0);
+        if(c<=0) return;
+        const adj=st.n==='인천공항'?c-100:c;
+        if(adj>bc){ bc=adj; bestSt=st.n; }
+      });
+      arr[d]=bestSt||OFF;
     }
   });
   return {cells,warns};
