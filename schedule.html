@@ -165,6 +165,17 @@
 <!-- 특이사항 -->
 <div class="panel" id="panel1">
   <div class="card">
+    <h3>특이사항 임시 저장</h3>
+    <div class="rowbtns">
+      <button class="btn small" onclick="saveReqDraft()">임시 저장</button>
+      <select id="reqDraftSel"><option value="">저장본 선택…</option></select>
+      <button class="btn small" onclick="loadReqDraft()">불러오기</button>
+      <button class="btn small" onclick="applyReqDraft()">반영 (바로 생성)</button>
+      <button class="btn small gray" onclick="deleteReqDraft()">삭제</button>
+    </div>
+    <p class="hint">임시 저장: 현재 특이사항·전매장 휴무일을 보관 · 불러오기: 저장본으로 목록 교체 · 반영: 저장본 적용 후 바로 스케줄 생성</p>
+  </div>
+  <div class="card">
     <h3>전매장 휴무일 <span class="hint">(추석·설날 당일 등 — 전 직원이 쉬며, 기본 휴무 일수와 별도)</span></h3>
     <div class="rowbtns">
       <input type="text" id="holDays" placeholder="날짜 (예: 25)" style="width:120px">
@@ -435,6 +446,59 @@ function addHol(){
   save(); renderHols();
 }
 function delHol(i){ const mk=monthKey(); S.hols[mk].splice(i,1); save(); renderHols(); }
+// ---------- 특이사항 임시 저장 ----------
+function saveReqDraft(){
+  const mk=monthKey(); if(!mk){ alert('상단에서 대상 월을 먼저 선택하세요.'); return; }
+  if(!S.reqDrafts) S.reqDrafts={};
+  if(!S.reqDrafts[mk]) S.reqDrafts[mk]=[];
+  const n=(S.reqs[mk]||[]).length, hn=((S.hols&&S.hols[mk])||[]).length;
+  const label=new Date().toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})+` (특이사항 ${n}건${hn?`·전휴무 ${hn}일`:''})`;
+  S.reqDrafts[mk].push({label,reqs:JSON.parse(JSON.stringify(S.reqs[mk]||[])),hols:JSON.parse(JSON.stringify((S.hols&&S.hols[mk])||[]))});
+  if(S.reqDrafts[mk].length>10) S.reqDrafts[mk].shift();
+  save(); renderReqDrafts();
+  alert('특이사항 임시 저장 완료: '+label);
+}
+function renderReqDrafts(){
+  const sel=document.getElementById('reqDraftSel'); if(!sel) return;
+  const mk=monthKey();
+  const list=(S.reqDrafts&&S.reqDrafts[mk])||[];
+  sel.innerHTML='<option value="">저장본 선택…</option>'+list.map((x,i)=>`<option value="${i}">${i+1}. ${x.label}</option>`).join('');
+}
+function loadReqDraft(){
+  const sel=document.getElementById('reqDraftSel');
+  const i=sel.value; if(i===''){ alert('불러올 저장본을 먼저 선택하세요.'); return; }
+  const mk=monthKey();
+  if(!confirm('현재 특이사항 목록을 저장본으로 교체할까요?')) return;
+  const d=S.reqDrafts[mk][+i];
+  S.reqs[mk]=JSON.parse(JSON.stringify(d.reqs));
+  if(!S.hols) S.hols={};
+  S.hols[mk]=JSON.parse(JSON.stringify(d.hols||[]));
+  save(); renderReqs();
+}
+function applyReqDraft(){
+  const sel=document.getElementById('reqDraftSel');
+  const i=sel.value;
+  const mk=monthKey(); if(!mk){ alert('상단에서 대상 월을 먼저 선택하세요.'); return; }
+  if(i!==''){
+    const d=S.reqDrafts[mk][+i];
+    S.reqs[mk]=JSON.parse(JSON.stringify(d.reqs));
+    if(!S.hols) S.hols={};
+    S.hols[mk]=JSON.parse(JSON.stringify(d.hols||[]));
+    save(); renderReqs();
+  }
+  const btn=document.querySelectorAll('.tabs button')[2];
+  if(btn) showTab(2,btn);
+  generate();
+}
+function deleteReqDraft(){
+  const sel=document.getElementById('reqDraftSel');
+  const i=sel.value; if(i===''){ alert('삭제할 저장본을 먼저 선택하세요.'); return; }
+  const mk=monthKey();
+  const d=S.reqDrafts[mk][+i];
+  if(!confirm(`저장본 "${+i+1}. ${d.label}"을(를) 삭제할까요?`)) return;
+  S.reqDrafts[mk].splice(+i,1);
+  save(); renderReqDrafts();
+}
 function renderHols(){
   const mk=monthKey();
   const box=document.getElementById('holList');
@@ -1314,8 +1378,8 @@ setTimeout(endIntro,2800); // 약 3초 후 자동 전환
 (function(){
   const now=new Date(); now.setMonth(now.getMonth()+1);
   document.getElementById('monthPick').value=now.toISOString().slice(0,7);
-  document.getElementById('monthPick').addEventListener('change',()=>{ renderReqs(); renderDrafts(); });
-  renderStores(); renderEmps(); renderReqs(); renderDrafts();
+  document.getElementById('monthPick').addEventListener('change',()=>{ renderReqs(); renderDrafts(); renderReqDrafts(); });
+  renderStores(); renderEmps(); renderReqs(); renderDrafts(); renderReqDrafts();
 })();
 </script>
 </body>
