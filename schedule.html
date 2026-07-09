@@ -333,7 +333,7 @@ function renderEmps(){
     <td><select onchange="S.emps[${i}].role=this.value;if(this.value==='파트'||this.value==='교육'){S.emps[${i}].offN=8;}save();renderEmps()"><option value="" ${!e.role?'selected':''}>-</option><option ${e.role==='오픈'?'selected':''}>오픈</option><option ${e.role==='마감'?'selected':''}>마감</option><option ${e.role==='풀타임'?'selected':''}>풀타임</option><option ${e.role==='파트'?'selected':''}>파트</option><option ${e.role==='교육'?'selected':''}>교육</option></select></td>
     <td><select onchange="S.emps[${i}].type=this.value;S.emps[${i}].offN=null;save();renderEmps()"><option ${e.type==='정규직'?'selected':''}>정규직</option><option ${e.type==='파트타임'?'selected':''}>파트타임</option><option ${e.type==='교육'?'selected':''}>교육</option></select></td>
     <td><input type="number" min="8" max="20" value="${offTarget(e)}" style="width:56px" onchange="S.emps[${i}].offN=Math.min(20,Math.max(8,+this.value));save();renderEmps()">일</td>
-    <td><input type="text" value="${(e.pref||[]).join(',')}" placeholder="예: 논현,연수" style="width:120px" onchange="S.emps[${i}].pref=this.value.split(',').map(s=>s.trim()).filter(Boolean);save()"></td>
+    <td><input type="text" value="${(e.pref||[]).join(',')}" placeholder="예: 논현,연수,구월" style="width:240px" onchange="S.emps[${i}].pref=this.value.split(',').map(s=>s.trim()).filter(Boolean);save()"></td>
     <td><button class="btn small gray" onclick="delEmp(${i})">삭제</button></td></tr>`).join('');
   document.getElementById('reqEmp').innerHTML=S.emps.map(e=>`<option>${e.name}</option>`).join('');
 }
