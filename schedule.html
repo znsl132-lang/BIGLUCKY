@@ -445,7 +445,7 @@ function renderHols(){
 }
 
 // ---------- 스케줄 생성 ----------
-function generate(){
+function generate(keepExtra){
   const mk=monthKey(); if(!mk){ alert('상단에서 대상 월을 먼저 선택하세요.'); return; }
   const [y,m]=mk.split('-').map(Number);
   const nDays=new Date(y,m,0).getDate();
@@ -461,8 +461,22 @@ function generate(){
   if(consecW.length&&!confirm('다른 방법이 없어 6일 초과 연속 근무가 포함됐습니다.\n\n'+consecW.join('\n')+'\n\n이대로 편성할까요? (취소 시 생성 중단)')) return;
   sched={year:y,month:m,nDays,cells:bestCells};
   if(!S.extraLog) S.extraLog={};
-  S.extraLog[mk]=[]; save(); // 재생성 시 이번 달 부여 기록 초기화
+  if(!keepExtra){ S.extraLog[mk]=[]; } // 재생성 시 이번 달 부여 기록 초기화 (일괄 재편성 제외)
+  save();
   pendingExtra=[]; extraHidden=false;
+  // 중복 근무 경고: 2인 매장(로데오)을 제외하고 같은 매장에 2명 이상 편성된 날
+  const dupes=[];
+  for(let d=0;d<nDays;d++){
+    S.stores.filter(st=>st.need<2).forEach(st=>{
+      const names=S.emps.filter(e=>{
+        if(e.role==='교육') return false;
+        const v=bestCells[e.name]&&bestCells[e.name][d];
+        return v&&v!==''&&!['휴가','훈련','출장','전휴무'].includes(v)&&v.replace(/\((OP|CL)\)$/,'')===st.n;
+      }).map(e=>e.name);
+      if(names.length>=2) dupes.push(`${m}월 ${d+1}일 ${st.n}: ${names.length}명 근무 (${names.join(', ')})`);
+    });
+  }
+  if(dupes.length) alert('중복 근무 경고 — 같은 매장에 2명 이상 편성된 날\n\n'+dupes.slice(0,15).join('\n')+(dupes.length>15?'\n외 '+(dupes.length-15)+'건':''));
   renderSched(bestWarns);
   document.getElementById('dlBtn').style.display='';
   document.getElementById('saveBtn').style.display='';
@@ -496,9 +510,12 @@ function genOnce(y,m,nDays,reqs,mk,seed){
   const maxOffPerDay=Math.max(0,nAct-totalNeed);
   const dayOffCnt=Array(nDays).fill(0); // 휴무+휴가+훈련+출장 = 그날 빠지는 인원
   for(let d=0;d<nDays;d++) S.emps.forEach(e=>{ const v=cells[e.name][d]; if(v===OFF||['휴가','훈련','출장'].includes(v)) dayOffCnt[d]++; });
+  // 일괄 재편성으로 부여된 추가 휴무: 이 달 목표 휴무에 가산
+  const bonus={};
+  ((S.extraLog&&S.extraLog[mk])||[]).forEach(x=>{ if(x.bulk) bonus[x.name]=(bonus[x.name]||0)+1; });
   const needMap={};
   S.emps.forEach(e=>{
-    const n=offTarget(e)-cells[e.name].filter(v=>v===OFF).length;
+    const n=offTarget(e)+(bonus[e.name]||0)-cells[e.name].filter(v=>v===OFF).length;
     if(n<0) warns.push(`${e.name}: 휴무 요청이 목표(${offTarget(e)}일)보다 많습니다.`);
     needMap[e.name]=isTrainee(e)?0:Math.max(0,n); // 교육생은 팀장 동행이라 별도 배분 없음
   });
@@ -533,6 +550,16 @@ function genOnce(y,m,nDays,reqs,mk,seed){
       needMap[r.emp]-=2;
     }
   });
+  // 자체 인원 전용 매장(필요 1명·소속 2명 이상, 예: 계산): 외부 투입 금지 + 소속 휴무 중복 금지
+  const selfOnly=new Set(S.stores.filter(st=>st.need===1&&S.emps.filter(e=>e.home===st.n&&!isTrainee2(e)).length>=2).map(st=>st.n));
+  function isTrainee2(e){ return e.role==='교육'; }
+  const mateWorking=(e,d)=>{
+    if(!selfOnly.has(e.home)) return true;
+    return S.emps.some(o=>o!==e&&!isTrainee2(o)&&o.home===e.home&&(()=>{
+      const v=cells[o.name][d];
+      return v===null||(v&&v!==OFF&&!['휴가','훈련','출장','전휴무'].includes(v));
+    })());
+  };
   let remain=Object.values(needMap).reduce((a,b)=>a+b,0);
   let guard=remain*3;
   while(remain>0&&guard-->0){
@@ -543,6 +570,7 @@ function genOnce(y,m,nDays,reqs,mk,seed){
       for(let d=0;d<nDays;d++){
         if(arr[d]!==null) continue;
         if(dayOffCnt[d]>=maxOffPerDay) continue; // 하루 휴무 정원 초과 금지
+        if(!mateWorking(e,d)) continue; // 자체 인원 전용 매장: 동료 부재일엔 휴무 불가
         const wk=weekOf(d);
         const offInWeek=arr.filter((v,i)=>weekOf(i)===wk&&v===OFF).length;
         const mates=S.emps.filter(o=>o.name!==e.name&&o.home===e.home&&e.home!=='순환'&&!isTrainee(o));
@@ -596,8 +624,9 @@ function genOnce(y,m,nDays,reqs,mk,seed){
     });
     // 부족 매장에 순환 인력 투입
     const rotFree=()=>S.emps.filter(e=>e.home==='순환'&&!isTrainee(e)&&cells[e.name][d]===null);
-    // (a-1) 우선매장 지정 순환 인력을 해당 매장 부족분에 먼저 배치
+    // (a-1) 우선매장 지정 순환 인력을 해당 매장 부족분에 먼저 배치 (자체 인원 전용 매장 제외)
     S.stores.forEach(st=>{
+      if(selfOnly.has(st.n)) return;
       while(at[st.n].length<st.need){
         const cand=rotFree().filter(e=>prefRank(e,st.n)<99)
           .sort((a,b)=>workCnt[a.name]-workCnt[b.name])[0];
@@ -607,6 +636,7 @@ function genOnce(y,m,nDays,reqs,mk,seed){
     });
     // (a-2) 남은 부족분에 나머지 순환 인력 투입 (근무 적은 사람 우선)
     S.stores.forEach(st=>{
+      if(selfOnly.has(st.n)) return;
       while(at[st.n].length<st.need){
         const cand=rotFree().sort((a,b)=>workCnt[a.name]-workCnt[b.name])[0];
         if(!cand) break;
@@ -615,7 +645,7 @@ function genOnce(y,m,nDays,reqs,mk,seed){
     });
     // (b) 잉여 매장에서 부족 매장으로 차출 (순환 인력 우선, 역할 없는 사람 우선)
     for(let pass=0;pass<S.stores.length*3;pass++){
-      const shortSt=S.stores.find(st=>at[st.n].length<st.need);
+      const shortSt=S.stores.find(st=>at[st.n].length<st.need&&!selfOnly.has(st.n));
       if(!shortSt) break;
       let moved=false;
       for(const donor of S.stores){
@@ -638,7 +668,7 @@ function genOnce(y,m,nDays,reqs,mk,seed){
     // (c) 그래도 부족하면 비요청 휴무자 소환 (휴무는 여유 있는 날로 이동 — 일수 보존)
     S.stores.forEach(st=>{
       if(at[st.n].length<st.need){
-        const pool=S.emps.filter(e=>!isTrainee(e)&&allowed(e,st.n)&&(st.n===e.home||awayOK(e))&&cells[e.name][d]===OFF&&!fixedOff[e.name].has(d))
+        const pool=S.emps.filter(e=>!isTrainee(e)&&allowed(e,st.n)&&(!selfOnly.has(st.n)||e.home===st.n)&&(st.n===e.home||awayOK(e))&&cells[e.name][d]===OFF&&!fixedOff[e.name].has(d))
           .sort((a,b)=>prefRank(a,st.n)-prefRank(b,st.n));
         for(const p of pool){
           if(at[st.n].length>=st.need) break;
@@ -670,7 +700,7 @@ function genOnce(y,m,nDays,reqs,mk,seed){
     });
     // 남은 순환 미정 인력 → 그날 인원 적은 매장 지원
     rotFree().forEach(e=>{
-      const tgt=S.stores.slice().sort((a,b)=>((at[a.n].length-a.need)-(at[b.n].length-b.need))||(prefRank(e,a.n)-prefRank(e,b.n)))[0];
+      const tgt=S.stores.filter(s2=>!selfOnly.has(s2.n)).sort((a,b)=>((at[a.n].length-a.need)-(at[b.n].length-b.need))||(prefRank(e,a.n)-prefRank(e,b.n)))[0]||S.stores[0];
       cells[e.name][d]=tgt.n; at[tgt.n].push(e.name);
     });
     // 로데오 OP/CL 라벨: 역할이 오픈/마감인 사람만. 풀타임·그 외는 라벨 없이 풀타임 근무.
@@ -693,6 +723,13 @@ function genOnce(y,m,nDays,reqs,mk,seed){
         else { s=-1; len=0; }
       }
       if(brk<0) break;
+      // 자체 인원 전용 매장: 동료가 근무하는 날로 끊는 위치 조정
+      if(!mateWorking(e,brk)){
+        let nb=-1;
+        for(let k=brk+1;k<nDays&&!isRestV(arr[k]);k++) if(mateWorking(e,k)){ nb=k; break; }
+        if(nb<0) break;
+        brk=nb;
+      }
       // 회사 전체 휴무가 가장 몰린 날의 휴무를 근무로 전환 (월말 쏠림 방지)
       let o=-1,oCnt=-1;
       for(let k=0;k<nDays;k++){
@@ -718,7 +755,13 @@ function genOnce(y,m,nDays,reqs,mk,seed){
         else { if(len===6&&found<0) found=s; s=-1; len=0; }
       }
       if(found<0) break;
-      const brk=found+3;
+      let brk=found+3;
+      if(!mateWorking(e,brk)){
+        let nb=-1;
+        for(let k=found+1;k<found+6&&k<nDays;k++) if(k!==brk&&!isRestV(arr[k])&&mateWorking(e,k)){ nb=k; break; }
+        if(nb<0) break;
+        brk=nb;
+      }
       let o=-1,oCnt=-1;
       for(let k=0;k<nDays;k++){
         if(arr[k]!==OFF||fixedOff[e.name].has(k)) continue;
@@ -771,7 +814,7 @@ function genOnce(y,m,nDays,reqs,mk,seed){
     S.stores.forEach(st=>{
       let cur=cntAt(st.n,d);
       while(cur<st.need){
-        const cands=S.emps.filter(e=>!isTrainee(e)&&allowed(e,st.n)&&(st.n===e.home||awayOK(e))&&cells[e.name][d]===OFF&&!fixedOff[e.name].has(d))
+        const cands=S.emps.filter(e=>!isTrainee(e)&&allowed(e,st.n)&&(!selfOnly.has(st.n)||e.home===st.n)&&(st.n===e.home||awayOK(e))&&cells[e.name][d]===OFF&&!fixedOff[e.name].has(d))
           .sort((a,b)=>{
             const ra=a.home===st.n?0:(prefRank(a,st.n)<99?1:(a.home==='순환'?2:3));
             const rb=b.home===st.n?0:(prefRank(b,st.n)<99?1:(b.home==='순환'?2:3));
@@ -850,10 +893,98 @@ function genOnce(y,m,nDays,reqs,mk,seed){
 
 const STORE_PALETTE=['#ffe9ec','#fff3d6','#e3f2fd','#e8f5e9','#f3e5f5','#e0f7fa','#fff8e1','#efebe9','#ede7f6','#f1f8e9','#fde2ff','#e2fff3'];
 function storeColor(stn){ const i=S.stores.findIndex(s=>s.n===stn); return i<0?'#ffffff':STORE_PALETTE[i%STORE_PALETTE.length]; }
+let lastWarns=[];
+function selfOnlyStore(stn){
+  const st=S.stores.find(s=>s.n===stn);
+  if(!st||st.need!==1) return false;
+  return S.emps.filter(e=>e.home===stn&&e.role!=='교육').length>=2;
+}
+function warnLine(w,i){
+  if(typeof w==='object'&&w.type==='offsuggest'){
+    const btns=w.days.length
+      ?w.days.map(x=>x.sub
+        ?`<button class="btn small" style="margin:2px 3px" title="${x.sub.name}이(가) 대신 근무" onclick="applyOffFixSub('${w.name}',${x.d},'${x.sub.name}','${x.sub.to}',${i})">${x.d+1}일 (${x.label})</button>`
+        :`<button class="btn small" style="margin:2px 3px" title="이날을 휴무로 전환" onclick="applyOffFix('${w.name}',${x.d},${i})">${x.d+1}일 (${x.label})</button>`).join('')
+      :'<span class="hint">안전하게 뺄 수 있는 날이 없습니다</span>';
+    return `💤 ${w.name}: 줄어든 휴무 보충 추천 → `+btns;
+  }
+  const m=w.match(/^(\d+)월 (\d+)일 (.+?): (근무 인원 없음|최소 인원 미달|1명 풀타임)/);
+  if(!m||!sched) return '⚠ '+w;
+  const day=+m[2]-1, store=m[3];
+  const cands=S.emps.filter(e=>e.role!=='교육'&&sched.cells[e.name]&&sched.cells[e.name][day]===OFF&&(e.home==='순환'||e.home===store||(e.pref||[]).includes(store))&&(!selfOnlyStore(store)||e.home===store))
+    .sort((a,b)=>{
+      const ra=a.home===store?0:((a.pref||[]).includes(store)?1:2);
+      const rb=b.home===store?0:((b.pref||[]).includes(store)?1:2);
+      return ra-rb;
+    }).slice(0,4);
+  const btns=cands.length
+    ?cands.map(e=>`<button class="btn small" style="margin:2px 3px" title="휴무를 근무로 전환해 투입" onclick="applyWarnFix('${e.name}',${day},'${store}',${i})">${e.name} 투입</button>`).join('')
+    :'<span class="hint">투입 가능 후보 없음 (셀 클릭으로 수동 조정)</span>';
+  return '⚠ '+w+' → '+btns;
+}
+function applyWarnFix(name,day,store,idx){
+  const isRest=v=>v===OFF||v==='전휴무'||v==='휴가';
+  const arr=sched.cells[name];
+  // 투입 시 연속 근무 길이 계산 → 6일 초과면 동의 확인
+  let run=1;
+  for(let k=day-1;k>=0&&arr[k]!=null&&!isRest(arr[k]);k--)run++;
+  for(let k=day+1;k<sched.nDays&&arr[k]!=null&&!isRest(arr[k]);k++)run++;
+  if(run>6&&!confirm(`${name}님이 ${run}일 연속 근무가 됩니다. 그래도 투입할까요?`)) return;
+  arr[day]=store;
+  lastWarns.splice(idx,1);
+  // 줄어든 휴무 보충 추천: 본인이 근무 중이고 그 매장에 필요 인원보다 많이 출근하는 날
+  const strip=v=>v.replace(/\((OP|CL|PT)\)$/,'');
+  const sugg=[];
+  for(let k=0;k<sched.nDays;k++){
+    if(k===day) continue;
+    const v=arr[k];
+    if(!v||v===OFF||['휴가','훈련','출장','전휴무'].includes(v)) continue;
+    const b=strip(v);
+    const st=S.stores.find(s=>s.n===b); const need=st?st.need:1;
+    const cnt=S.emps.filter(o=>o.role!=='교육').filter(o=>{
+      const q=sched.cells[o.name][k];
+      return q&&q!==OFF&&!['휴가','훈련','출장','전휴무'].includes(q)&&strip(q)===b;
+    }).length;
+    if(cnt>need) sugg.push({d:k,label:`${b} ${cnt}명 출근`,cnt});
+  }
+  sugg.sort((a,b)=>b.cnt-a.cnt);
+  // 체인 추천: 다른 매장(예: 계산)에 2명 이상 출근하는 날, 그 잉여 인원이 대신 들어와주고 본인은 휴무
+  for(let k=0;k<sched.nDays&&sugg.length<5;k++){
+    if(k===day||sugg.some(x=>x.d===k)) continue;
+    const v=arr[k];
+    if(!v||v===OFF||['휴가','훈련','출장','전휴무'].includes(v)) continue;
+    const B=strip(v);
+    let done=false;
+    for(const st of S.stores){
+      if(done||st.n===B) continue;
+      const workers=S.emps.filter(o=>o.role!=='교육'&&o.name!==name).filter(o=>{
+        const q=sched.cells[o.name][k];
+        return q&&q!==OFF&&!['휴가','훈련','출장','전휴무'].includes(q)&&strip(q)===st.n;
+      });
+      if(workers.length<=st.need) continue;
+      const w=workers.find(o=>(o.home==='순환'||o.home===B||(o.pref||[]).includes(B))&&(!selfOnlyStore(B)||o.home===B));
+      if(w){ sugg.push({d:k,label:`${st.n} ${workers.length}명 → ${w.name} 대체`,cnt:workers.length,sub:{name:w.name,to:B}}); done=true; }
+    }
+  }
+  lastWarns.push({type:'offsuggest',name,days:sugg.slice(0,5)});
+  renderSched(lastWarns);
+}
+function applyOffFixSub(name,d,subName,to,idx){
+  sched.cells[name][d]=OFF;
+  sched.cells[subName][d]=to;
+  lastWarns.splice(idx,1);
+  renderSched(lastWarns);
+}
+function applyOffFix(name,d,idx){
+  sched.cells[name][d]=OFF;
+  lastWarns.splice(idx,1);
+  renderSched(lastWarns);
+}
 function renderSched(warns){
+  if(warns!==undefined) lastWarns=warns;
   const {year,month,nDays,cells}=sched;
   const wb=document.getElementById('warnBox');
-  wb.innerHTML=(warns&&warns.length)?`<div class="warn">⚠ ${warns.join('<br>⚠ ')}</div>`:'';
+  wb.innerHTML=lastWarns.length?`<div class="warn">${lastWarns.map((w,i)=>warnLine(w,i)).join('<br>')}</div>`:'';
   let h='<div class="legend">'+S.stores.map(st=>`<span class="lg"><i style="background:${storeColor(st.n)}"></i>${st.n}</span>`).join('')+
     '<span class="lg"><i style="background:#f4f4f5"></i>휴무</span><span class="lg"><i style="background:#fce4ec"></i>전휴무</span></div>';
   h+='<table id="schedTable"><thead><tr><th class="namecol">성명</th><th class="homecol">소속</th>';
@@ -862,6 +993,8 @@ function renderSched(warns){
     h+=`<th class="${wd===0?'sun':wd===6?'sat':''}">${d}<br><small>${DAYNAMES[wd]}</small></th>`;
   }
   h+='<th>휴무</th><th>휴가<br>훈련</th></tr></thead><tbody>';
+  const bonusMap={};
+  ((S.extraLog&&S.extraLog[monthKey()])||[]).forEach(x=>{ if(x.bulk) bonusMap[x.name]=(bonusMap[x.name]||0)+1; });
   S.emps.forEach(e=>{
     const arr=cells[e.name]; if(!arr) return;
     let offN=0,vacN=0;
@@ -879,10 +1012,11 @@ function renderSched(warns){
         const base=m2?m2[1].trim():v;
         style=`background:${storeColor(base)}`;
         txt=m2?`${base}<span class="opcl">${m2[2]}</span>`:v;
+        if(e.role==='교육') txt+=`<span class="opcl">PT</span>`;
       }
       row+=`<td class="${cls}" style="${style}" onclick="editCell('${e.name}',${d})">${txt}</td>`;
     }
-    row+=`<td class="sum"><b>${offN}</b>/${offTarget(e)}</td><td class="sum">${vacN}</td></tr>`;
+    row+=`<td class="sum"><b>${offN}</b>/${offTarget(e)+(bonusMap[e.name]||0)}</td><td class="sum">${vacN}</td></tr>`;
     h+=row;
   });
   h+='</tbody></table>';
@@ -929,7 +1063,14 @@ function renderExtra(){
     h+='<div style="margin:8px 0">대기 중: '+pendingExtra.map((n,i)=>`<span class="reqtag">${n} +1일<b onclick="unstageExtra(${i})">✕</b></span>`).join('')+'</div>';
     h+=`<div class="rowbtns"><button class="btn small" onclick="applyExtra()">스케줄에 반영</button></div>`;
   }
-  if(log.length) h+='<div>'+log.map((x,i)=>`<span class="reqtag">${x.name} ${x.day+1}일 추가휴무${x.sub?` (${x.sub.name} 대체)`:''}<b onclick="undoExtra(${i})">✕</b></span>`).join('')+'</div>';
+  if(total>0){
+    h+=`<div style="margin-top:10px;padding-top:10px;border-top:1px dashed #ddd">
+      <p class="hint" style="margin:0 0 6px">여러 명 한번에: 선택 후 일괄 부여하면 추가 휴무를 포함해 스케줄을 처음부터 다시 편성합니다.</p>
+      <div>${S.emps.filter(e=>e.role!=='교육').map(e=>`<label style="margin-right:10px;font-size:13px;white-space:nowrap"><input type="checkbox" class="exsel" value="${e.name}"> ${e.name}</label>`).join('')}</div>
+      <div class="rowbtns"><button class="btn small" onclick="applyExtraBulk()">선택 인원 일괄 부여 &amp; 재편성</button></div>
+    </div>`;
+  }
+  if(log.length) h+='<div>'+log.map((x,i)=>`<span class="reqtag">${x.name} ${x.bulk?'추가휴무 1일 (재편성)':`${x.day+1}일 추가휴무${x.sub?` (${x.sub.name} 대체)`:''}`}<b onclick="undoExtra(${i})">✕</b></span>`).join('')+'</div>';
   h+='</div>';
   box.innerHTML=h;
 }
@@ -969,7 +1110,7 @@ function planExtra(name){
     for(const st of S.stores){
       if(st.n===X) continue;
       if(cnt(st.n,d)>st.need){
-        const okTo=o=>o.home==='순환'||X===o.home||(o.pref||[]).includes(X);
+        const okTo=o=>(o.home==='순환'||X===o.home||(o.pref||[]).includes(X))&&(!selfOnlyStore(X)||o.home===X);
         const w=S.emps.find(o=>o.name!==name&&!isTr(o)&&okTo(o)&&isWork(cells[o.name][d])&&baseOf(cells[o.name][d])===st.n);
         if(w) return {day:d,store:X,sub:{name:w.name,day:d,from:cells[w.name][d],to:X}};
       }
@@ -1039,8 +1180,24 @@ function deleteDraft(){
   S.drafts[mk].splice(+i,1);
   save(); renderDrafts();
 }
+function applyExtraBulk(){
+  const checked=[...document.querySelectorAll('.exsel:checked')].map(c=>c.value);
+  if(!checked.length){ alert('일괄 부여할 인원을 먼저 선택하세요.'); return; }
+  const mk=monthKey();
+  if(!S.extraLog) S.extraLog={};
+  if(!S.extraLog[mk]) S.extraLog[mk]=[];
+  checked.forEach(n=>S.extraLog[mk].push({name:n,day:-1,bulk:true}));
+  save();
+  generate(true); // 부여분을 포함해 스케줄 재편성
+  alert('추가 휴무 +1일씩 반영해 스케줄을 다시 편성했습니다:\n'+checked.join(', '));
+}
 function undoExtra(i){
   const mk=monthKey(); const x=S.extraLog[mk][i];
+  if(x.bulk){
+    S.extraLog[mk].splice(i,1); save();
+    generate(true); // 취소분 반영해 재편성
+    return;
+  }
   if(sched&&sched.cells[x.name]&&sched.cells[x.name][x.day]===OFF) sched.cells[x.name][x.day]=x.val;
   if(x.sub&&sched&&sched.cells[x.sub.name]) sched.cells[x.sub.name][x.sub.day]=x.sub.from;
   S.extraLog[mk].splice(i,1); save(); renderSched([]);
@@ -1073,7 +1230,9 @@ function exportXlsx(){
     const row=['위베이프',e.name,e.title||'',e.home];
     let offN=0,vacN=0;
     arr.forEach(v=>{
-      row.push(v===OFF?'':v);
+      let out=v===OFF?'':v;
+      if(e.role==='교육'&&out&&!['휴가','훈련','출장','전휴무'].includes(out)) out+='(PT)';
+      row.push(out);
       if(v===OFF) offN++;
       if(v==='휴가'||v==='훈련') vacN++;
     });
@@ -1111,7 +1270,7 @@ function exportXlsx(){
       else if(v==='휴가'){ s.fill={fgColor:{rgb:'FFC7CE'}}; s.font={sz:10,color:{rgb:'9C0006'}}; }
       else if(v==='훈련'){ s.fill={fgColor:{rgb:'FFE9C9'}}; }
       else if(v==='출장'){ s.fill={fgColor:{rgb:'DDEBF7'}}; }
-      else { s.fill={fgColor:{rgb:exColor(v.replace(/\((OP|CL)\)$/,''))}}; }
+      else { s.fill={fgColor:{rgb:exColor(v.replace(/\((OP|CL|PT)\)$/,''))}}; }
     }
     cell.s=s;
   }
