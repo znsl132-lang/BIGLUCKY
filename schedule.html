@@ -1093,6 +1093,27 @@ function endIntro(){
 }
 setTimeout(endIntro,2800); // 약 3초 후 자동 전환
 
+// ---------- 웹앱 매니페스트 (홈 화면 추가 시 아이콘·이름) ----------
+(function(){
+  const LOGO='https://github.com/user-attachments/assets/7ac07bf2-100b-4129-8124-d389a21c5cd9';
+  const manifest={
+    name:'위베이프 직원 스케줄 생성기',
+    short_name:'위베이프',
+    start_url:location.href.split('#')[0],
+    display:'standalone',
+    background_color:'#ffffff',
+    theme_color:'#1a1a2e',
+    icons:[
+      {src:LOGO,sizes:'192x192',type:'image/png'},
+      {src:LOGO,sizes:'500x500',type:'image/png'}
+    ]
+  };
+  const link=document.createElement('link');
+  link.rel='manifest';
+  link.href=URL.createObjectURL(new Blob([JSON.stringify(manifest)],{type:'application/json'}));
+  document.head.appendChild(link);
+})();
+
 // ---------- init ----------
 (function(){
   const now=new Date(); now.setMonth(now.getMonth()+1);
