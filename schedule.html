@@ -64,6 +64,7 @@
   #schedTable .opcl { display: inline-block; margin-left: 2px; font-size: 9.5px; color: #555; background: rgba(255,255,255,.75); border-radius: 3px; padding: 0 3px; font-weight: bold; }
   #schedTable td.sum { cursor: default; background: #fafafa; }
   #schedTable td.dup { outline: 2px dashed #e94560; outline-offset: -2px; }
+  #schedTable td.lk { filter: blur(.7px) grayscale(1); opacity: .38; transition: opacity .25s, filter .25s; }
   #cellMenu { position: absolute; display: none; z-index: 10000; background: #fff; border: 1px solid #d9dbe3; border-radius: 12px; box-shadow: 0 12px 32px rgba(16,17,26,.2); padding: 10px; width: 290px; }
   #cellMenu .cm-title { font-size: 12.5px; font-weight: 700; color: #444; margin: 0 2px 8px; }
   #cellMenu .cm-grid { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -247,7 +248,7 @@
   <div class="card" id="rebuildCard" style="display:none">
     <h3>🔁 월중 재편성 <span class="hint">— 장기 결원·퇴사 등 대규모 변경 시</span></h3>
     <div class="rowbtns">
-      <label style="font-size:13px">재편성 시작일: <input type="number" id="rbDay" min="1" value="1" style="width:64px"> 일부터</label>
+      <label style="font-size:13px">재편성 시작일: <input type="number" id="rbDay" min="1" value="1" style="width:64px" oninput="updateLockPreview()"> 일부터</label>
       <button class="btn" onclick="rebuildSchedule()">재편성 실행</button>
     </div>
     <div id="rbEmps" style="font-size:13px;margin-top:4px"></div>
@@ -1171,7 +1172,25 @@ function renderChangeCards(){
   ac.style.display=''; rc.style.display='';
   document.getElementById('absEmp').innerHTML=S.emps.map(e=>`<option>${e.name}</option>`).join('');
   document.getElementById('rbDay').max=sched.nDays;
-  document.getElementById('rbEmps').innerHTML='한 달 전체 고정할 직원: '+S.emps.map(e=>`<label style="margin-right:10px;white-space:nowrap"><input type="checkbox" class="rbsel" value="${e.name}"> ${e.name}</label>`).join('');
+  const prev=new Set([...document.querySelectorAll('.rbsel:checked')].map(c=>c.value));
+  document.getElementById('rbEmps').innerHTML='한 달 전체 고정할 직원: '+S.emps.map(e=>`<label style="margin-right:10px;white-space:nowrap"><input type="checkbox" class="rbsel" value="${e.name}" ${prev.has(e.name)?'checked':''} onchange="updateLockPreview()"> ${e.name}</label>`).join('');
+  updateLockPreview();
+}
+// 고정 영역 미리보기: 실제 값은 그대로, 화면만 흐리게
+function updateLockPreview(){
+  const tbl=document.getElementById('schedTable'); if(!tbl) return;
+  const dayEl=document.getElementById('rbDay');
+  const from=Math.max(0,(+(dayEl&&dayEl.value)||1)-1); // 이 인덱스 미만 날짜는 고정
+  const locked=new Set([...document.querySelectorAll('.rbsel:checked')].map(c=>c.value));
+  tbl.querySelectorAll('tr[data-n]').forEach(tr=>{
+    const n=tr.getAttribute('data-n');
+    const rowLocked=locked.has(n);
+    tr.querySelectorAll('td').forEach(td=>{
+      const dAttr=td.getAttribute('data-d');
+      const dayLocked=dAttr!==null&&+dAttr<from;
+      td.classList.toggle('lk',rowLocked||dayLocked);
+    });
+  });
 }
 function selfOnlyStore(stn){
   const st=S.stores.find(s=>s.n===stn);
@@ -1282,7 +1301,7 @@ function renderSched(warns){
   S.emps.forEach(e=>{
     const arr=cells[e.name]; if(!arr) return;
     let offN=0,vacN=0;
-    let row=`<tr><td class="namecol"><b>${e.name}</b>${e.title?`<span class="ttl">${e.title}</span>`:''}</td><td class="homecol">${e.home}</td>`;
+    let row=`<tr data-n="${e.name}"><td class="namecol"><b>${e.name}</b>${e.title?`<span class="ttl">${e.title}</span>`:''}</td><td class="homecol">${e.home}</td>`;
     for(let d=0;d<nDays;d++){
       const v=arr[d];
       let cls='',style='',txt=v;
@@ -1299,7 +1318,7 @@ function renderSched(warns){
         txt=m2?`${base}<span class="opcl">${m2[2]}</span>`:v;
         if(e.role==='교육') txt+=`<span class="opcl">PT</span>`;
       }
-      row+=`<td class="${cls}${dupCells.has(e.name+'|'+d)?' dup':''}" style="${style}" onclick="editCell(event,'${e.name}',${d})">${txt}</td>`;
+      row+=`<td data-d="${d}" class="${cls}${dupCells.has(e.name+'|'+d)?' dup':''}" style="${style}" onclick="editCell(event,'${e.name}',${d})">${txt}</td>`;
     }
     row+=`<td class="sum"><b>${offN}</b>/${offTarget(e)+(bonusMap[e.name]||0)}</td><td class="sum">${vacN}</td></tr>`;
     h+=row;
