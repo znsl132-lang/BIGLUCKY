@@ -1439,7 +1439,9 @@ function warnLine(w,i){
   const m=w.match(/^(\d+)월 (\d+)일 (.+?): (근무 인원 없음|최소 인원 미달|1명 풀타임)/);
   if(!m||!sched) return '⚠ '+w;
   const day=+m[2]-1, store=m[3];
-  const cands=S.emps.filter(e=>e.role!=='교육'&&sched.cells[e.name]&&sched.cells[e.name][day]===OFF&&(e.home==='순환'||e.home===store||(e.pref||[]).includes(store))&&(!selfOnlyStore(store)||e.home===store||(e.pref||[]).includes(store)))
+  // 본인이 요청한 휴무는 투입 후보에서 제외 (요청 보호)
+  const reqOffSet=new Set((S.reqs[monthKey()]||[]).filter(r=>['휴무요청','휴가','병가','훈련','출장'].includes(r.type)).map(r=>r.emp+'|'+(r.day-1)));
+  const cands=S.emps.filter(e=>e.role!=='교육'&&!reqOffSet.has(e.name+'|'+day)&&sched.cells[e.name]&&sched.cells[e.name][day]===OFF&&(e.home==='순환'||e.home===store||(e.pref||[]).includes(store))&&(!selfOnlyStore(store)||e.home===store||(e.pref||[]).includes(store)))
     .sort((a,b)=>{
       const ra=a.home===store?0:((a.pref||[]).includes(store)?1:2);
       const rb=b.home===store?0:((b.pref||[]).includes(store)?1:2);
