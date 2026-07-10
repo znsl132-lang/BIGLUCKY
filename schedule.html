@@ -5,6 +5,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>위베이프 직원 스케줄 생성기</title>
+<meta name="robots" content="noindex, nofollow">
 <link rel="icon" type="image/png" href="https://github.com/user-attachments/assets/7ac07bf2-100b-4129-8124-d389a21c5cd9">
 <link rel="apple-touch-icon" href="https://github.com/user-attachments/assets/7ac07bf2-100b-4129-8124-d389a21c5cd9">
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
@@ -612,6 +613,21 @@ function genOnce(y,m,nDays,reqs,mk,seed,preset){
   const fromIdx=preset?preset.fromIdx:0;
   const lockedEmp=preset?preset.locked:new Set();
   const isLocked=(name,d)=>!!preset&&(d<fromIdx||lockedEmp.has(name));
+  // 전월 말 연속 근무 이월: 마지막 저장본 기준으로 각자 몇 일 연속 근무 중이었는지
+  const prevTail={};
+  (function(){
+    const pm=new Date(y,m-2,1);
+    const pmk=pm.getFullYear()+'-'+String(pm.getMonth()+1).padStart(2,'0');
+    const pc=S.lastSched&&S.lastSched[pmk];
+    if(!pc) return;
+    const restP=v=>v===''||v==='전휴무'||v==='휴가'||v==='병가';
+    S.emps.forEach(e=>{
+      const a=pc[e.name]; if(!a) return;
+      let c=0;
+      for(let i=a.length-1;i>=0;i--){ if(a[i]!=null&&!restP(a[i])) c++; else break; }
+      prevTail[e.name]=c;
+    });
+  })();
   const warns=[];
   // cells[emp][d-1] : null=미정, ''=휴무, '휴가'/'훈련'/'출장', 매장명, 매장명+'(OP)'/'(CL)'
   const cells={}; S.emps.forEach(e=>cells[e.name]=Array(nDays).fill(null));
@@ -883,11 +899,16 @@ function genOnce(y,m,nDays,reqs,mk,seed,preset){
   S.emps.filter(e=>!isTrainee(e)&&!lockedEmp.has(e.name)).forEach(e=>{
     const arr=cells[e.name];
     let guard=8;
+    const carry=prevTail[e.name]||0;
     while(guard-->0){
       let s=-1,len=0,brk=-1;
       for(let d=0;d<=nDays;d++){
         const rest=(d===nDays)||isRestV(arr[d]);
-        if(!rest){ if(s<0)s=d; len++; if(len>5){ brk=s+5; break; } }
+        if(!rest){
+          if(s<0)s=d; len++;
+          const allowed=(s===0?Math.max(0,5-carry):5); // 월초 연속은 전월 이월분 차감
+          if(len>allowed){ brk=s+allowed; break; }
+        }
         else { s=-1; len=0; }
       }
       if(brk<0) break;
@@ -912,7 +933,13 @@ function genOnce(y,m,nDays,reqs,mk,seed,preset){
     }
   });
   // 4.6) 소프트 교정 ①: 6일 연속 근무도 가급적 회피 (가능할 때만 5일 이하로 쪼갬)
-  const workRunAt=(arr,k)=>{ let len=1; for(let i=k-1;i>=0&&!isRestV(arr[i]);i--)len++; for(let i=k+1;i<nDays&&!isRestV(arr[i]);i++)len++; return len; };
+  const workRunAt=(arr,k,carry)=>{
+    let len=1,i=k-1;
+    for(;i>=0&&!isRestV(arr[i]);i--)len++;
+    if(i<0) len+=carry||0; // 월초까지 닿으면 전월 이월분 합산
+    for(let j=k+1;j<nDays&&!isRestV(arr[j]);j++)len++;
+    return len;
+  };
   S.emps.filter(e=>!isTrainee(e)&&!lockedEmp.has(e.name)).forEach(e=>{
     const arr=cells[e.name];
     let guard=6;
@@ -934,7 +961,7 @@ function genOnce(y,m,nDays,reqs,mk,seed,preset){
       let o=-1,oCnt=-1;
       for(let k=0;k<nDays;k++){
         if(arr[k]!==OFF||fixedOff[e.name].has(k)) continue;
-        if(workRunAt(arr,k)>5) continue; // 옮긴 자리에 새 6연속이 생기면 제외
+        if(workRunAt(arr,k,prevTail[e.name]||0)>5) continue; // 옮긴 자리에 새 6연속이 생기면 제외
         const tot=S.emps.reduce((a,q)=>a+((!isTrainee(q)&&cells[q.name][k]===OFF)?1:0),0);
         if(tot>oCnt){ oCnt=tot; o=k; }
       }
@@ -972,7 +999,7 @@ function genOnce(y,m,nDays,reqs,mk,seed,preset){
       }
       if(t<0) break; // 방법 없으면 유지 (가급적)
       arr[moveD]= e.home!=='순환' ? e.home : (((e.pref||[])[0])||S.stores[0].n);
-      if(workRunAt(arr,moveD)>5){ arr[moveD]=OFF; break; } // 새 초과 연속근무 방지
+      if(workRunAt(arr,moveD,prevTail[e.name]||0)>5){ arr[moveD]=OFF; break; } // 새 초과 연속근무 방지
       arr[t]=OFF;
     }
   });
@@ -1040,9 +1067,10 @@ function genOnce(y,m,nDays,reqs,mk,seed,preset){
   }
   // 6) 연속 근무 6일 초과 잔존 여부 확인 (있으면 생성 시 동의 팝업)
   S.emps.filter(e=>!isTrainee(e)).forEach(e=>{
-    const arr=cells[e.name]; let run=0,mx=0;
+    const arr=cells[e.name];
+    let run=prevTail[e.name]||0,mx=0; // 월초는 전월 이월분부터 시작
     for(let d=0;d<nDays;d++){ if(!isRestV(arr[d])) run++; else run=0; if(run>mx)mx=run; }
-    if(mx>5) warns.push(`${e.name}: ${mx}일 연속 근무 발생`);
+    if(mx>5) warns.push(`${e.name}: ${mx}일 연속 근무 발생${(prevTail[e.name]?' (전월 이월 포함)':'')}`);
   });
   // 7) 교육생: 휴무 8일 고정, 나머지는 전부 근무. 팀장(들)을 따라가되 가급적 인천공항 회피.
   S.emps.filter(isTrainee).forEach(tr=>{
@@ -1233,7 +1261,7 @@ function rdCandidates(d){
   const reqOff=new Set((S.reqs[mk]||[]).filter(r=>['휴무요청','휴가','병가','훈련','출장'].includes(r.type)).map(r=>r.emp+'|'+(r.day-1)));
   const recips=[...document.querySelectorAll('.rdsel:checked')].map(c=>c.value).filter(n=>n!==rdPlan.name);
   const cells=sched.cells;
-  const runIf=(rec,dd)=>{ let len=1; for(let k=dd-1;k>=0&&!rest(cells[rec][k]||'');k--)len++; for(let k=dd+1;k<sched.nDays&&!rest(cells[rec][k]||'');k++)len++; return len; };
+  const runIf=(rec,dd)=>{ let len=1,i=dd-1; for(;i>=0&&!rest(cells[rec][i]||'');i--)len++; if(i<0) len+=prevCarry(rec); for(let k=dd+1;k<sched.nDays&&!rest(cells[rec][k]||'');k++)len++; return len; };
   return recips.filter(rec=>{
     const e2=S.emps.find(x=>x.name===rec);
     if(!e2||e2.role==='교육') return false;
@@ -1256,8 +1284,9 @@ function buildRdPlanUI(){
   const restV=v=>v===''||v==='전휴무'||v==='휴가'||v==='병가';
   const runSim=(rec,dd)=>{
     const isRest=k=>!(added[rec]&&added[rec].has(k))&&restV(sched.cells[rec][k]||'');
-    let len=1;
-    for(let k=dd-1;k>=0&&!isRest(k);k--)len++;
+    let len=1,i=dd-1;
+    for(;i>=0&&!isRest(i);i--)len++;
+    if(i<0) len+=prevCarry(rec);
     for(let k=dd+1;k<sched.nDays&&!isRest(k);k++)len++;
     return len;
   };
@@ -1288,9 +1317,10 @@ function applyRedistribute(){
     const pick=sel?sel.value:'';
     if(!pick) return;
     if(!cells[pick]||cells[pick][w.d]!==OFF){ skipped.push(`${w.d+1}일 ${pick}: 이미 근무 중이라 제외`); return; }
-    // 순차 재검증: 이번 적용에서 앞서 배정된 날 포함해 5일 연속 초과 확인
-    let len=1;
-    for(let k=w.d-1;k>=0&&!restV(cells[pick][k]||'');k--)len++;
+    // 순차 재검증: 이번 적용에서 앞서 배정된 날 + 전월 이월 포함해 5일 연속 초과 확인
+    let len=1,ii=w.d-1;
+    for(;ii>=0&&!restV(cells[pick][ii]||'');ii--)len++;
+    if(ii<0) len+=prevCarry(pick);
     for(let k=w.d+1;k<sched.nDays&&!restV(cells[pick][k]||'');k++)len++;
     if(len>5){ skipped.push(`${w.d+1}일 ${pick}: 5일 연속 초과로 제외`); return; }
     cells[pick][w.d]=w.val;
@@ -1341,7 +1371,7 @@ function rebuildSchedule(){
   const day=+document.getElementById('rbDay').value;
   if(!(day>=1&&day<=sched.nDays)){ alert('재편성 시작일을 확인하세요.'); return; }
   const locked=new Set([...document.querySelectorAll('.rbsel:checked')].map(c=>c.value));
-  if(!confirm(`${day}일부터 재편성합니다.\n· ${day-1>=1?day-1+'일까지: 전원 현재 스케줄 유지':'처음부터 재편성'}\n· 한 달 전체 고정: ${locked.size?[...locked].join(', '):'없음'}\n\n진행할까요?`)) return;
+  if(!confirm(`${day}일부터 재편성합니다.\n· ${day-1>=1?day-1+'일까지: 전원 현재 스케줄 유지':'처음부터 재편성'}\n· 한 달 전체 고정: ${locked.size?[...locked].join(', '):'없음'}\n\n※ 재편성 구간의 수동 수정 내용은 사라집니다.\n진행할까요?`)) return;
   const preset={fromIdx:day-1,locked,cells:JSON.parse(JSON.stringify(sched.cells))};
   generate(true,preset);
 }
@@ -1381,6 +1411,18 @@ function selfOnlyStore(stn){
   if(!st||st.need!==1) return false;
   return S.emps.filter(e=>e.home===stn&&e.role!=='교육').length>=2;
 }
+// 전월 말 연속 근무 일수 (마지막 저장된 전월 스케줄 기준)
+function prevCarry(name){
+  if(!sched) return 0;
+  const pm=new Date(sched.year,sched.month-2,1);
+  const pmk=pm.getFullYear()+'-'+String(pm.getMonth()+1).padStart(2,'0');
+  const pc=S.lastSched&&S.lastSched[pmk]&&S.lastSched[pmk][name];
+  if(!pc) return 0;
+  const rest=v=>v===''||v==='전휴무'||v==='휴가'||v==='병가';
+  let c=0;
+  for(let i=pc.length-1;i>=0;i--){ if(pc[i]!=null&&!rest(pc[i])) c++; else break; }
+  return c;
+}
 function warnLine(w,i){
   if(typeof w==='object'&&w.type==='surplus'){
     const btns=w.names.map(n=>`<button class="btn small" style="margin:2px 3px" title="이날 휴무 처리 + 추가 휴무 기록" onclick="applySurplusOff('${n}',${w.d},${i})">${n} 휴무</button>`).join('');
@@ -1411,9 +1453,10 @@ function warnLine(w,i){
 function applyWarnFix(name,day,store,idx){
   const isRest=v=>v===OFF||v==='전휴무'||v==='휴가'||v==='병가';
   const arr=sched.cells[name];
-  // 투입 시 연속 근무 길이 계산 → 6일 초과면 동의 확인
-  let run=1;
-  for(let k=day-1;k>=0&&arr[k]!=null&&!isRest(arr[k]);k--)run++;
+  // 투입 시 연속 근무 길이 계산 (전월 이월 포함) → 5일 초과면 동의 확인
+  let run=1,kk=day-1;
+  for(;kk>=0&&arr[kk]!=null&&!isRest(arr[kk]);kk--)run++;
+  if(kk<0) run+=prevCarry(name);
   for(let k=day+1;k<sched.nDays&&arr[k]!=null&&!isRest(arr[k]);k++)run++;
   if(run>5&&!confirm(`${name}님이 ${run}일 연속 근무가 됩니다. 그래도 투입할까요?`)) return;
   arr[day]=store;
@@ -1490,7 +1533,8 @@ function warnStillValid(w){
   if(m){
     const arr=sched.cells[m[1]]; if(!arr) return false;
     const rest=v=>v===''||v==='전휴무'||v==='휴가'||v==='병가';
-    let run=0,mx=0; for(let d=0;d<sched.nDays;d++){ if(!rest(arr[d]))run++; else run=0; if(run>mx)mx=run; }
+    let run=prevCarry(m[1]),mx=0;
+    for(let d=0;d<sched.nDays;d++){ if(!rest(arr[d]))run++; else run=0; if(run>mx)mx=run; }
     return mx>5;
   }
   m=w.match(/^(.+?): 휴무 (\d+)일을 배치하지 못했습니다/);
@@ -1514,6 +1558,10 @@ function renderSched(warns){
   if(sched) pruneWarns(); // 해결된 경고는 자동으로 사라짐
   computeDupes(); // 중복근무 표시는 항상 최신 상태 유지
   const {year,month,nDays,cells}=sched;
+  // 최신 스케줄 자동 보관 (다음 달 생성 시 월 경계 연속근무 계산에 사용)
+  if(!S.lastSched) S.lastSched={};
+  S.lastSched[`${year}-${String(month).padStart(2,'0')}`]=cells;
+  save();
   const wb=document.getElementById('warnBox');
   wb.innerHTML=lastWarns.length?`<div class="warn">${lastWarns.map((w,i)=>warnLine(w,i)).join('<br>')}</div>`:'';
   let h='<div class="legend">'+S.stores.map(st=>`<span class="lg"><i style="background:${storeColor(st.n)}"></i>${st.n}</span>`).join('')+
@@ -1715,6 +1763,7 @@ function deleteDraft(){
 function applyExtraBulk(){
   const checked=[...document.querySelectorAll('.exsel:checked')].map(c=>c.value);
   if(!checked.length){ alert('일괄 부여할 인원을 먼저 선택하세요.'); return; }
+  if(!confirm('일괄 부여는 스케줄을 처음부터 다시 편성합니다.\n셀 클릭 수정·투입·결원 반영 등 수동 변경 내용은 사라집니다.\n\n계속할까요?')) return;
   const mk=monthKey();
   if(!S.extraLog) S.extraLog={};
   if(!S.extraLog[mk]) S.extraLog[mk]=[];
@@ -1868,7 +1917,9 @@ function importXlsx(){
       const y=+tm[1], m=+tm[2];
       const nDays=new Date(y,m,0).getDate();
       const c0=4; // 소속/성명/직책/구분 다음부터 날짜
-      const cells={}; const unknown=[];
+      const cells={}; const unknown=[]; const badVals=new Set();
+      const knownStores=new Set(S.stores.map(s2=>s2.n));
+      const knownAbs=['휴가','병가','훈련','출장','전휴무'];
       for(let r=3;r<aoa.length;r++){
         const row=aoa[r]; if(!row||!String(row[1]||'').trim()) continue;
         const name=String(row[1]).trim();
@@ -1877,6 +1928,7 @@ function importXlsx(){
           let v=row[c0+d];
           v=(v===undefined||v===null)?'':String(v).trim();
           v=v.replace(/\(PT\)$/,''); // 교육생 표기는 내부값에서 제거 (표시 때 자동 부여)
+          if(v&&!knownAbs.includes(v)&&!knownStores.has(v.replace(/\((OP|CL)\)$/,''))) badVals.add(v);
           arr.push(v);
         }
         cells[name]=arr;
@@ -1892,7 +1944,9 @@ function importXlsx(){
       showTools();
       const btn=document.querySelectorAll('.tabs button')[2];
       if(btn) showTab(2,btn);
-      alert(`불러오기 완료: ${y}년 ${m}월 스케줄\n③ 탭에서 수정 후 다시 엑셀로 다운로드하세요.`+(unknown.length?`\n\n⚠ 직원 목록에 없는 이름(표에 표시되지 않음): ${unknown.join(', ')}\n① 탭에서 직원을 추가하면 표시됩니다.`:''));
+      alert(`불러오기 완료: ${y}년 ${m}월 스케줄\n③ 탭에서 수정 후 다시 엑셀로 다운로드하세요.`
+        +(unknown.length?`\n\n⚠ 직원 목록에 없는 이름(표에 표시되지 않음): ${unknown.join(', ')}\n① 탭에서 직원을 추가하면 표시됩니다.`:'')
+        +(badVals.size?`\n\n⚠ 매장 목록에 없는 값 발견(오타 가능, 인원 집계·색상 제외됨): ${[...badVals].join(', ')}\n① 탭 매장 목록과 이름이 정확히 같아야 합니다.`:''));
     }catch(err){ alert('불러오기 실패: '+err); }
   };
   reader.readAsArrayBuffer(f);
