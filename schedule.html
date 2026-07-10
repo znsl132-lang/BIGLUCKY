@@ -171,7 +171,7 @@
   </div>
   <div class="card">
     <h3>직원 목록</h3>
-    <table id="empTable"><thead><tr><th>성명</th><th>직책</th><th>소속(매장/순환)</th><th>역할</th><th>고용형태</th><th>월 휴무(8~20)</th><th>우선 배치 매장<br><span class="hint">(쉼표 구분·순위 없음 / 고정 직원은 비워두면 담당 매장만 근무)</span></th><th></th></tr></thead><tbody></tbody></table>
+    <table id="empTable"><thead><tr><th>성명</th><th>직책</th><th>소속(매장/순환)</th><th>역할</th><th>고용형태</th><th>월 휴무(8~20)</th><th>우선 배치 매장<br><span class="hint">(쉼표 구분·순위 없음 / 고정 직원은 비워두면 담당 매장만 근무)</span></th><th>편성 제외 매장<br><span class="hint">(쉼표 구분 — 이 매장엔 절대 배치 안 됨)</span></th><th></th></tr></thead><tbody></tbody></table>
     <div class="rowbtns">
       <input type="text" id="newEmpName" placeholder="이름">
       <button class="btn small" onclick="addEmp()">직원 추가</button>
@@ -416,6 +416,7 @@ function renderEmps(){
     <td><select onchange="S.emps[${i}].type=this.value;S.emps[${i}].offN=null;save();renderEmps()"><option ${e.type==='정규직'?'selected':''}>정규직</option><option ${e.type==='파트타임'?'selected':''}>파트타임</option><option ${e.type==='교육'?'selected':''}>교육</option></select></td>
     <td><input type="number" min="8" max="20" value="${offTarget(e)}" style="width:56px" onchange="S.emps[${i}].offN=Math.min(20,Math.max(8,+this.value));save();renderEmps()">일</td>
     <td><input type="text" value="${(e.pref||[]).join(',')}" placeholder="예: 논현,연수,구월" style="width:240px" onchange="S.emps[${i}].pref=this.value.split(',').map(s=>s.trim()).filter(Boolean);save()"></td>
+    <td><input type="text" value="${(e.ban||[]).join(',')}" placeholder="예: 인천공항" style="width:160px" onchange="S.emps[${i}].ban=this.value.split(',').map(s=>s.trim()).filter(Boolean);save()"></td>
     <td><button class="btn small gray" onclick="delEmp(${i})">삭제</button></td></tr>`).join('');
   document.getElementById('reqEmp').innerHTML=S.emps.map(e=>`<option>${e.name}</option>`).join('');
 }
@@ -748,6 +749,7 @@ function genOnce(y,m,nDays,reqs,mk,seed,preset){
   // 우선매장: 순위 없음(포함 여부만). 고정 직원은 담당+우선매장만 근무 가능, 우선매장 비면 담당 매장만.
   const prefRank=(e,stn)=>((e.pref||[]).includes(stn)?0:99);
   const allowed=(e,stn)=>{
+    if((e.ban||[]).includes(stn)) return false; // 편성 제외 매장은 절대 배치 금지
     if(e.home==='순환') return true;
     return stn===e.home||(e.pref||[]).includes(stn);
   };
@@ -793,7 +795,7 @@ function genOnce(y,m,nDays,reqs,mk,seed,preset){
     // (a-1) 우선매장 지정 순환 인력을 해당 매장 부족분에 먼저 배치 (자체 인원 매장도 pref 보유자는 가능)
     S.stores.forEach(st=>{
       while(at[st.n].length<st.need){
-        const cand=rotFree().filter(e=>prefRank(e,st.n)<99)
+        const cand=rotFree().filter(e=>prefRank(e,st.n)<99&&allowed(e,st.n))
           .sort((a,b)=>workCnt[a.name]-workCnt[b.name])[0];
         if(!cand) break;
         cells[cand.name][d]=st.n; at[st.n].push(cand.name);
@@ -803,7 +805,7 @@ function genOnce(y,m,nDays,reqs,mk,seed,preset){
     S.stores.forEach(st=>{
       if(selfOnly.has(st.n)) return;
       while(at[st.n].length<st.need){
-        const cand=rotFree().sort((a,b)=>workCnt[a.name]-workCnt[b.name])[0];
+        const cand=rotFree().filter(e=>allowed(e,st.n)).sort((a,b)=>workCnt[a.name]-workCnt[b.name])[0];
         if(!cand) break;
         cells[cand.name][d]=st.n; at[st.n].push(cand.name);
       }
@@ -811,7 +813,7 @@ function genOnce(y,m,nDays,reqs,mk,seed,preset){
     // (a-3) 자체 인원 매장의 잉여 멤버: 본인 우선배치매장 부족분 지원
     S.stores.forEach(st=>{
       while(at[st.n].length<st.need){
-        const cand=S.emps.filter(e=>!isTrainee(e)&&e.home!=='순환'&&selfOnly.has(e.home)&&cells[e.name][d]===null&&(e.pref||[]).includes(st.n))
+        const cand=S.emps.filter(e=>!isTrainee(e)&&e.home!=='순환'&&selfOnly.has(e.home)&&cells[e.name][d]===null&&(e.pref||[]).includes(st.n)&&allowed(e,st.n))
           .sort((a,b)=>workCnt[a.name]-workCnt[b.name])[0];
         if(!cand) break;
         cells[cand.name][d]=st.n; at[st.n].push(cand.name);
@@ -819,7 +821,7 @@ function genOnce(y,m,nDays,reqs,mk,seed,preset){
     });
     // (a-4) 그래도 남은 잉여 멤버: 우선배치매장 중 인원 여유 적은 곳으로 지원 (없으면 홈 잉여)
     S.emps.filter(e=>!isTrainee(e)&&e.home!=='순환'&&selfOnly.has(e.home)&&cells[e.name][d]===null).forEach(e=>{
-      const opts=(e.pref||[]).map(p=>S.stores.find(s2=>s2.n===p)).filter(Boolean);
+      const opts=(e.pref||[]).map(p=>S.stores.find(s2=>s2.n===p)).filter(Boolean).filter(s2=>allowed(e,s2.n));
       const tgt=opts.sort((a,b)=>(at[a.n].length-a.need)-(at[b.n].length-b.need))[0];
       const stn=tgt?tgt.n:e.home;
       cells[e.name][d]=stn; at[stn].push(e.name);
@@ -884,7 +886,7 @@ function genOnce(y,m,nDays,reqs,mk,seed,preset){
     });
     // 남은 순환 미정 인력 → 그날 인원 적은 매장 지원
     rotFree().forEach(e=>{
-      const tgt=S.stores.filter(s2=>!selfOnly.has(s2.n)).sort((a,b)=>((at[a.n].length-a.need)-(at[b.n].length-b.need))||(prefRank(e,a.n)-prefRank(e,b.n)))[0]||S.stores[0];
+      const tgt=S.stores.filter(s2=>!selfOnly.has(s2.n)&&allowed(e,s2.n)).sort((a,b)=>((at[a.n].length-a.need)-(at[b.n].length-b.need))||(prefRank(e,a.n)-prefRank(e,b.n)))[0]||S.stores.find(s2=>allowed(e,s2.n))||S.stores[0];
       cells[e.name][d]=tgt.n; at[tgt.n].push(e.name);
     });
     // 로데오 OP/CL 라벨: 역할이 오픈/마감인 사람만. 풀타임·그 외는 라벨 없이 풀타임 근무.
@@ -1086,7 +1088,7 @@ function genOnce(y,m,nDays,reqs,mk,seed,preset){
     const target=Array(nDays).fill(null);
     for(let d=0;d<nDays;d++){
       if(isHol[d]) continue;
-      const opts=mentors.map(o=>cells[o.name][d]).filter(v=>isWork(v)).map(v=>baseOf(v));
+      const opts=mentors.map(o=>cells[o.name][d]).filter(v=>isWork(v)).map(v=>baseOf(v)).filter(s2=>!(tr.ban||[]).includes(s2));
       if(opts.length) target[d]=opts.find(s2=>s2!=='인천공항')||opts[0];
     }
     // 휴무 8일 배치 (요청 휴무 포함): 팀장 전원 부재일 > 인천공항만 가능한 날 > 주별 균형 순
@@ -1114,6 +1116,7 @@ function genOnce(y,m,nDays,reqs,mk,seed,preset){
       // 팀장 전원 부재일: 그날 인원이 가장 많은 매장으로 (인천공항은 최후)
       let bestSt=null,bc=-1e9;
       S.stores.forEach(st=>{
+        if((tr.ban||[]).includes(st.n)) return;
         const c=S.emps.reduce((a,o)=>a+((!isTrainee(o)&&isWork(cells[o.name][d])&&baseOf(cells[o.name][d])===st.n)?1:0),0);
         if(c<=0) return;
         const adj=st.n==='인천공항'?c-100:c;
@@ -1265,6 +1268,7 @@ function rdCandidates(d){
   return recips.filter(rec=>{
     const e2=S.emps.find(x=>x.name===rec);
     if(!e2||e2.role==='교육') return false;
+    if((e2.ban||[]).includes(sched.cells[rdPlan.name][d]?String(sched.cells[rdPlan.name][d]).replace(/\((OP|CL|PT)\)$/,''):'')) return false; // 편성 제외 매장
     if(cells[rec][d]!==OFF) return false;
     if(reqOff.has(rec+'|'+d)) return false;
     if(runIf(rec,d)>5) return false;
@@ -1441,7 +1445,7 @@ function warnLine(w,i){
   const day=+m[2]-1, store=m[3];
   // 본인이 요청한 휴무는 투입 후보에서 제외 (요청 보호)
   const reqOffSet=new Set((S.reqs[monthKey()]||[]).filter(r=>['휴무요청','휴가','병가','훈련','출장'].includes(r.type)).map(r=>r.emp+'|'+(r.day-1)));
-  const cands=S.emps.filter(e=>e.role!=='교육'&&!reqOffSet.has(e.name+'|'+day)&&sched.cells[e.name]&&sched.cells[e.name][day]===OFF&&(e.home==='순환'||e.home===store||(e.pref||[]).includes(store))&&(!selfOnlyStore(store)||e.home===store||(e.pref||[]).includes(store)))
+  const cands=S.emps.filter(e=>e.role!=='교육'&&!(e.ban||[]).includes(store)&&!reqOffSet.has(e.name+'|'+day)&&sched.cells[e.name]&&sched.cells[e.name][day]===OFF&&(e.home==='순환'||e.home===store||(e.pref||[]).includes(store))&&(!selfOnlyStore(store)||e.home===store||(e.pref||[]).includes(store)))
     .sort((a,b)=>{
       const ra=a.home===store?0:((a.pref||[]).includes(store)?1:2);
       const rb=b.home===store?0:((b.pref||[]).includes(store)?1:2);
@@ -1693,7 +1697,7 @@ function planExtra(name){
     for(const st of S.stores){
       if(st.n===X) continue;
       if(cnt(st.n,d)>st.need){
-        const okTo=o=>(o.home==='순환'||X===o.home||(o.pref||[]).includes(X))&&(!selfOnlyStore(X)||o.home===X||(o.pref||[]).includes(X));
+        const okTo=o=>!(o.ban||[]).includes(X)&&(o.home==='순환'||X===o.home||(o.pref||[]).includes(X))&&(!selfOnlyStore(X)||o.home===X||(o.pref||[]).includes(X));
         const w=S.emps.find(o=>o.name!==name&&!isTr(o)&&okTo(o)&&isWork(cells[o.name][d])&&baseOf(cells[o.name][d])===st.n);
         if(w) return {day:d,store:X,sub:{name:w.name,day:d,from:cells[w.name][d],to:X}};
       }
