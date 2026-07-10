@@ -109,6 +109,9 @@
   .tabs button.active { color:var(--ink); border-bottom-color:var(--gold); }
   .card { border-radius:14px; border:1px solid var(--line); box-shadow:0 1px 2px rgba(16,17,26,.04), 0 10px 28px rgba(16,17,26,.05); padding:18px 20px; }
   .card h3 { font-size:15px; font-weight:700; letter-spacing:-.2px; }
+  details.card summary { font-size:15px; font-weight:700; letter-spacing:-.2px; cursor:pointer; user-select:none; list-style-position:inside; }
+  details.card summary:hover { color:#000; }
+  details.card[open] summary { margin-bottom:4px; }
   .btn { background:var(--ink); border-radius:10px; font-weight:600; box-shadow:0 2px 10px rgba(20,21,31,.18); transition:transform .16s, box-shadow .16s, background .16s; }
   .btn:hover { transform:translateY(-1px); box-shadow:0 6px 18px rgba(20,21,31,.24); background:var(--ink2); }
   .btn.gray { background:#fff; color:#3a3b47; border:1px solid #d9dbe3; box-shadow:none; }
@@ -224,9 +227,6 @@
 <div class="panel" id="panel2">
   <div class="rowbtns">
     <button class="btn" onclick="generate()">스케줄 생성</button>
-    <button class="btn gray" onclick="exportXlsx()" id="dlBtn" style="display:none">엑셀 다운로드</button>
-    <button class="btn gray" onclick="reviewDupes()" id="dupBtn" style="display:none">중복근무 검토</button>
-    <button class="btn gray" onclick="recommendOffs()" id="recBtn" style="display:none">휴무자 추천</button>
     <button class="btn gray" onclick="saveDraft()" id="saveBtn" style="display:none">임시 저장</button>
     <select id="draftSel"><option value="">저장본 선택…</option></select>
     <button class="btn small" onclick="loadDraft()">불러오기</button>
@@ -235,19 +235,19 @@
   </div>
   <div id="warnBox"></div>
   <div id="extraBox"></div>
-  <div class="card" id="absenceCard" style="display:none">
-    <h3>🚑 긴급 결원·변경 반영 <span class="hint">— 재생성 없이 현재 스케줄만 국소 수정</span></h3>
-    <div class="rowbtns">
+  <details class="card" id="absenceCard" style="display:none">
+    <summary>🚑 긴급 결원·변경 반영 <span class="hint">— 재생성 없이 현재 스케줄만 국소 수정</span></summary>
+    <div class="rowbtns" style="margin-top:10px">
       <select id="absEmp"></select>
       <select id="absType"><option>병가</option><option>휴가</option><option>출장</option><option>훈련</option><option value="휴무">개인 휴무</option></select>
       <input type="text" id="absDays" placeholder="날짜 (예: 12, 15-17)" style="width:150px">
       <button class="btn small" onclick="applyAbsence()">반영</button>
     </div>
     <p class="hint">해당 날짜가 결원 처리되고, 빈자리가 생기면 경고창에 투입 추천 버튼이 뜹니다. ② 특이사항에도 자동 기록돼 재생성해도 유지됩니다.</p>
-  </div>
-  <div class="card" id="rebuildCard" style="display:none">
-    <h3>🚨 결원 근무 분배 <span class="hint">— 퇴사·장기 병가 시 그 사람의 근무를 선택 인원에게 인수인계</span></h3>
-    <div class="rowbtns">
+  </details>
+  <details class="card" id="rebuildCard" style="display:none">
+    <summary>🚨 결원 근무 분배 · 월중 재편성 <span class="hint">— 퇴사·장기 병가 인수인계 / 고정 후 재생성</span></summary>
+    <div class="rowbtns" style="margin-top:10px">
       <select id="rdEmp"></select>
       <select id="rdType"><option>병가</option><option>휴가</option><option value="휴무">퇴사 (빈칸 처리)</option></select>
       <input type="text" id="rdDays" placeholder="기간 (예: 15-31)" style="width:140px">
@@ -263,8 +263,16 @@
     </div>
     <div id="rbEmps" style="font-size:13px;margin-top:4px"></div>
     <p class="hint">시작일 전날까지는 전원 그대로 유지되고, 체크한 직원은 한 달 전체가 고정됩니다(회색 표시 미리보기).</p>
+  </details>
+  <div class="rowbtns" id="tableTools" style="display:none">
+    <button class="btn gray" onclick="reviewDupes()">중복근무 검토</button>
+    <button class="btn gray" onclick="reviewGaps()">공백매장 검토</button>
+    <button class="btn gray" onclick="recommendOffs()">휴무자 추천</button>
   </div>
   <div class="schedwrap" id="schedBox"></div>
+  <div class="rowbtns" id="bottomBar" style="display:none;margin-top:12px">
+    <button class="btn" onclick="exportXlsx()" id="dlBtn">📥 엑셀 다운로드</button>
+  </div>
 </div>
 
 <!-- 스케줄 변경 (엑셀 불러오기) -->
@@ -590,10 +598,7 @@ function generate(keepExtra,preset){
   const dupes=computeDupes();
   if(dupes.length) alert('중복 근무 경고 — 같은 매장에 2명 이상 편성된 날\n(표에서 빨간 점선으로 표시됩니다)\n\n'+dupes.slice(0,15).join('\n')+(dupes.length>15?'\n외 '+(dupes.length-15)+'건':''));
   renderSched(bestWarns);
-  document.getElementById('dlBtn').style.display='';
-  document.getElementById('saveBtn').style.display='';
-  document.getElementById('dupBtn').style.display='';
-  document.getElementById('recBtn').style.display='';
+  showTools();
 }
 function genOnce(y,m,nDays,reqs,mk,seed,preset){
   let _rs=(y*10000+m*100+(seed||0))|0;
@@ -1086,6 +1091,15 @@ function computeDupes(){
   }
   return list;
 }
+function reviewGaps(){
+  if(!sched){ alert('먼저 스케줄을 생성하세요.'); return; }
+  const holes=coverageWarnsForDays([...Array(sched.nDays).keys()]);
+  if(!holes.length){ alert('공백 매장 없음 — 모든 매장이 최소 인원을 충족합니다.'); return; }
+  lastWarns=lastWarns.concat(holes);
+  renderSched(lastWarns);
+  alert(`공백/미달 ${holes.length}건을 찾았습니다.\n경고창의 투입 추천 버튼으로 바로 처리할 수 있습니다.`);
+}
+function showTools(){ ['saveBtn','tableTools','bottomBar'].forEach(id=>{ const b=document.getElementById(id); if(b) b.style.display=''; }); }
 function reviewDupes(){
   if(!sched){ alert('먼저 스케줄을 생성하세요.'); return; }
   const list=computeDupes();
@@ -1131,8 +1145,10 @@ function applySurplusOff(name,d,idx){
 // ---------- 모드 A: 긴급 결원·변경 (국소 수정) ----------
 function coverageWarnsForDays(dayIdxs){
   const strip=v=>v.replace(/\((OP|CL|PT)\)$/,'');
+  const hols=(S.hols&&S.hols[monthKey()])||[];
   const out=[];
   dayIdxs.forEach(d=>{
+    if(hols.includes(d+1)) return; // 전매장 휴무일 제외
     S.stores.forEach(st=>{
       const cnt=S.emps.filter(e=>e.role!=='교육').filter(e=>{
         const v=sched.cells[e.name][d];
@@ -1586,8 +1602,7 @@ function loadDraft(){
   sched=JSON.parse(JSON.stringify(S.drafts[mk][+i].sched));
   pendingExtra=[]; extraHidden=false;
   renderSched([]);
-  document.getElementById('dlBtn').style.display='';
-  document.getElementById('saveBtn').style.display='';
+  showTools();
 }
 function deleteDraft(){
   const sel=document.getElementById('draftSel');
@@ -1775,7 +1790,7 @@ function importXlsx(){
       sched={year:y,month:m,nDays,cells};
       pendingExtra=[]; extraHidden=false;
       renderSched([]);
-      ['dlBtn','saveBtn','dupBtn','recBtn'].forEach(id=>{ const b=document.getElementById(id); if(b) b.style.display=''; });
+      showTools();
       const btn=document.querySelectorAll('.tabs button')[2];
       if(btn) showTab(2,btn);
       alert(`불러오기 완료: ${y}년 ${m}월 스케줄\n③ 탭에서 수정 후 다시 엑셀로 다운로드하세요.`+(unknown.length?`\n\n⚠ 직원 목록에 없는 이름(표에 표시되지 않음): ${unknown.join(', ')}\n① 탭에서 직원을 추가하면 표시됩니다.`:''));
