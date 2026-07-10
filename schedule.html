@@ -63,6 +63,12 @@
   #schedTable .opcl { display: inline-block; margin-left: 2px; font-size: 9.5px; color: #555; background: rgba(255,255,255,.75); border-radius: 3px; padding: 0 3px; font-weight: bold; }
   #schedTable td.sum { cursor: default; background: #fafafa; }
   #schedTable td.dup { outline: 2px dashed #e94560; outline-offset: -2px; }
+  #cellMenu { position: absolute; display: none; z-index: 10000; background: #fff; border: 1px solid #d9dbe3; border-radius: 12px; box-shadow: 0 12px 32px rgba(16,17,26,.2); padding: 10px; width: 290px; }
+  #cellMenu .cm-title { font-size: 12.5px; font-weight: 700; color: #444; margin: 0 2px 8px; }
+  #cellMenu .cm-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+  #cellMenu .cm-item { border: 1px solid rgba(0,0,0,.1); border-radius: 8px; padding: 6px 10px; font-size: 12.5px; cursor: pointer; font-weight: 600; color: #222; }
+  #cellMenu .cm-item:hover { filter: brightness(.92); }
+  #cellMenu .cm-cur { border: 2px solid #14151f; }
   .legend { display: flex; flex-wrap: wrap; gap: 12px; margin: 10px 2px; font-size: 12px; color: #555; }
   .legend .lg { display: inline-flex; align-items: center; gap: 5px; }
   .legend .lg i { width: 13px; height: 13px; border-radius: 3px; display: inline-block; border: 1px solid #ddd; }
@@ -129,6 +135,7 @@
        onerror="this.remove();document.getElementById('introTxt').style.display='flex'">
   <div class="intro-logo" id="introTxt" style="display:none"><span>WE</span><span class="vv">V</span><span>APE</span></div>
 </div>
+<div id="cellMenu"></div>
 <header>
   <h1>위베이프 직원 스케줄 생성기</h1>
   <label style="font-size:14px">대상 월 <input type="month" id="monthPick"></label>
@@ -1172,7 +1179,7 @@ function renderSched(warns){
         txt=m2?`${base}<span class="opcl">${m2[2]}</span>`:v;
         if(e.role==='교육') txt+=`<span class="opcl">PT</span>`;
       }
-      row+=`<td class="${cls}${dupCells.has(e.name+'|'+d)?' dup':''}" style="${style}" onclick="editCell('${e.name}',${d})">${txt}</td>`;
+      row+=`<td class="${cls}${dupCells.has(e.name+'|'+d)?' dup':''}" style="${style}" onclick="editCell(event,'${e.name}',${d})">${txt}</td>`;
     }
     row+=`<td class="sum"><b>${offN}</b>/${offTarget(e)+(bonusMap[e.name]||0)}</td><td class="sum">${vacN}</td></tr>`;
     h+=row;
@@ -1361,14 +1368,43 @@ function undoExtra(i){
   S.extraLog[mk].splice(i,1); save(); renderSched([]);
 }
 
-function editCell(name,d){
-  const opts=['(휴무)','전휴무','휴가','훈련','출장',...S.stores.map(s=>s.n),...S.stores.filter(s=>s.need>=2).flatMap(s=>[s.n+'(OP)',s.n+'(CL)'])];
-  const cur=sched.cells[name][d]||'(휴무)';
-  const pick=prompt(`${name} ${d+1}일 — 입력값 선택:\n${opts.join(' / ')}`,cur);
-  if(pick===null) return;
-  sched.cells[name][d]=(pick.trim()==='(휴무)'||pick.trim()==='')?OFF:pick.trim();
-  renderSched([]);
+function editCell(ev,name,d){
+  ev.stopPropagation();
+  const menu=document.getElementById('cellMenu');
+  const cur=sched.cells[name][d]||'';
+  const item=(val,label,bg,cls)=>`<button class="cm-item${cur===val?' cm-cur':''} ${cls||''}" ${bg?`style="background:${bg}"`:''} onclick="setCell('${name}',${d},'${val}')">${label}</button>`;
+  let h=`<div class="cm-title">${name} · ${d+1}일 <span class="hint">(현재: ${cur===''?'휴무':cur})</span></div><div class="cm-grid">`;
+  S.stores.forEach(st=>{
+    h+=item(st.n,st.n,storeColor(st.n));
+    if(st.need>=2){
+      h+=item(st.n+'(OP)',st.n+' OP',storeColor(st.n));
+      h+=item(st.n+'(CL)',st.n+' CL',storeColor(st.n));
+    }
+  });
+  h+=item('','휴무','#f4f4f5');
+  h+=item('전휴무','전휴무',null,'cell-hol');
+  h+=item('휴가','휴가',null,'cell-vac');
+  h+=item('훈련','훈련',null,'cell-train');
+  h+=item('출장','출장',null,'cell-trip');
+  h+='</div>';
+  menu.innerHTML=h;
+  menu.style.display='block';
+  const mw=290, mh=Math.min(menu.offsetHeight||300,360);
+  const x=Math.min(ev.clientX,window.innerWidth-mw-12)+window.scrollX;
+  const y=Math.min(ev.clientY,window.innerHeight-mh-12)+window.scrollY;
+  menu.style.left=Math.max(6,x)+'px';
+  menu.style.top=Math.max(6,y)+'px';
 }
+function setCell(name,d,val){
+  sched.cells[name][d]=val===''?OFF:val;
+  closeCellMenu();
+  renderSched(lastWarns);
+}
+function closeCellMenu(){ const m=document.getElementById('cellMenu'); if(m) m.style.display='none'; }
+document.addEventListener('click',e=>{
+  const m=document.getElementById('cellMenu');
+  if(m&&m.style.display!=='none'&&!m.contains(e.target)) closeCellMenu();
+});
 
 // ---------- 엑셀 내보내기 ----------
 function exportXlsx(){
