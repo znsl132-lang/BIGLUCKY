@@ -65,6 +65,9 @@
   #schedTable td.sum { cursor: default; background: #fafafa; }
   #schedTable td.dup { outline: 2px dashed #e94560; outline-offset: -2px; }
   #schedTable td.lk { filter: blur(.7px) grayscale(1); opacity: .38; transition: opacity .25s, filter .25s; }
+  #schedTable td.rd-dim { filter: grayscale(1); opacity: .3; transition: opacity .25s, filter .25s; }
+  #schedTable td.hl-period { outline: 2px dashed #f2c50f; outline-offset: -2px; }
+  #schedTable td.hl-work { outline: 3px solid #f2c50f; outline-offset: -3px; font-weight: 700; box-shadow: inset 0 0 0 100px rgba(242,197,15,.18); }
   #cellMenu { position: absolute; display: none; z-index: 10000; background: #fff; border: 1px solid #d9dbe3; border-radius: 12px; box-shadow: 0 12px 32px rgba(16,17,26,.2); padding: 10px; width: 290px; }
   #cellMenu .cm-title { font-size: 12.5px; font-weight: 700; color: #444; margin: 0 2px 8px; }
   #cellMenu .cm-grid { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -250,11 +253,12 @@
     <div class="rowbtns" style="margin-top:10px">
       <select id="rdEmp"></select>
       <select id="rdType"><option>병가</option><option>휴가</option><option value="휴무">퇴사 (빈칸 처리)</option></select>
-      <input type="text" id="rdDays" placeholder="기간 (예: 15-31)" style="width:140px">
-      <button class="btn" onclick="redistribute()">분배 실행</button>
+      <input type="text" id="rdDays" placeholder="기간 (예: 23-30)" style="width:140px">
+      <button class="btn" onclick="previewRedistribute()">근무일 확인</button>
     </div>
     <div id="rdEmps" style="font-size:13px;margin-top:4px"></div>
-    <p class="hint">결원자의 실제 근무일만 골라, 체크한 직원 중 그날 휴무이면서 <b>5일 연속 근무를 넘지 않는 후보</b>에게 골고루 배정합니다. 요청 휴무는 보호되고, 배정 못 한 날은 경고로 남습니다.</p>
+    <div id="rdPlan"></div>
+    <p class="hint">기간을 확인하면 표에서 결원자의 <b>총 기간(점선)과 실 근무일(진한 테두리)</b>이 강조되고, 분배 대상 외 직원은 흐려집니다. 근무일마다 그날 휴무인 후보를 골라 적용하며, <b>우선배치매장 조건을 무시하고 강제 편성</b>됩니다(5일 연속 초과·요청 휴무만 보호). 다른 직원 스케줄은 변동 없습니다.</p>
     <hr style="border:0;border-top:1px dashed #ddd;margin:12px 0">
     <div style="font-size:13.5px;font-weight:600;margin-bottom:6px">🔁 월중 재편성 (고정 후 전체 재생성)</div>
     <div class="rowbtns">
@@ -270,7 +274,7 @@
     <button class="btn gray" onclick="recommendOffs()">휴무자 추천</button>
   </div>
   <div class="schedwrap" id="schedBox"></div>
-  <div class="rowbtns" id="bottomBar" style="display:none;margin-top:12px">
+  <div class="rowbtns" id="bottomBar" style="display:none;margin-top:12px;justify-content:flex-end">
     <button class="btn" onclick="exportXlsx()" id="dlBtn">📥 엑셀 다운로드</button>
   </div>
 </div>
@@ -1181,48 +1185,93 @@ function applyAbsence(){
   document.getElementById('absDays').value='';
   alert(`${name} — ${type} ${days.join(', ')}일 반영 완료.`+(holes.length?`\n\n빈자리 ${holes.length}건이 생겼습니다. 경고창의 투입 추천 버튼으로 메꿔주세요.`:'\n\n빈자리 없이 처리됐습니다.'));
 }
-// ---------- 결원 근무 분배 (퇴사·장기 병가 인수인계) ----------
-function redistribute(){
+// ---------- 결원 근무 분배 (2단계: 근무일 확인 → 후보 선택 → 적용) ----------
+let rdPlan=null;
+function previewRedistribute(){
   if(!sched){ alert('먼저 스케줄을 생성하거나 불러오세요.'); return; }
   const name=document.getElementById('rdEmp').value;
-  const type=document.getElementById('rdType').value; // 병가/휴가/휴무(퇴사)
+  const type=document.getElementById('rdType').value;
   const mk=monthKey(); const [y,m]=mk.split('-').map(Number);
   const days=parseDays(document.getElementById('rdDays').value,sched.nDays,m);
-  if(!days.length){ alert('기간을 입력하세요. 예: 15-31'); return; }
-  const recips=[...document.querySelectorAll('.rdsel:checked')].map(c=>c.value).filter(n=>n!==name);
-  if(!recips.length){ alert('분배 받을 직원을 한 명 이상 체크하세요.'); return; }
-  const strip=v=>v.replace(/\((OP|CL|PT)\)$/,'');
-  const rest=v=>v===''||v==='전휴무'||v==='휴가'||v==='병가';
+  if(!days.length){ alert('기간을 입력하세요. 예: 23-30'); return; }
   const isW=v=>v&&v!==''&&!['휴가','병가','훈련','출장','전휴무'].includes(v);
-  const cells=sched.cells;
-  const runIf=(rec,d)=>{ let len=1; for(let k=d-1;k>=0&&!rest(cells[rec][k]||'');k--)len++; for(let k=d+1;k<sched.nDays&&!rest(cells[rec][k]||'');k++)len++; return len; };
+  const workdays=days.filter(day=>isW(sched.cells[name][day-1]))
+    .map(day=>({d:day-1,val:sched.cells[name][day-1],store:sched.cells[name][day-1].replace(/\((OP|CL|PT)\)$/,'')}));
+  rdPlan={name,type,days,workdays};
+  buildRdPlanUI();
+  updateRdPreview();
+}
+function rdCandidates(d){
+  // 강제 편성: 우선배치매장 조건 무시. 그날 휴무 + 요청휴무 아님 + 5연속 이하만 확인
+  const mk=monthKey();
+  const rest=v=>v===''||v==='전휴무'||v==='휴가'||v==='병가';
   const reqOff=new Set((S.reqs[mk]||[]).filter(r=>['휴무요청','휴가','병가','훈련','출장'].includes(r.type)).map(r=>r.emp+'|'+(r.day-1)));
-  const assignedCnt={}; recips.forEach(n=>assignedCnt[n]=0);
-  let handovers=0;
-  days.forEach(day=>{
-    const d=day-1;
-    const val=cells[name][d];
-    const wasWork=isW(val);
-    cells[name][d]=type==='휴무'?OFF:type; // 결원 처리
-    if(!wasWork) return;
-    const store=strip(val);
-    const cand=recips.filter(rec=>{
-      if(cells[rec][d]!==OFF) return false;            // 그날 휴무인 사람만 대체 가능
-      if(reqOff.has(rec+'|'+d)) return false;          // 본인 요청 휴무 보호
-      const e2=S.emps.find(x=>x.name===rec);
-      if(!e2||e2.role==='교육') return false;
-      const okStore=e2.home==='순환'||e2.home===store||(e2.pref||[]).includes(store);
-      if(!okStore) return false;
-      if(selfOnlyStore(store)&&e2.home!==store) return false;
-      if(runIf(rec,d)>5) return false;                 // 5일 연속 초과 방지
-      return true;
-    }).sort((a,b)=>assignedCnt[a]-assignedCnt[b]||(cells[a].filter(v=>v===OFF).length-cells[b].filter(v=>v===OFF).length)*-1);
-    if(!cand.length) return; // 커버 못 한 날은 아래 coverage 경고로 잡힘
-    const pick=cand[0];
-    cells[pick][d]=val; // OP/CL 라벨 포함 그대로 인수
-    assignedCnt[pick]++; handovers++;
+  const recips=[...document.querySelectorAll('.rdsel:checked')].map(c=>c.value).filter(n=>n!==rdPlan.name);
+  const cells=sched.cells;
+  const runIf=(rec,dd)=>{ let len=1; for(let k=dd-1;k>=0&&!rest(cells[rec][k]||'');k--)len++; for(let k=dd+1;k<sched.nDays&&!rest(cells[rec][k]||'');k++)len++; return len; };
+  return recips.filter(rec=>{
+    const e2=S.emps.find(x=>x.name===rec);
+    if(!e2||e2.role==='교육') return false;
+    if(cells[rec][d]!==OFF) return false;
+    if(reqOff.has(rec+'|'+d)) return false;
+    if(runIf(rec,d)>5) return false;
+    return true;
   });
-  // 특이사항 기록 (재생성해도 유지)
+}
+function buildRdPlanUI(){
+  const box=document.getElementById('rdPlan');
+  if(!box||!rdPlan){ if(box) box.innerHTML=''; return; }
+  const {name,days,workdays}=rdPlan;
+  const range=days.length>1?`${days[0]}-${days[days.length-1]}`:String(days[0]);
+  let h=`<div style="margin:10px 0 6px;font-size:13.5px"><b>${name}</b> — 총 결근 기간 <b>${range} (${days.length}일)</b> 중 실 근무 <b>${workdays.length}일</b>`;
+  if(!workdays.length){ h+=' → 인수인계할 근무가 없습니다. 바로 적용하면 결원 처리만 됩니다.</div>'; }
+  else h+='</div>';
+  // 근무일별 후보 선택 (기본값: 골고루 + 누적 배정을 반영한 연속근무 시뮬레이션)
+  const cnt={}, added={};
+  const restV=v=>v===''||v==='전휴무'||v==='휴가'||v==='병가';
+  const runSim=(rec,dd)=>{
+    const isRest=k=>!(added[rec]&&added[rec].has(k))&&restV(sched.cells[rec][k]||'');
+    let len=1;
+    for(let k=dd-1;k>=0&&!isRest(k);k--)len++;
+    for(let k=dd+1;k<sched.nDays&&!isRest(k);k++)len++;
+    return len;
+  };
+  h+=workdays.map(w=>{
+    const cands=rdCandidates(w.d);
+    const auto=cands.filter(c=>runSim(c,w.d)<=5).sort((a,b)=>(cnt[a]||0)-(cnt[b]||0))[0]||'';
+    if(auto){ cnt[auto]=(cnt[auto]||0)+1; (added[auto]=added[auto]||new Set()).add(w.d); }
+    const opts='<option value="">(미배정)</option>'+cands.map(c=>`<option ${c===auto?'selected':''}>${c}</option>`).join('');
+    return `<div class="rowbtns" style="margin:4px 0"><span style="font-size:13px;min-width:130px"><b>${w.d+1}일</b> ${w.store}${/\((OP|CL)\)/.test(w.val)?' '+w.val.match(/\((OP|CL)\)/)[1]:''}</span><select id="rdpick_${w.d}">${opts}</select>${cands.length?'':'<span class="hint">그날 휴무인 후보 없음</span>'}</div>`;
+  }).join('');
+  h+=`<div class="rowbtns" style="margin-top:8px"><button class="btn" onclick="applyRedistribute()">적용하기</button><button class="btn gray" onclick="cancelRd()">취소</button></div>`;
+  box.innerHTML=h;
+}
+function onRdSelChange(){ if(rdPlan) buildRdPlanUI(); updateRdPreview(); }
+function cancelRd(){ rdPlan=null; const b=document.getElementById('rdPlan'); if(b) b.innerHTML=''; updateRdPreview(); }
+function applyRedistribute(){
+  if(!rdPlan) return;
+  const {name,type,days,workdays}=rdPlan;
+  const mk=monthKey();
+  const cells=sched.cells;
+  // 결원 처리
+  days.forEach(day=>{ cells[name][day-1]=type==='휴무'?OFF:type; });
+  // 선택한 후보에게 근무 인수 (라벨 포함 그대로, 타인 스케줄 무변동)
+  let assigned=0; const per={}; const skipped=[];
+  const restV=v=>v===''||v==='전휴무'||v==='휴가'||v==='병가';
+  workdays.forEach(w=>{
+    const sel=document.getElementById('rdpick_'+w.d);
+    const pick=sel?sel.value:'';
+    if(!pick) return;
+    if(!cells[pick]||cells[pick][w.d]!==OFF){ skipped.push(`${w.d+1}일 ${pick}: 이미 근무 중이라 제외`); return; }
+    // 순차 재검증: 이번 적용에서 앞서 배정된 날 포함해 5일 연속 초과 확인
+    let len=1;
+    for(let k=w.d-1;k>=0&&!restV(cells[pick][k]||'');k--)len++;
+    for(let k=w.d+1;k<sched.nDays&&!restV(cells[pick][k]||'');k++)len++;
+    if(len>5){ skipped.push(`${w.d+1}일 ${pick}: 5일 연속 초과로 제외`); return; }
+    cells[pick][w.d]=w.val;
+    per[pick]=(per[pick]||0)+1; assigned++;
+  });
+  // 특이사항 기록
   if(type!=='휴무'){
     if(!S.reqs[mk]) S.reqs[mk]=[];
     days.forEach(day=>{
@@ -1231,11 +1280,35 @@ function redistribute(){
     });
   }
   save();
+  rdPlan=null;
+  const box=document.getElementById('rdPlan'); if(box) box.innerHTML='';
   const holes=coverageWarnsForDays(days.map(x=>x-1));
   lastWarns=lastWarns.concat(holes);
   renderSched(lastWarns);
-  const summary=recips.map(n=>`· ${n}: ${assignedCnt[n]}일`).filter(s=>!/ 0일$/.test(s)).join('\n');
-  alert(`분배 완료 — ${name}의 근무 ${handovers}일을 인수인계했습니다.\n\n${summary||'배정된 인원 없음'}`+(holes.length?`\n\n⚠ 커버 못 한 날 ${holes.length}건 — 경고창의 투입 버튼으로 처리하세요.`:'')+`\n\n※ 인수한 직원의 휴무가 줄었습니다. 필요하면 "휴무자 추천"으로 보충하세요.`);
+  updateRdPreview();
+  const summary=Object.entries(per).map(([n,c])=>`· ${n}: ${c}일`).join('\n');
+  alert(`적용 완료 — ${name} 결원 처리 및 근무 ${assigned}일 인수인계\n\n${summary||'배정 없음'}`+(skipped.length?`\n\n제외됨:\n${skipped.join('\n')}`:'')+(holes.length?`\n\n⚠ 커버 안 된 날 ${holes.length}건 — 경고창의 투입 버튼으로 처리하세요.`:''));
+}
+// 강조/흐림 미리보기 (표시 전용)
+function updateRdPreview(){
+  const tbl=document.getElementById('schedTable'); if(!tbl) return;
+  tbl.querySelectorAll('td.hl-period,td.hl-work').forEach(td=>td.classList.remove('hl-period','hl-work'));
+  const recips=new Set([...document.querySelectorAll('.rdsel:checked')].map(c=>c.value));
+  tbl.querySelectorAll('tr[data-n]').forEach(tr=>{
+    const n=tr.getAttribute('data-n');
+    const dim=!!rdPlan&&recips.size>0&&!recips.has(n)&&n!==(rdPlan&&rdPlan.name);
+    tr.querySelectorAll('td').forEach(td=>td.classList.toggle('rd-dim',dim));
+  });
+  if(!rdPlan) return;
+  const tr=tbl.querySelector(`tr[data-n="${rdPlan.name}"]`); if(!tr) return;
+  rdPlan.days.forEach(day=>{
+    const td=tr.querySelector(`td[data-d="${day-1}"]`);
+    if(td) td.classList.add('hl-period');
+  });
+  rdPlan.workdays.forEach(w=>{
+    const td=tr.querySelector(`td[data-d="${w.d}"]`);
+    if(td){ td.classList.remove('hl-period'); td.classList.add('hl-work'); }
+  });
 }
 // ---------- 모드 B: 월중 재편성 (고정 후 재생성) ----------
 function rebuildSchedule(){
@@ -1258,8 +1331,9 @@ function renderChangeCards(){
   document.getElementById('rbEmps').innerHTML='한 달 전체 고정할 직원: '+S.emps.map(e=>`<label style="margin-right:10px;white-space:nowrap"><input type="checkbox" class="rbsel" value="${e.name}" ${prev.has(e.name)?'checked':''} onchange="updateLockPreview()"> ${e.name}</label>`).join('');
   document.getElementById('rdEmp').innerHTML=S.emps.filter(e=>e.role!=='교육').map(e=>`<option>${e.name}</option>`).join('');
   const prevRd=new Set([...document.querySelectorAll('.rdsel:checked')].map(c=>c.value));
-  document.getElementById('rdEmps').innerHTML='분배 받을 직원 선택: '+S.emps.filter(e=>e.role!=='교육').map(e=>`<label style="margin-right:10px;white-space:nowrap"><input type="checkbox" class="rdsel" value="${e.name}" ${prevRd.has(e.name)?'checked':''}> ${e.name}</label>`).join('');
+  document.getElementById('rdEmps').innerHTML='분배 받을 직원 선택: '+S.emps.filter(e=>e.role!=='교육').map(e=>`<label style="margin-right:10px;white-space:nowrap"><input type="checkbox" class="rdsel" value="${e.name}" ${prevRd.has(e.name)?'checked':''} onchange="onRdSelChange()"> ${e.name}</label>`).join('');
   updateLockPreview();
+  updateRdPreview();
 }
 // 고정 영역 미리보기: 실제 값은 그대로, 화면만 흐리게
 function updateLockPreview(){
