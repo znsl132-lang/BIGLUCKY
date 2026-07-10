@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- v2 -->
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -86,7 +87,7 @@
   .daychip.t-trip { background: #e0f0ff; border-color: #90bce0; }
   .daychip.t-fix { background: #e8e0ff; border-color: #a898e0; }
   .daychip.t-cond { background: #e0f5e0; border-color: #8cc88c; }
-  .cell-vac { background: #ffe0e0; } .cell-trip { background: #e0f0ff; } .cell-train { background: #ffe9c9; } .cell-hol { background: #fce4ec; color: #c62828; font-weight: bold; }
+  .cell-vac { background: #ffe0e0; } .cell-trip { background: #e0f0ff; } .cell-train { background: #ffe9c9; } .cell-hol { background: #fce4ec; color: #c62828; font-weight: bold; } .cell-sick { background: #ffd9e8; color: #ad1457; }
   .cell-reqoff { background: #e8e8e8; font-size: 10px; color: #999; }
   .rowbtns { display: flex; gap: 8px; margin: 12px 0; flex-wrap: wrap; align-items: center; }
   .hint { font-size: 12px; color: #666; margin: 6px 0; }
@@ -198,6 +199,7 @@
       <select id="reqType">
         <option value="휴무요청">휴무 요청</option>
         <option value="휴가">휴가</option>
+        <option value="병가">병가</option>
         <option value="훈련">훈련</option>
         <option value="출장">출장</option>
         <option value="근무지정">특정 매장 근무 지정</option>
@@ -231,6 +233,25 @@
   </div>
   <div id="warnBox"></div>
   <div id="extraBox"></div>
+  <div class="card" id="absenceCard" style="display:none">
+    <h3>🚑 긴급 결원·변경 반영 <span class="hint">— 재생성 없이 현재 스케줄만 국소 수정</span></h3>
+    <div class="rowbtns">
+      <select id="absEmp"></select>
+      <select id="absType"><option>병가</option><option>휴가</option><option>출장</option><option>훈련</option><option value="휴무">개인 휴무</option></select>
+      <input type="text" id="absDays" placeholder="날짜 (예: 12, 15-17)" style="width:150px">
+      <button class="btn small" onclick="applyAbsence()">반영</button>
+    </div>
+    <p class="hint">해당 날짜가 결원 처리되고, 빈자리가 생기면 경고창에 투입 추천 버튼이 뜹니다. ② 특이사항에도 자동 기록돼 재생성해도 유지됩니다.</p>
+  </div>
+  <div class="card" id="rebuildCard" style="display:none">
+    <h3>🔁 월중 재편성 <span class="hint">— 장기 결원·퇴사 등 대규모 변경 시</span></h3>
+    <div class="rowbtns">
+      <label style="font-size:13px">재편성 시작일: <input type="number" id="rbDay" min="1" value="1" style="width:64px"> 일부터</label>
+      <button class="btn" onclick="rebuildSchedule()">재편성 실행</button>
+    </div>
+    <div id="rbEmps" style="font-size:13px;margin-top:4px"></div>
+    <p class="hint">시작일 전날까지는 전원 그대로 유지되고, 체크한 직원은 한 달 전체가 고정됩니다. 나머지만 다시 최적 편성합니다.</p>
+  </div>
   <div class="schedwrap" id="schedBox"></div>
 </div>
 
@@ -266,6 +287,8 @@
       <tr><th>수동 수정</th><td style="text-align:left">표에서 셀을 클릭하면 그날 근무/휴무를 직접 바꿀 수 있습니다.</td></tr>
       <tr><th>추가 휴무 부여</th><td style="text-align:left">인원이 남는 날 특정 직원에게 +1일씩 휴무를 더 줄 수 있습니다. "+1일 부여"로 대기시킨 뒤 <b>스케줄에 반영</b>(변동 내역 팝업) 또는 <b>반영 없이 편성</b>. 부여 기록은 다음 달에도 표시돼 순번 참고용으로 쓰입니다.</td></tr>
       <tr><th>임시 저장</th><td style="text-align:left">마음에 드는 버전을 저장해두고(월별 최대 10개) "불러오기"로 비교, "삭제"로 정리할 수 있습니다.</td></tr>
+      <tr><th>🚑 긴급 결원</th><td style="text-align:left">월중에 병가·출장 등이 생기면 여기에 입력하세요. 나머지 스케줄은 건드리지 않고 그 날짜만 결원 처리되며, 빈자리가 생기면 투입 추천 버튼이 뜹니다.</td></tr>
+      <tr><th>🔁 월중 재편성</th><td style="text-align:left">장기 결원·퇴사 등 큰 변경 시 사용. 시작일 전날까지와 체크한 직원은 그대로 두고 나머지만 다시 최적 편성합니다.</td></tr>
     </table>
   </div>
   <div class="card">
@@ -427,7 +450,7 @@ function renderReqs(){
   const box=document.getElementById('reqList');
   const list=S.reqs[mk]||[];
   if(!list.length){ box.innerHTML='<p class="hint">등록된 특이사항이 없습니다.</p>'; return; }
-  const typeCls={'휴가':'t-vac','훈련':'t-train','출장':'t-trip','근무지정':'t-fix'};
+  const typeCls={'휴가':'t-vac','병가':'t-vac','훈련':'t-train','출장':'t-trip','근무지정':'t-fix'};
   let h='<table class="reqtbl"><thead><tr><th style="width:90px">직원</th><th>내용 (일자 클릭 ✕로 삭제)</th><th style="width:50px">건수</th></tr></thead><tbody>';
   S.emps.forEach(e=>{
     const rs=list.filter(r=>r.emp===e.name).sort((a,b)=>a.day-b.day);
@@ -519,7 +542,7 @@ function renderHols(){
 }
 
 // ---------- 스케줄 생성 ----------
-function generate(keepExtra){
+function generate(keepExtra,preset){
   const mk=monthKey(); if(!mk){ alert('상단에서 대상 월을 먼저 선택하세요.'); return; }
   const [y,m]=mk.split('-').map(Number);
   const nDays=new Date(y,m,0).getDate();
@@ -527,7 +550,7 @@ function generate(keepExtra){
   // 고정 시드로 최대 24회 시도 → 경고가 가장 적은 최적 버전 채택 (같은 입력이면 항상 같은 결과)
   let bestCells=null,bestWarns=null;
   for(let t=0;t<24;t++){
-    const r=genOnce(y,m,nDays,reqs,mk,t);
+    const r=genOnce(y,m,nDays,reqs,mk,t,preset);
     if(!bestWarns||r.warns.length<bestWarns.length){ bestCells=r.cells; bestWarns=r.warns; }
     if(bestWarns.length===0) break;
   }
@@ -547,17 +570,33 @@ function generate(keepExtra){
   document.getElementById('dupBtn').style.display='';
   document.getElementById('recBtn').style.display='';
 }
-function genOnce(y,m,nDays,reqs,mk,seed){
+function genOnce(y,m,nDays,reqs,mk,seed,preset){
   let _rs=(y*10000+m*100+(seed||0))|0;
   const rng=()=>{ _rs=_rs+0x6D2B79F5|0; let t=Math.imul(_rs^_rs>>>15,1|_rs); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; };
   const isTrainee=e=>e.role==='교육';
+  // 재편성 고정: fromIdx 이전 날짜 전체 + locked 직원의 한 달 전체는 불변
+  const fromIdx=preset?preset.fromIdx:0;
+  const lockedEmp=preset?preset.locked:new Set();
+  const isLocked=(name,d)=>!!preset&&(d<fromIdx||lockedEmp.has(name));
   const warns=[];
   // cells[emp][d-1] : null=미정, ''=휴무, '휴가'/'훈련'/'출장', 매장명, 매장명+'(OP)'/'(CL)'
   const cells={}; S.emps.forEach(e=>cells[e.name]=Array(nDays).fill(null));
   const fixedOff={}; S.emps.forEach(e=>fixedOff[e.name]=new Set());
+  if(preset){
+    S.emps.forEach(e=>{
+      const src=preset.cells[e.name]; if(!src) return;
+      for(let d=0;d<nDays;d++){
+        if(isLocked(e.name,d)&&src[d]!==undefined&&src[d]!==null){
+          cells[e.name][d]=src[d];
+          if(src[d]===OFF) fixedOff[e.name].add(d);
+        }
+      }
+    });
+  }
   // 1) 특이사항 반영
   reqs.forEach(r=>{
     const arr=cells[r.emp]; if(!arr||r.type==='조건부') return;
+    if(isLocked(r.emp,r.day-1)) return; // 고정 구간은 기존 값 유지
     if(r.type==='휴무요청'){ arr[r.day-1]=OFF; fixedOff[r.emp].add(r.day-1); }
     else if(r.type==='근무지정'){ arr[r.day-1]=r.store; }
     else arr[r.day-1]=r.type;
@@ -566,6 +605,7 @@ function genOnce(y,m,nDays,reqs,mk,seed){
   const isHol=Array(nDays).fill(false);
   ((S.hols&&S.hols[mk])||[]).forEach(d=>{ if(d>=1&&d<=nDays) isHol[d-1]=true; });
   for(let d=0;d<nDays;d++) if(isHol[d]) S.emps.forEach(e=>{
+    if(isLocked(e.name,d)) return;
     const arr=cells[e.name];
     if(arr[d]===null||arr[d]===OFF){ arr[d]='전휴무'; fixedOff[e.name].delete(d); }
   });
@@ -575,7 +615,7 @@ function genOnce(y,m,nDays,reqs,mk,seed){
   const nAct=S.emps.filter(e=>!isTrainee(e)).length;
   const maxOffPerDay=Math.max(0,nAct-totalNeed);
   const dayOffCnt=Array(nDays).fill(0); // 휴무+휴가+훈련+출장 = 그날 빠지는 인원
-  for(let d=0;d<nDays;d++) S.emps.forEach(e=>{ const v=cells[e.name][d]; if(v===OFF||['휴가','훈련','출장'].includes(v)) dayOffCnt[d]++; });
+  for(let d=0;d<nDays;d++) S.emps.forEach(e=>{ const v=cells[e.name][d]; if(v===OFF||['휴가','병가','훈련','출장'].includes(v)) dayOffCnt[d]++; });
   // 일괄 재편성으로 부여된 추가 휴무: 이 달 목표 휴무에 가산
   const bonus={};
   ((S.extraLog&&S.extraLog[mk])||[]).forEach(x=>{ if(x.bulk) bonus[x.name]=(bonus[x.name]||0)+1; });
@@ -583,7 +623,7 @@ function genOnce(y,m,nDays,reqs,mk,seed){
   S.emps.forEach(e=>{
     const n=offTarget(e)+(bonus[e.name]||0)-cells[e.name].filter(v=>v===OFF).length;
     if(n<0) warns.push(`${e.name}: 휴무 요청이 목표(${offTarget(e)}일)보다 많습니다.`);
-    needMap[e.name]=isTrainee(e)?0:Math.max(0,n); // 교육생은 팀장 동행이라 별도 배분 없음
+    needMap[e.name]=(isTrainee(e)||lockedEmp.has(e.name))?0:Math.max(0,n); // 교육생·고정 직원은 별도 배분 없음
   });
   // 조건부 휴무 (가급적): 조건에 맞는 날을 먼저 확보
   const wd=d=>new Date(y,m-1,d+1).getDay(); // 0=일, 6=토
@@ -623,7 +663,7 @@ function genOnce(y,m,nDays,reqs,mk,seed){
     if(!selfOnly.has(e.home)) return true;
     return S.emps.some(o=>o!==e&&!isTrainee2(o)&&o.home===e.home&&(()=>{
       const v=cells[o.name][d];
-      return v===null||(v&&v!==OFF&&!['휴가','훈련','출장','전휴무'].includes(v));
+      return v===null||(v&&v!==OFF&&!['휴가','병가','훈련','출장','전휴무'].includes(v));
     })());
   };
   let remain=Object.values(needMap).reduce((a,b)=>a+b,0);
@@ -667,7 +707,7 @@ function genOnce(y,m,nDays,reqs,mk,seed){
     let home=0,away=0;
     for(let k=0;k<nDays;k++){
       const v=cells[e.name][k];
-      if(!v||v===OFF||['휴가','훈련','출장','전휴무'].includes(v)) continue;
+      if(!v||v===OFF||['휴가','병가','훈련','출장','전휴무'].includes(v)) continue;
       if(v.replace(/\((OP|CL)\)$/,'')===e.home) home++; else away++;
     }
     return away<home;
@@ -683,7 +723,7 @@ function genOnce(y,m,nDays,reqs,mk,seed){
     S.emps.forEach(e=>{
       if(isTrainee(e)) return;
       const v=cells[e.name][d];
-      if(v&&v!==OFF&&!['휴가','훈련','출장'].includes(v)){
+      if(v&&v!==OFF&&!['휴가','병가','훈련','출장'].includes(v)){
         const base=v.replace(/\((OP|CL)\)$/,'');
         if(at[base]) at[base].push(e.name);
       }
@@ -717,7 +757,7 @@ function genOnce(y,m,nDays,reqs,mk,seed){
       for(const donor of S.stores){
         if(donor.n===shortSt.n||at[donor.n].length<=donor.need) continue;
         const nm=at[donor.n].slice()
-          .filter(x=>{ const o=S.emps.find(q=>q.name===x); return allowed(o,shortSt.n)&&(shortSt.n===o.home||awayOK(o)); })
+          .filter(x=>{ const o=S.emps.find(q=>q.name===x); return !isLocked(x,d)&&allowed(o,shortSt.n)&&(shortSt.n===o.home||awayOK(o)); })
           .sort((a,b)=>{
           const ea=S.emps.find(x=>x.name===a),eb=S.emps.find(x=>x.name===b);
           return prefRank(ea,shortSt.n)-prefRank(eb,shortSt.n)
@@ -754,10 +794,13 @@ function genOnce(y,m,nDays,reqs,mk,seed){
       if(names.length>=2){
         // 역할 선호 반영
         const empOf=n=>S.emps.find(e=>e.name===n)||{};
-        // 오픈/마감 역할 우선, 없으면 소속이 이 매장인 파트가 대신 (근무 환경 따라감)
-        const opN=names.find(n=>empOf(n).role==='오픈')||names.find(n=>empOf(n).role==='파트'&&empOf(n).home===st.n);
-        const clN=names.find(n=>n!==opN&&empOf(n).role==='마감')||names.find(n=>n!==opN&&empOf(n).role==='파트'&&empOf(n).home===st.n);
+        // 고정 셀의 기존 라벨 우선 → 오픈/마감 역할 → 소속 파트 순
+        const lkOp=names.find(n=>isLocked(n,d)&&/\(OP\)$/.test(cells[n][d]||''));
+        const lkCl=names.find(n=>isLocked(n,d)&&/\(CL\)$/.test(cells[n][d]||''));
+        const opN=lkOp||names.find(n=>empOf(n).role==='오픈')||names.find(n=>empOf(n).role==='파트'&&empOf(n).home===st.n);
+        const clN=lkCl||names.find(n=>n!==opN&&empOf(n).role==='마감')||names.find(n=>n!==opN&&empOf(n).role==='파트'&&empOf(n).home===st.n);
         names.forEach(n=>{
+          if(isLocked(n,d)) return;
           if(n===opN) cells[n][d]=st.n+'(OP)';
           else if(n===clN) cells[n][d]=st.n+'(CL)';
           else cells[n][d]=st.n;
@@ -775,10 +818,10 @@ function genOnce(y,m,nDays,reqs,mk,seed){
   // 4) 잔여 미정 → 휴무 (교육생 제외 — 아래에서 팀장 동행 편성)
   S.emps.forEach(e=>{ if(isTrainee(e)) return; const a=cells[e.name]; for(let d=0;d<nDays;d++) if(a[d]===null) a[d]=OFF; });
   const baseOf=v=>v?v.replace(/\((OP|CL)\)$/,''):v;
-  const isWork=v=>v&&v!==OFF&&!['휴가','훈련','출장','전휴무'].includes(v);
+  const isWork=v=>v&&v!==OFF&&!['휴가','병가','훈련','출장','전휴무'].includes(v);
   // 4.5) 최대 연속 근무 6일 제한: 초과 구간은 휴무와 교환해 끊음
-  const isRestV=v=>v===OFF||v==='전휴무'||v==='휴가';
-  S.emps.filter(e=>!isTrainee(e)).forEach(e=>{
+  const isRestV=v=>v===OFF||v==='전휴무'||v==='휴가'||v==='병가';
+  S.emps.filter(e=>!isTrainee(e)&&!lockedEmp.has(e.name)).forEach(e=>{
     const arr=cells[e.name];
     let guard=8;
     while(guard-->0){
@@ -789,6 +832,7 @@ function genOnce(y,m,nDays,reqs,mk,seed){
         else { s=-1; len=0; }
       }
       if(brk<0) break;
+      if(brk<fromIdx) break; // 고정 구간의 연속 근무는 손대지 않음
       // 자체 인원 전용 매장: 동료가 근무하는 날로 끊는 위치 조정
       if(!mateWorking(e,brk)){
         let nb=-1;
@@ -810,7 +854,7 @@ function genOnce(y,m,nDays,reqs,mk,seed){
   });
   // 4.6) 소프트 교정 ①: 6일 연속 근무도 가급적 회피 (가능할 때만 5일 이하로 쪼갬)
   const workRunAt=(arr,k)=>{ let len=1; for(let i=k-1;i>=0&&!isRestV(arr[i]);i--)len++; for(let i=k+1;i<nDays&&!isRestV(arr[i]);i++)len++; return len; };
-  S.emps.filter(e=>!isTrainee(e)).forEach(e=>{
+  S.emps.filter(e=>!isTrainee(e)&&!lockedEmp.has(e.name)).forEach(e=>{
     const arr=cells[e.name];
     let guard=6;
     while(guard-->0){
@@ -822,9 +866,9 @@ function genOnce(y,m,nDays,reqs,mk,seed){
       }
       if(found<0) break;
       let brk=found+3;
-      if(!mateWorking(e,brk)){
+      if(brk<fromIdx||!mateWorking(e,brk)){
         let nb=-1;
-        for(let k=found+1;k<found+6&&k<nDays;k++) if(k!==brk&&!isRestV(arr[k])&&mateWorking(e,k)){ nb=k; break; }
+        for(let k=Math.max(found+1,fromIdx);k<found+6&&k<nDays;k++) if(k!==brk&&!isRestV(arr[k])&&mateWorking(e,k)){ nb=k; break; }
         if(nb<0) break;
         brk=nb;
       }
@@ -842,7 +886,7 @@ function genOnce(y,m,nDays,reqs,mk,seed){
   });
   // 4.7) 소프트 교정 ②: 3일 연속 휴무 가급적 분산
   const restRunAt=(arr,k)=>{ let len=1; for(let i=k-1;i>=0&&isRestV(arr[i]);i--)len++; for(let i=k+1;i<nDays&&isRestV(arr[i]);i++)len++; return len; };
-  S.emps.filter(e=>!isTrainee(e)).forEach(e=>{
+  S.emps.filter(e=>!isTrainee(e)&&!lockedEmp.has(e.name)).forEach(e=>{
     const arr=cells[e.name];
     let guard=6;
     while(guard-->0){
@@ -856,12 +900,12 @@ function genOnce(y,m,nDays,reqs,mk,seed){
       // 목적지: 잉여 인원이 있는 근무일 중, 휴무로 바꿔도 새 3연속 휴무가 안 생기는 날
       let t=-1;
       for(let k=0;k<nDays;k++){
-        if(isHol[k]) continue;
+        if(isHol[k]||isLocked(e.name,k)) continue;
         const v=arr[k];
-        if(!v||v===OFF||['휴가','훈련','출장','전휴무'].includes(v)) continue;
+        if(!v||v===OFF||['휴가','병가','훈련','출장','전휴무'].includes(v)) continue;
         const b=v.replace(/\((OP|CL)\)$/,'');
         const needK=(S.stores.find(s2=>s2.n===b)||{need:1}).need;
-        const cnt=S.emps.reduce((a,q)=>{ const qv=cells[q.name][k]; return a+((!isTrainee(q)&&qv&&qv!==OFF&&!['휴가','훈련','출장','전휴무'].includes(qv)&&qv.replace(/\((OP|CL)\)$/,'')===b)?1:0); },0);
+        const cnt=S.emps.reduce((a,q)=>{ const qv=cells[q.name][k]; return a+((!isTrainee(q)&&qv&&qv!==OFF&&!['휴가','병가','훈련','출장','전휴무'].includes(qv)&&qv.replace(/\((OP|CL)\)$/,'')===b)?1:0); },0);
         if(cnt<=needK) continue;
         let rl=1; for(let i=k-1;i>=0&&isRestV(arr[i]);i--)rl++; for(let i=k+1;i<nDays&&isRestV(arr[i]);i++)rl++;
         if(rl>=3) continue;
@@ -880,7 +924,8 @@ function genOnce(y,m,nDays,reqs,mk,seed){
     S.stores.forEach(st=>{
       let cur=cntAt(st.n,d);
       while(cur<st.need){
-        const cands=S.emps.filter(e=>!isTrainee(e)&&allowed(e,st.n)&&(!selfOnly.has(st.n)||e.home===st.n)&&(st.n===e.home||awayOK(e))&&cells[e.name][d]===OFF&&!fixedOff[e.name].has(d))
+        if(d<fromIdx) break; // 고정 구간은 복구하지 않고 경고만
+        const cands=S.emps.filter(e=>!isTrainee(e)&&!lockedEmp.has(e.name)&&allowed(e,st.n)&&(!selfOnly.has(st.n)||e.home===st.n)&&(st.n===e.home||awayOK(e))&&cells[e.name][d]===OFF&&!fixedOff[e.name].has(d))
           .sort((a,b)=>{
             const ra=a.home===st.n?0:(prefRank(a,st.n)<99?1:(a.home==='순환'?2:3));
             const rb=b.home===st.n?0:(prefRank(b,st.n)<99?1:(b.home==='순환'?2:3));
@@ -890,7 +935,7 @@ function genOnce(y,m,nDays,reqs,mk,seed){
         for(const cand of cands){
           let d2=-1;
           for(let k=0;k<nDays;k++){
-            if(k===d||isHol[k]) continue;
+            if(k===d||isHol[k]||isLocked(cand.name,k)) continue;
             const v=cells[cand.name][k];
             if(!isWork(v)) continue;
             const b=baseOf(v);
@@ -919,12 +964,15 @@ function genOnce(y,m,nDays,reqs,mk,seed){
     S.stores.filter(st=>st.need>=2).forEach(st=>{
       const names=S.emps.filter(e=>!isTrainee(e)&&isWork(cells[e.name][d])&&baseOf(cells[e.name][d])===st.n).map(e=>e.name);
       const empOf=n=>S.emps.find(e=>e.name===n)||{};
-      if(names.length<2){ names.forEach(n=>{ cells[n][d]=st.n; }); return; }
-      const opN=names.find(n=>empOf(n).role==='오픈')
+      if(names.length<2){ names.forEach(n=>{ if(!isLocked(n,d)) cells[n][d]=st.n; }); return; }
+      const lkOp=names.find(n=>isLocked(n,d)&&/\(OP\)$/.test(cells[n][d]||''));
+      const lkCl=names.find(n=>isLocked(n,d)&&/\(CL\)$/.test(cells[n][d]||''));
+      const opN=lkOp||names.find(n=>empOf(n).role==='오픈')
              ||names.find(n=>empOf(n).role==='파트'&&empOf(n).home===st.n);
-      const clN=names.find(n=>n!==opN&&empOf(n).role==='마감')
+      const clN=lkCl||names.find(n=>n!==opN&&empOf(n).role==='마감')
              ||names.find(n=>n!==opN&&empOf(n).role==='파트'&&empOf(n).home===st.n);
       names.forEach(n=>{
+        if(isLocked(n,d)) return;
         if(n===opN) cells[n][d]=st.n+'(OP)';
         else if(n===clN) cells[n][d]=st.n+'(CL)';
         else cells[n][d]=st.n;
@@ -940,6 +988,7 @@ function genOnce(y,m,nDays,reqs,mk,seed){
   // 7) 교육생: 휴무 8일 고정, 나머지는 전부 근무. 팀장(들)을 따라가되 가급적 인천공항 회피.
   S.emps.filter(isTrainee).forEach(tr=>{
     const arr=cells[tr.name];
+    if(lockedEmp.has(tr.name)){ for(let d=0;d<nDays;d++) if(arr[d]===null) arr[d]=OFF; return; }
     const mentors=S.emps.filter(o=>!isTrainee(o)&&o.title==='팀장');
     if(!mentors.length){
       warns.push(`${tr.name}: 직책이 '팀장'인 직원이 없어 교육생 동행 편성을 못 했습니다`);
@@ -1002,7 +1051,7 @@ function computeDupes(){
     S.stores.filter(st=>st.need<2).forEach(st=>{
       const es=S.emps.filter(e=>e.role!=='교육').filter(e=>{
         const v=cells[e.name]&&cells[e.name][d];
-        return v&&v!==''&&!['휴가','훈련','출장','전휴무'].includes(v)&&strip(v)===st.n;
+        return v&&v!==''&&!['휴가','병가','훈련','출장','전휴무'].includes(v)&&strip(v)===st.n;
       });
       if(es.length>=2){
         es.forEach(e=>dupCells.add(e.name+'|'+d));
@@ -1031,7 +1080,7 @@ function recommendOffs(){
     S.stores.forEach(st=>{
       const es=S.emps.filter(e=>e.role!=='교육').filter(e=>{
         const v=cells[e.name][d];
-        return v&&v!==''&&!['휴가','훈련','출장','전휴무'].includes(v)&&strip(v)===st.n;
+        return v&&v!==''&&!['휴가','병가','훈련','출장','전휴무'].includes(v)&&strip(v)===st.n;
       });
       if(es.length<=st.need) return;
       const sorted=es.slice().sort((a,b)=>(hist[a.name]||0)-(hist[b.name]||0)||((a.role?1:0)-(b.role?1:0)));
@@ -1053,6 +1102,62 @@ function applySurplusOff(name,d,idx){
   save();
   lastWarns.splice(idx,1);
   renderSched(lastWarns);
+}
+// ---------- 모드 A: 긴급 결원·변경 (국소 수정) ----------
+function coverageWarnsForDays(dayIdxs){
+  const strip=v=>v.replace(/\((OP|CL|PT)\)$/,'');
+  const out=[];
+  dayIdxs.forEach(d=>{
+    S.stores.forEach(st=>{
+      const cnt=S.emps.filter(e=>e.role!=='교육').filter(e=>{
+        const v=sched.cells[e.name][d];
+        return v&&v!==''&&!['휴가','병가','훈련','출장','전휴무'].includes(v)&&strip(v)===st.n;
+      }).length;
+      if(cnt===0) out.push(`${sched.month}월 ${d+1}일 ${st.n}: 근무 인원 없음 — 수동 조정 필요`);
+      else if(cnt<st.need) out.push(`${sched.month}월 ${d+1}일 ${st.n}: 최소 인원 미달`);
+    });
+  });
+  return out;
+}
+function applyAbsence(){
+  if(!sched){ alert('먼저 스케줄을 생성하거나 불러오세요.'); return; }
+  const name=document.getElementById('absEmp').value;
+  const type=document.getElementById('absType').value;
+  const mk=monthKey(); const [y,m]=mk.split('-').map(Number);
+  const days=parseDays(document.getElementById('absDays').value,sched.nDays,m);
+  if(!days.length){ alert('날짜를 입력하세요. 예: 12, 15-17'); return; }
+  days.forEach(day=>{
+    const d=day-1;
+    sched.cells[name][d]=type==='휴무'?OFF:type;
+    if(!S.reqs[mk]) S.reqs[mk]=[];
+    S.reqs[mk]=S.reqs[mk].filter(r=>!(r.emp===name&&r.day===day));
+    S.reqs[mk].push({emp:name,type:type==='휴무'?'휴무요청':type,day,store:''});
+  });
+  save();
+  const holes=coverageWarnsForDays(days.map(x=>x-1));
+  lastWarns=lastWarns.concat(holes);
+  renderSched(lastWarns);
+  document.getElementById('absDays').value='';
+  alert(`${name} — ${type} ${days.join(', ')}일 반영 완료.`+(holes.length?`\n\n빈자리 ${holes.length}건이 생겼습니다. 경고창의 투입 추천 버튼으로 메꿔주세요.`:'\n\n빈자리 없이 처리됐습니다.'));
+}
+// ---------- 모드 B: 월중 재편성 (고정 후 재생성) ----------
+function rebuildSchedule(){
+  if(!sched){ alert('먼저 스케줄을 생성하세요.'); return; }
+  const day=+document.getElementById('rbDay').value;
+  if(!(day>=1&&day<=sched.nDays)){ alert('재편성 시작일을 확인하세요.'); return; }
+  const locked=new Set([...document.querySelectorAll('.rbsel:checked')].map(c=>c.value));
+  if(!confirm(`${day}일부터 재편성합니다.\n· ${day-1>=1?day-1+'일까지: 전원 현재 스케줄 유지':'처음부터 재편성'}\n· 한 달 전체 고정: ${locked.size?[...locked].join(', '):'없음'}\n\n진행할까요?`)) return;
+  const preset={fromIdx:day-1,locked,cells:JSON.parse(JSON.stringify(sched.cells))};
+  generate(true,preset);
+}
+function renderChangeCards(){
+  const ac=document.getElementById('absenceCard'), rc=document.getElementById('rebuildCard');
+  if(!ac||!rc) return;
+  if(!sched){ ac.style.display='none'; rc.style.display='none'; return; }
+  ac.style.display=''; rc.style.display='';
+  document.getElementById('absEmp').innerHTML=S.emps.map(e=>`<option>${e.name}</option>`).join('');
+  document.getElementById('rbDay').max=sched.nDays;
+  document.getElementById('rbEmps').innerHTML='한 달 전체 고정할 직원: '+S.emps.map(e=>`<label style="margin-right:10px;white-space:nowrap"><input type="checkbox" class="rbsel" value="${e.name}"> ${e.name}</label>`).join('');
 }
 function selfOnlyStore(stn){
   const st=S.stores.find(s=>s.n===stn);
@@ -1087,7 +1192,7 @@ function warnLine(w,i){
   return '⚠ '+w+' → '+btns;
 }
 function applyWarnFix(name,day,store,idx){
-  const isRest=v=>v===OFF||v==='전휴무'||v==='휴가';
+  const isRest=v=>v===OFF||v==='전휴무'||v==='휴가'||v==='병가';
   const arr=sched.cells[name];
   // 투입 시 연속 근무 길이 계산 → 6일 초과면 동의 확인
   let run=1;
@@ -1102,12 +1207,12 @@ function applyWarnFix(name,day,store,idx){
   for(let k=0;k<sched.nDays;k++){
     if(k===day) continue;
     const v=arr[k];
-    if(!v||v===OFF||['휴가','훈련','출장','전휴무'].includes(v)) continue;
+    if(!v||v===OFF||['휴가','병가','훈련','출장','전휴무'].includes(v)) continue;
     const b=strip(v);
     const st=S.stores.find(s=>s.n===b); const need=st?st.need:1;
     const cnt=S.emps.filter(o=>o.role!=='교육').filter(o=>{
       const q=sched.cells[o.name][k];
-      return q&&q!==OFF&&!['휴가','훈련','출장','전휴무'].includes(q)&&strip(q)===b;
+      return q&&q!==OFF&&!['휴가','병가','훈련','출장','전휴무'].includes(q)&&strip(q)===b;
     }).length;
     if(cnt>need) sugg.push({d:k,label:`${b} ${cnt}명 출근`,cnt});
   }
@@ -1116,14 +1221,14 @@ function applyWarnFix(name,day,store,idx){
   for(let k=0;k<sched.nDays&&sugg.length<5;k++){
     if(k===day||sugg.some(x=>x.d===k)) continue;
     const v=arr[k];
-    if(!v||v===OFF||['휴가','훈련','출장','전휴무'].includes(v)) continue;
+    if(!v||v===OFF||['휴가','병가','훈련','출장','전휴무'].includes(v)) continue;
     const B=strip(v);
     let done=false;
     for(const st of S.stores){
       if(done||st.n===B) continue;
       const workers=S.emps.filter(o=>o.role!=='교육'&&o.name!==name).filter(o=>{
         const q=sched.cells[o.name][k];
-        return q&&q!==OFF&&!['휴가','훈련','출장','전휴무'].includes(q)&&strip(q)===st.n;
+        return q&&q!==OFF&&!['휴가','병가','훈련','출장','전휴무'].includes(q)&&strip(q)===st.n;
       });
       if(workers.length<=st.need) continue;
       const w=workers.find(o=>(o.home==='순환'||o.home===B||(o.pref||[]).includes(B))&&(!selfOnlyStore(B)||o.home===B));
@@ -1170,6 +1275,7 @@ function renderSched(warns){
       if(v===OFF){ cls='off'; txt=''; offN++; }
       else if(v==='전휴무'){ cls='cell-hol'; }
       else if(v==='휴가'){ cls='cell-vac'; vacN++; }
+      else if(v==='병가'){ cls='cell-sick'; vacN++; }
       else if(v==='훈련'){ cls='cell-train'; vacN++; }
       else if(v==='출장'){ cls='cell-trip'; }
       else {
@@ -1187,6 +1293,7 @@ function renderSched(warns){
   h+='</tbody></table>';
   document.getElementById('schedBox').innerHTML=h;
   renderExtra();
+  renderChangeCards();
 }
 
 // ---------- 잉여 휴무 (추가 휴무 부여) ----------
@@ -1197,7 +1304,7 @@ function extraCands(){
   for(let d=0;d<nDays;d++){
     if(hols.includes(d+1)) continue;
     const at={}; S.stores.forEach(st=>at[st.n]=[]);
-    S.emps.forEach(e=>{ if(e.role==='교육') return; const v=cells[e.name][d]; if(v&&v!==OFF&&!['휴가','훈련','출장','전휴무'].includes(v)){ const b=v.replace(/\((OP|CL)\)$/,''); if(at[b]) at[b].push(e.name); } });
+    S.emps.forEach(e=>{ if(e.role==='교육') return; const v=cells[e.name][d]; if(v&&v!==OFF&&!['휴가','병가','훈련','출장','전휴무'].includes(v)){ const b=v.replace(/\((OP|CL)\)$/,''); if(at[b]) at[b].push(e.name); } });
     S.stores.forEach(st=>{
       const sur=at[st.n].length-st.need;
       if(sur>0){ total+=sur; at[st.n].forEach(n=>{ (byEmp[n]=byEmp[n]||[]).push({day:d,sur}); }); }
@@ -1247,7 +1354,7 @@ function unstageExtra(i){ pendingExtra.splice(i,1); renderExtra(); }
 function planExtra(name){
   const {nDays,cells}=sched; const mk=monthKey();
   const hols=(S.hols&&S.hols[mk])||[];
-  const isWork=v=>v&&v!==OFF&&!['휴가','훈련','출장','전휴무'].includes(v);
+  const isWork=v=>v&&v!==OFF&&!['휴가','병가','훈련','출장','전휴무'].includes(v);
   const baseOf=v=>v.replace(/\((OP|CL)\)$/,'');
   const isTr=o=>o.role==='교육';
   const cnt=(stn,d)=>S.emps.reduce((a,o)=>a+((!isTr(o)&&isWork(cells[o.name][d])&&baseOf(cells[o.name][d])===stn)?1:0),0);
@@ -1384,6 +1491,7 @@ function editCell(ev,name,d){
   h+=item('','휴무','#f4f4f5');
   h+=item('전휴무','전휴무',null,'cell-hol');
   h+=item('휴가','휴가',null,'cell-vac');
+  h+=item('병가','병가',null,'cell-sick');
   h+=item('훈련','훈련',null,'cell-train');
   h+=item('출장','출장',null,'cell-trip');
   h+='</div>';
@@ -1425,10 +1533,10 @@ function exportXlsx(){
     let offN=0,vacN=0;
     arr.forEach(v=>{
       let out=v===OFF?'':v;
-      if(e.role==='교육'&&out&&!['휴가','훈련','출장','전휴무'].includes(out)) out+='(PT)';
+      if(e.role==='교육'&&out&&!['휴가','병가','훈련','출장','전휴무'].includes(out)) out+='(PT)';
       row.push(out);
       if(v===OFF) offN++;
-      if(v==='휴가'||v==='훈련') vacN++;
+      if(v==='휴가'||v==='훈련'||v==='병가') vacN++;
     });
     row.push(offN,vacN);
     aoa.push(row);
@@ -1462,6 +1570,7 @@ function exportXlsx(){
       if(v===''){ s.fill={fgColor:{rgb:'EFEFEF'}}; }
       else if(v==='전휴무'){ s.fill={fgColor:{rgb:'FCE4EC'}}; s.font={sz:10,bold:true,color:{rgb:'C62828'}}; }
       else if(v==='휴가'){ s.fill={fgColor:{rgb:'FFC7CE'}}; s.font={sz:10,color:{rgb:'9C0006'}}; }
+      else if(v==='병가'){ s.fill={fgColor:{rgb:'FFD9E8'}}; s.font={sz:10,color:{rgb:'AD1457'}}; }
       else if(v==='훈련'){ s.fill={fgColor:{rgb:'FFE9C9'}}; }
       else if(v==='출장'){ s.fill={fgColor:{rgb:'DDEBF7'}}; }
       else { s.fill={fgColor:{rgb:exColor(v.replace(/\((OP|CL|PT)\)$/,''))}}; }
