@@ -145,7 +145,8 @@
   <button class="active" onclick="showTab(0,this)">① 직원·매장 설정</button>
   <button onclick="showTab(1,this)">② 특이사항 입력</button>
   <button onclick="showTab(2,this)">③ 스케줄 생성</button>
-  <button onclick="showTab(3,this)">④ 사용법</button>
+  <button onclick="showTab(3,this)">④ 스케줄 변경</button>
+  <button onclick="showTab(4,this)">⑤ 사용법</button>
 </div>
 
 <!-- 설정 -->
@@ -253,6 +254,19 @@
     <p class="hint">시작일 전날까지는 전원 그대로 유지되고, 체크한 직원은 한 달 전체가 고정됩니다. 나머지만 다시 최적 편성합니다.</p>
   </div>
   <div class="schedwrap" id="schedBox"></div>
+</div>
+
+<!-- 스케줄 변경 (엑셀 불러오기) -->
+<div class="panel" id="panelEdit">
+  <div class="card">
+    <h3>📂 엑셀 스케줄 불러와서 수정</h3>
+    <p class="hint" style="margin-top:0">이 프로그램에서 다운로드한 엑셀 파일(월 스케줄)을 불러오면 ③ 탭 화면으로 열립니다. 셀 클릭 수정, 긴급 결원 반영, 월중 재편성, 추가 휴무, 임시 저장, 엑셀 재다운로드까지 전부 사용할 수 있습니다.</p>
+    <div class="rowbtns">
+      <input type="file" id="xlsFile" accept=".xlsx,.xls">
+      <button class="btn" onclick="importXlsx()">불러오기</button>
+    </div>
+    <p class="hint">주의: 이 프로그램에서 내보낸 형식(제목 "YYYY년 M월 직원 스케줄" + 소속/성명/직책/구분 열)이어야 하며, 성명이 ① 직원 목록과 일치해야 표에 표시됩니다.</p>
+  </div>
 </div>
 
 <!-- 사용법 -->
@@ -1591,6 +1605,52 @@ function endIntro(){
   setTimeout(()=>iv.remove(),950);
 }
 setTimeout(endIntro,2800); // 약 3초 후 자동 전환
+
+// ---------- ④ 스케줄 변경: 엑셀 불러오기 ----------
+function importXlsx(){
+  const f=document.getElementById('xlsFile').files[0];
+  if(!f){ alert('엑셀 파일을 먼저 선택하세요.'); return; }
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    try{
+      const wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const aoa=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      const title=String((aoa[0]||[])[0]||'');
+      const tm=title.match(/(\d{4})년\s*(\d{1,2})월/);
+      if(!tm) throw '제목 셀에서 연·월을 찾지 못했습니다. (예: "2026년 8월 직원 스케줄")';
+      const y=+tm[1], m=+tm[2];
+      const nDays=new Date(y,m,0).getDate();
+      const c0=4; // 소속/성명/직책/구분 다음부터 날짜
+      const cells={}; const unknown=[];
+      for(let r=3;r<aoa.length;r++){
+        const row=aoa[r]; if(!row||!String(row[1]||'').trim()) continue;
+        const name=String(row[1]).trim();
+        const arr=[];
+        for(let d=0;d<nDays;d++){
+          let v=row[c0+d];
+          v=(v===undefined||v===null)?'':String(v).trim();
+          v=v.replace(/\(PT\)$/,''); // 교육생 표기는 내부값에서 제거 (표시 때 자동 부여)
+          arr.push(v);
+        }
+        cells[name]=arr;
+        if(!S.emps.some(e2=>e2.name===name)) unknown.push(name);
+      }
+      if(!Object.keys(cells).length) throw '직원 행을 찾지 못했습니다.';
+      S.emps.forEach(e2=>{ if(!cells[e2.name]) cells[e2.name]=Array(nDays).fill(''); });
+      document.getElementById('monthPick').value=y+'-'+String(m).padStart(2,'0');
+      renderReqs(); renderDrafts(); renderReqDrafts();
+      sched={year:y,month:m,nDays,cells};
+      pendingExtra=[]; extraHidden=false;
+      renderSched([]);
+      ['dlBtn','saveBtn','dupBtn','recBtn'].forEach(id=>{ const b=document.getElementById(id); if(b) b.style.display=''; });
+      const btn=document.querySelectorAll('.tabs button')[2];
+      if(btn) showTab(2,btn);
+      alert(`불러오기 완료: ${y}년 ${m}월 스케줄\n③ 탭에서 수정 후 다시 엑셀로 다운로드하세요.`+(unknown.length?`\n\n⚠ 직원 목록에 없는 이름(표에 표시되지 않음): ${unknown.join(', ')}\n① 탭에서 직원을 추가하면 표시됩니다.`:''));
+    }catch(err){ alert('불러오기 실패: '+err); }
+  };
+  reader.readAsArrayBuffer(f);
+}
 
 // ---------- 웹앱 매니페스트 (홈 화면 추가 시 아이콘·이름) ----------
 (function(){
