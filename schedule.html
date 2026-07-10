@@ -246,13 +246,23 @@
     <p class="hint">해당 날짜가 결원 처리되고, 빈자리가 생기면 경고창에 투입 추천 버튼이 뜹니다. ② 특이사항에도 자동 기록돼 재생성해도 유지됩니다.</p>
   </div>
   <div class="card" id="rebuildCard" style="display:none">
-    <h3>🔁 월중 재편성 <span class="hint">— 장기 결원·퇴사 등 대규모 변경 시</span></h3>
+    <h3>🚨 결원 근무 분배 <span class="hint">— 퇴사·장기 병가 시 그 사람의 근무를 선택 인원에게 인수인계</span></h3>
+    <div class="rowbtns">
+      <select id="rdEmp"></select>
+      <select id="rdType"><option>병가</option><option>휴가</option><option value="휴무">퇴사 (빈칸 처리)</option></select>
+      <input type="text" id="rdDays" placeholder="기간 (예: 15-31)" style="width:140px">
+      <button class="btn" onclick="redistribute()">분배 실행</button>
+    </div>
+    <div id="rdEmps" style="font-size:13px;margin-top:4px"></div>
+    <p class="hint">결원자의 실제 근무일만 골라, 체크한 직원 중 그날 휴무이면서 <b>5일 연속 근무를 넘지 않는 후보</b>에게 골고루 배정합니다. 요청 휴무는 보호되고, 배정 못 한 날은 경고로 남습니다.</p>
+    <hr style="border:0;border-top:1px dashed #ddd;margin:12px 0">
+    <div style="font-size:13.5px;font-weight:600;margin-bottom:6px">🔁 월중 재편성 (고정 후 전체 재생성)</div>
     <div class="rowbtns">
       <label style="font-size:13px">재편성 시작일: <input type="number" id="rbDay" min="1" value="1" style="width:64px" oninput="updateLockPreview()"> 일부터</label>
-      <button class="btn" onclick="rebuildSchedule()">재편성 실행</button>
+      <button class="btn gray" onclick="rebuildSchedule()">재편성 실행</button>
     </div>
     <div id="rbEmps" style="font-size:13px;margin-top:4px"></div>
-    <p class="hint">시작일 전날까지는 전원 그대로 유지되고, 체크한 직원은 한 달 전체가 고정됩니다. 나머지만 다시 최적 편성합니다.</p>
+    <p class="hint">시작일 전날까지는 전원 그대로 유지되고, 체크한 직원은 한 달 전체가 고정됩니다(회색 표시 미리보기).</p>
   </div>
   <div class="schedwrap" id="schedBox"></div>
 </div>
@@ -1155,6 +1165,62 @@ function applyAbsence(){
   document.getElementById('absDays').value='';
   alert(`${name} — ${type} ${days.join(', ')}일 반영 완료.`+(holes.length?`\n\n빈자리 ${holes.length}건이 생겼습니다. 경고창의 투입 추천 버튼으로 메꿔주세요.`:'\n\n빈자리 없이 처리됐습니다.'));
 }
+// ---------- 결원 근무 분배 (퇴사·장기 병가 인수인계) ----------
+function redistribute(){
+  if(!sched){ alert('먼저 스케줄을 생성하거나 불러오세요.'); return; }
+  const name=document.getElementById('rdEmp').value;
+  const type=document.getElementById('rdType').value; // 병가/휴가/휴무(퇴사)
+  const mk=monthKey(); const [y,m]=mk.split('-').map(Number);
+  const days=parseDays(document.getElementById('rdDays').value,sched.nDays,m);
+  if(!days.length){ alert('기간을 입력하세요. 예: 15-31'); return; }
+  const recips=[...document.querySelectorAll('.rdsel:checked')].map(c=>c.value).filter(n=>n!==name);
+  if(!recips.length){ alert('분배 받을 직원을 한 명 이상 체크하세요.'); return; }
+  const strip=v=>v.replace(/\((OP|CL|PT)\)$/,'');
+  const rest=v=>v===''||v==='전휴무'||v==='휴가'||v==='병가';
+  const isW=v=>v&&v!==''&&!['휴가','병가','훈련','출장','전휴무'].includes(v);
+  const cells=sched.cells;
+  const runIf=(rec,d)=>{ let len=1; for(let k=d-1;k>=0&&!rest(cells[rec][k]||'');k--)len++; for(let k=d+1;k<sched.nDays&&!rest(cells[rec][k]||'');k++)len++; return len; };
+  const reqOff=new Set((S.reqs[mk]||[]).filter(r=>['휴무요청','휴가','병가','훈련','출장'].includes(r.type)).map(r=>r.emp+'|'+(r.day-1)));
+  const assignedCnt={}; recips.forEach(n=>assignedCnt[n]=0);
+  let handovers=0;
+  days.forEach(day=>{
+    const d=day-1;
+    const val=cells[name][d];
+    const wasWork=isW(val);
+    cells[name][d]=type==='휴무'?OFF:type; // 결원 처리
+    if(!wasWork) return;
+    const store=strip(val);
+    const cand=recips.filter(rec=>{
+      if(cells[rec][d]!==OFF) return false;            // 그날 휴무인 사람만 대체 가능
+      if(reqOff.has(rec+'|'+d)) return false;          // 본인 요청 휴무 보호
+      const e2=S.emps.find(x=>x.name===rec);
+      if(!e2||e2.role==='교육') return false;
+      const okStore=e2.home==='순환'||e2.home===store||(e2.pref||[]).includes(store);
+      if(!okStore) return false;
+      if(selfOnlyStore(store)&&e2.home!==store) return false;
+      if(runIf(rec,d)>5) return false;                 // 5일 연속 초과 방지
+      return true;
+    }).sort((a,b)=>assignedCnt[a]-assignedCnt[b]||(cells[a].filter(v=>v===OFF).length-cells[b].filter(v=>v===OFF).length)*-1);
+    if(!cand.length) return; // 커버 못 한 날은 아래 coverage 경고로 잡힘
+    const pick=cand[0];
+    cells[pick][d]=val; // OP/CL 라벨 포함 그대로 인수
+    assignedCnt[pick]++; handovers++;
+  });
+  // 특이사항 기록 (재생성해도 유지)
+  if(type!=='휴무'){
+    if(!S.reqs[mk]) S.reqs[mk]=[];
+    days.forEach(day=>{
+      S.reqs[mk]=S.reqs[mk].filter(r=>!(r.emp===name&&r.day===day));
+      S.reqs[mk].push({emp:name,type,day,store:''});
+    });
+  }
+  save();
+  const holes=coverageWarnsForDays(days.map(x=>x-1));
+  lastWarns=lastWarns.concat(holes);
+  renderSched(lastWarns);
+  const summary=recips.map(n=>`· ${n}: ${assignedCnt[n]}일`).filter(s=>!/ 0일$/.test(s)).join('\n');
+  alert(`분배 완료 — ${name}의 근무 ${handovers}일을 인수인계했습니다.\n\n${summary||'배정된 인원 없음'}`+(holes.length?`\n\n⚠ 커버 못 한 날 ${holes.length}건 — 경고창의 투입 버튼으로 처리하세요.`:'')+`\n\n※ 인수한 직원의 휴무가 줄었습니다. 필요하면 "휴무자 추천"으로 보충하세요.`);
+}
 // ---------- 모드 B: 월중 재편성 (고정 후 재생성) ----------
 function rebuildSchedule(){
   if(!sched){ alert('먼저 스케줄을 생성하세요.'); return; }
@@ -1174,6 +1240,9 @@ function renderChangeCards(){
   document.getElementById('rbDay').max=sched.nDays;
   const prev=new Set([...document.querySelectorAll('.rbsel:checked')].map(c=>c.value));
   document.getElementById('rbEmps').innerHTML='한 달 전체 고정할 직원: '+S.emps.map(e=>`<label style="margin-right:10px;white-space:nowrap"><input type="checkbox" class="rbsel" value="${e.name}" ${prev.has(e.name)?'checked':''} onchange="updateLockPreview()"> ${e.name}</label>`).join('');
+  document.getElementById('rdEmp').innerHTML=S.emps.filter(e=>e.role!=='교육').map(e=>`<option>${e.name}</option>`).join('');
+  const prevRd=new Set([...document.querySelectorAll('.rdsel:checked')].map(c=>c.value));
+  document.getElementById('rdEmps').innerHTML='분배 받을 직원 선택: '+S.emps.filter(e=>e.role!=='교육').map(e=>`<label style="margin-right:10px;white-space:nowrap"><input type="checkbox" class="rdsel" value="${e.name}" ${prevRd.has(e.name)?'checked':''}> ${e.name}</label>`).join('');
   updateLockPreview();
 }
 // 고정 영역 미리보기: 실제 값은 그대로, 화면만 흐리게
@@ -1282,8 +1351,52 @@ function applyOffFix(name,d,idx){
   lastWarns.splice(idx,1);
   renderSched(lastWarns);
 }
+// 해결된 경고는 자동 소멸 + 중복 제거
+function warnStillValid(w){
+  if(!sched) return false;
+  const strip=v=>v.replace(/\((OP|CL|PT)\)$/,'');
+  const isW=v=>v&&v!==''&&!['휴가','병가','훈련','출장','전휴무'].includes(v);
+  const cnt=(stn,d)=>S.emps.filter(e=>e.role!=='교육').reduce((a,o)=>a+((isW(sched.cells[o.name][d])&&strip(sched.cells[o.name][d])===stn)?1:0),0);
+  if(typeof w==='object'){
+    if(w.type==='surplus'){ const st=S.stores.find(s=>s.n===w.store); return !!st&&cnt(w.store,w.d)>st.need; }
+    if(w.type==='offsuggest'){
+      const e=S.emps.find(x=>x.name===w.name); if(!e) return false;
+      const bonus=(((S.extraLog||{})[monthKey()])||[]).filter(x=>x.bulk&&x.name===w.name).length;
+      return sched.cells[w.name].filter(v=>v==='').length<offTarget(e)+bonus;
+    }
+    return true;
+  }
+  let m=w.match(/^(\d+)월 (\d+)일 (.+?): (근무 인원 없음|최소 인원 미달|1명 풀타임)/);
+  if(m){
+    const st=S.stores.find(s=>s.n===m[3]); if(!st) return false;
+    return cnt(m[3],+m[2]-1)<st.need;
+  }
+  m=w.match(/^(.+?): (\d+)일 연속 근무 발생/);
+  if(m){
+    const arr=sched.cells[m[1]]; if(!arr) return false;
+    const rest=v=>v===''||v==='전휴무'||v==='휴가'||v==='병가';
+    let run=0,mx=0; for(let d=0;d<sched.nDays;d++){ if(!rest(arr[d]))run++; else run=0; if(run>mx)mx=run; }
+    return mx>5;
+  }
+  m=w.match(/^(.+?): 휴무 (\d+)일을 배치하지 못했습니다/);
+  if(m){
+    const e=S.emps.find(x=>x.name===m[1]); if(!e) return true;
+    return sched.cells[e.name].filter(v=>v==='').length<offTarget(e);
+  }
+  return true;
+}
+function pruneWarns(){
+  const seenStr=new Set(), seenOff=new Set();
+  lastWarns=lastWarns.filter(w=>{
+    if(!warnStillValid(w)) return false;
+    if(typeof w==='string'){ if(seenStr.has(w)) return false; seenStr.add(w); return true; }
+    if(w.type==='offsuggest'){ if(seenOff.has(w.name)) return false; seenOff.add(w.name); return true; }
+    return true;
+  });
+}
 function renderSched(warns){
   if(warns!==undefined) lastWarns=warns;
+  if(sched) pruneWarns(); // 해결된 경고는 자동으로 사라짐
   computeDupes(); // 중복근무 표시는 항상 최신 상태 유지
   const {year,month,nDays,cells}=sched;
   const wb=document.getElementById('warnBox');
