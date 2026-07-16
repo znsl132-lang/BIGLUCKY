@@ -27,6 +27,8 @@
   .logo{display:flex;align-items:center;gap:9px;font-weight:800;font-size:19px;letter-spacing:.5px}
   .logo .v{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;
     background:var(--yellow);color:var(--black);border-radius:8px;font-size:19px;font-weight:900}
+  .logo-pill{background:#fff;border-radius:9px;padding:5px 12px;display:flex;align-items:center}
+  .logo-pill img{height:24px;display:block}
   .hd .title{font-size:14px;color:#d1d5db;font-weight:500}
   .hd .right{margin-left:auto;display:flex;align-items:center;gap:10px;font-size:12.5px;color:#9ca3af}
   .btn-refresh{background:var(--yellow);color:var(--black);border:0;border-radius:8px;
@@ -60,8 +62,11 @@
   .b-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;
     cursor:pointer;border:2px solid transparent;transition:border-color .15s, transform .1s}
   .b-card:hover{transform:translateY(-2px)}
+  .b-card.zero{border-color:#fca5a5}
   .b-card.sel{border-color:var(--yellow)}
-  .b-card .name{font-size:14px;font-weight:700}
+  .b-card .name{font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .badge-zero{font-size:10.5px;font-weight:700;color:#dc2626;background:#fef2f2;
+    border:1px solid #fecaca;border-radius:10px;padding:2px 8px}
   .b-card .row{display:flex;align-items:baseline;gap:8px;margin-top:8px}
   .b-card .big{font-size:26px;font-weight:800;letter-spacing:-.5px}
   .b-card .unit{font-size:12px;color:var(--sub)}
@@ -91,7 +96,19 @@
   footer .f-note{font-size:10.5px;color:#6b7280;margin-top:8px}
 
   @media(max-width:860px){ .summary{grid-template-columns:repeat(2,1fr)} .summary .s-card:last-child{grid-column:1/-1} }
-  @media(max-width:520px){ .hd .title{display:none} }
+  @media(max-width:520px){
+    .hd .title{display:none}
+    .summary{gap:8px;margin-top:14px}
+    .s-card{padding:12px 14px}
+    .s-card .num{font-size:22px}
+    .s-card .delta{font-size:11px}
+    .b-card .big{font-size:22px}
+    .b-card .sub{flex-wrap:wrap;gap:6px 10px}
+    .toggle{margin-left:0;width:100%}
+    .toggle button{flex:1;padding:7px 0;text-align:center}
+    .c-box{height:200px}
+    .c-card.wide .c-box{height:220px}
+  }
 
   /* ===== 인트로: WE VAPE 로고 페이드 인 (스케줄 생성기와 동일) ===== */
   #intro{position:fixed;inset:0;background:#fff;z-index:9999;display:flex;align-items:center;justify-content:center;cursor:pointer}
@@ -122,7 +139,10 @@
 
 <header>
   <div class="hd">
-    <div class="logo"><span class="v">V</span>WE VAPE</div>
+    <div class="logo">
+      <span class="logo-pill"><img src="https://github.com/user-attachments/assets/7ac07bf2-100b-4129-8124-d389a21c5cd9" alt="WE VAPE"
+        onerror="this.parentElement.outerHTML='&lt;span class=&quot;v&quot;&gt;V&lt;/span&gt;WE VAPE'"></span>
+    </div>
     <div class="title">지점 고객 데이터 현황</div>
     <div class="right">
       <span id="updatedAt"></span>
@@ -282,10 +302,11 @@ function renderBranches(){
     if (period === "today") delta = deltaHtml(m.today, m.yesterday, "전일");
     else if (period === "week") delta = deltaHtml(m.week, m.prevWeek, "이전 7일");
     else if (period === "month") delta = deltaHtml(m.month, m.prevMonth, "지난달 동기");
+    const zero = m.today === 0; // 오늘 수집 없는 지점 강조
     const card = document.createElement("div");
-    card.className = "b-card" + (selected===b.name ? " sel":"");
+    card.className = "b-card" + (zero ? " zero":"") + (selected===b.name ? " sel":"");
     card.innerHTML = `
-      <div class="name">${b.name}</div>
+      <div class="name">${b.name}${zero ? '<span class="badge-zero">오늘 수집 없음</span>' : ''}</div>
       <div class="row"><span class="big">${big.toLocaleString()}</span><span class="unit">건 · ${periodLabel[period]}</span></div>
       <div>${delta}</div>
       <div class="sub"><span>오늘 ${m.today}</span><span>7일 ${m.week}</span><span>이번달 ${m.month}</span><span>누적 ${m.total}</span></div>
@@ -439,6 +460,7 @@ setTimeout(endIntro, 2800); // 약 3초 후 자동 전환 (클릭 시 즉시 건
 })();
 
 loadData();
+setInterval(loadData, 5 * 60 * 1000); // 5분마다 자동 새로고침 (매장 모니터용)
 </script>
 </body>
 </html>
