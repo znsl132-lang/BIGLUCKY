@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>WE VAPE 지점 고객 데이터 현황</title>
+<link rel="icon" href="https://github.com/user-attachments/assets/7ac07bf2-100b-4129-8124-d389a21c5cd9">
+<link rel="apple-touch-icon" href="https://github.com/user-attachments/assets/7ac07bf2-100b-4129-8124-d389a21c5cd9">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  /* ============ WE VAPE 브랜드: 노랑 #FFC41E / 검정 / 하양 ============ */
+  :root{
+    --yellow:#FFC41E; --black:#111111; --white:#ffffff;
+    --bg:#f6f7f9; --card:#ffffff; --text:#1a1a1a; --sub:#6b7280;
+    --line:#ececee; --up:#16a34a; --down:#dc2626;
+    --radius:14px; --shadow:0 1px 3px rgba(17,17,17,.06),0 4px 14px rgba(17,17,17,.05);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Pretendard','Apple SD Gothic Neo','Malgun Gothic',system-ui,sans-serif;
+    background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 18px 60px}
+
+  /* 헤더 */
+  header{background:var(--black);color:var(--white)}
+  .hd{max-width:1180px;margin:0 auto;padding:16px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .logo{display:flex;align-items:center;gap:9px;font-weight:800;font-size:19px;letter-spacing:.5px}
+  .logo .v{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;
+    background:var(--yellow);color:var(--black);border-radius:8px;font-size:19px;font-weight:900}
+  .hd .title{font-size:14px;color:#d1d5db;font-weight:500}
+  .hd .right{margin-left:auto;display:flex;align-items:center;gap:10px;font-size:12.5px;color:#9ca3af}
+  .btn-refresh{background:var(--yellow);color:var(--black);border:0;border-radius:8px;
+    padding:7px 14px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+  .btn-refresh:hover{filter:brightness(1.05)}
+
+  .notice{margin:16px 0 0;padding:10px 14px;border-radius:10px;font-size:13px;display:none}
+  .notice.demo{display:block;background:#fff8e1;border:1px solid #f5d67b;color:#8a6d1a}
+  .notice.error{display:block;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c}
+
+  /* 요약 스트립 */
+  .summary{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-top:20px}
+  .s-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px 18px;
+    border-top:3px solid var(--yellow)}
+  .s-card .lbl{font-size:12.5px;color:var(--sub);font-weight:600}
+  .s-card .num{font-size:28px;font-weight:800;margin-top:4px;letter-spacing:-.5px}
+  .s-card .delta{font-size:12px;font-weight:700;margin-top:2px}
+  .delta.up{color:var(--up)} .delta.down{color:var(--down)} .delta.flat{color:var(--sub)}
+
+  /* 섹션 타이틀 + 기간 토글 */
+  .sec{display:flex;align-items:center;gap:12px;margin:30px 0 14px;flex-wrap:wrap}
+  .sec h2{font-size:17px;font-weight:800}
+  .sec .bar{width:5px;height:18px;background:var(--yellow);border-radius:3px}
+  .toggle{margin-left:auto;display:flex;background:#ebedf0;border-radius:9px;padding:3px}
+  .toggle button{border:0;background:transparent;padding:6px 14px;font-size:12.5px;font-weight:700;
+    border-radius:7px;cursor:pointer;color:var(--sub);font-family:inherit}
+  .toggle button.on{background:var(--black);color:var(--yellow)}
+
+  /* 지점 카드 그리드 */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+  .b-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;
+    cursor:pointer;border:2px solid transparent;transition:border-color .15s, transform .1s}
+  .b-card:hover{transform:translateY(-2px)}
+  .b-card.sel{border-color:var(--yellow)}
+  .b-card .name{font-size:14px;font-weight:700}
+  .b-card .row{display:flex;align-items:baseline;gap:8px;margin-top:8px}
+  .b-card .big{font-size:26px;font-weight:800;letter-spacing:-.5px}
+  .b-card .unit{font-size:12px;color:var(--sub)}
+  .b-card .sub{display:flex;gap:10px;margin-top:8px;font-size:11.5px;color:var(--sub)}
+  .b-card svg{margin-top:10px;width:100%;height:34px}
+
+  /* 상세 */
+  .detail-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .chip{font-size:12px;font-weight:700;background:var(--black);color:var(--yellow);
+    border-radius:20px;padding:5px 13px}
+  .btn-all{border:1px solid var(--line);background:var(--card);border-radius:20px;padding:5px 13px;
+    font-size:12px;font-weight:600;cursor:pointer;color:var(--sub);font-family:inherit;display:none}
+  .charts{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;margin-top:14px}
+  .c-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px}
+  .c-card h3{font-size:13.5px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+  .c-card h3::before{content:"";width:8px;height:8px;background:var(--yellow);border-radius:2px}
+  .c-card.wide{grid-column:1/-1}
+  .c-box{position:relative;height:220px}
+  .c-card.wide .c-box{height:260px}
+  .consent-num{font-size:34px;font-weight:800;text-align:center;margin-top:60px}
+  .consent-sub{text-align:center;color:var(--sub);font-size:12.5px;margin-top:6px}
+
+  footer{margin-top:50px;background:var(--black);color:#e5e7eb;text-align:center;padding:26px 18px}
+  footer .f-title{font-size:13.5px;font-weight:700;color:var(--white)}
+  footer .f-copy{font-size:12px;color:#9ca3af;margin-top:6px}
+  footer .f-copy .author{color:var(--yellow);font-weight:700}
+  footer .f-note{font-size:10.5px;color:#6b7280;margin-top:8px}
+
+  @media(max-width:860px){ .summary{grid-template-columns:repeat(2,1fr)} .summary .s-card:last-child{grid-column:1/-1} }
+  @media(max-width:520px){ .hd .title{display:none} }
+
+  /* ===== 인트로: WE VAPE 로고 페이드 인 (스케줄 생성기와 동일) ===== */
+  #intro{position:fixed;inset:0;background:#fff;z-index:9999;display:flex;align-items:center;justify-content:center;cursor:pointer}
+  #intro.done{opacity:0;transition:opacity .9s ease;pointer-events:none}
+  .intro-img{width:min(430px,72vw);height:auto;opacity:0;transform:scale(.94);
+    transition:opacity 1.25s ease .15s, transform 1.25s cubic-bezier(.2,.7,.3,1) .15s}
+  .intro-img.show{opacity:1;transform:scale(1)}
+  .intro-logo{font-family:'Arial Black',Arial,'Malgun Gothic',sans-serif;font-weight:900;letter-spacing:.05em;
+    display:flex;align-items:center;color:#0d0d0d;font-size:min(13vw,76px);opacity:0;transform:scale(.93);
+    animation:logoIn 1.5s cubic-bezier(.2,.7,.3,1) .35s forwards;user-select:none}
+  .intro-logo .vv{color:#FFD400;font-size:1.62em;line-height:.85;margin:0 .01em;-webkit-text-stroke:1.5px #0d0d0d;transform:translateY(-.06em)}
+  @keyframes logoIn{to{opacity:1;transform:scale(1)}}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+  body.ready header{animation:fadeUp .5s ease-out both}
+  body.ready .summary{animation:fadeUp .5s ease-out .12s both}
+  body.ready .grid{animation:fadeUp .5s ease-out .2s both}
+  body.ready .charts{animation:fadeUp .6s ease-out .28s both}
+</style>
+</head>
+<body>
+
+<div id="intro" onclick="endIntro()" title="클릭하면 건너뜁니다">
+  <img src="https://github.com/user-attachments/assets/7ac07bf2-100b-4129-8124-d389a21c5cd9" alt="WE VAPE" class="intro-img"
+       onload="this.classList.add('show')"
+       onerror="this.remove();document.getElementById('introTxt').style.display='flex'">
+  <div class="intro-logo" id="introTxt" style="display:none"><span>WE</span><span class="vv">V</span><span>APE</span></div>
+</div>
+
+<header>
+  <div class="hd">
+    <div class="logo"><span class="v">V</span>WE VAPE</div>
+    <div class="title">지점 고객 데이터 현황</div>
+    <div class="right">
+      <span id="updatedAt"></span>
+      <button class="btn-refresh" onclick="loadData()">새로고침</button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div id="notice" class="notice"></div>
+
+  <!-- 전체 요약 -->
+  <div class="summary">
+    <div class="s-card"><div class="lbl">오늘 수집</div><div class="num" id="sumToday">-</div><div class="delta" id="dToday"></div></div>
+    <div class="s-card"><div class="lbl">어제 수집</div><div class="num" id="sumYesterday">-</div><div class="delta"></div></div>
+    <div class="s-card"><div class="lbl">최근 7일</div><div class="num" id="sumWeek">-</div><div class="delta" id="dWeek"></div></div>
+    <div class="s-card"><div class="lbl">이번 달</div><div class="num" id="sumMonth">-</div><div class="delta" id="dMonth"></div></div>
+    <div class="s-card"><div class="lbl">누적 전체</div><div class="num" id="sumTotal">-</div><div class="delta"></div></div>
+  </div>
+
+  <!-- 지점 카드 -->
+  <div class="sec">
+    <div class="bar"></div><h2>지점별 수집 현황</h2>
+    <div class="toggle" id="periodToggle">
+      <button data-p="today" class="on">오늘</button>
+      <button data-p="week">7일</button>
+      <button data-p="month">이번 달</button>
+      <button data-p="total">누적</button>
+    </div>
+  </div>
+  <div class="grid" id="branchGrid"></div>
+
+  <!-- 상세 -->
+  <div class="sec">
+    <div class="bar"></div><h2>상세 분석</h2>
+    <div class="detail-head" style="margin-left:auto">
+      <span class="chip" id="detailChip">전체 지점</span>
+      <button class="btn-all" id="btnAll" onclick="selectBranch(null)">전체 보기로 돌아가기</button>
+    </div>
+  </div>
+  <div class="charts">
+    <div class="c-card wide"><h3>최근 30일 수집 추이</h3><div class="c-box"><canvas id="chTrend"></canvas></div></div>
+    <div class="c-card"><h3>성별</h3><div class="c-box"><canvas id="chGender"></canvas></div></div>
+    <div class="c-card"><h3>연령대</h3><div class="c-box"><canvas id="chAge"></canvas></div></div>
+    <div class="c-card"><h3>방문 경로</h3><div class="c-box"><canvas id="chRoute"></canvas></div></div>
+    <div class="c-card"><h3>구매 기기</h3><div class="c-box"><canvas id="chDevice"></canvas></div></div>
+    <div class="c-card"><h3>선호 맛</h3><div class="c-box"><canvas id="chFlavor"></canvas></div></div>
+    <div class="c-card"><h3>마케팅 수신 동의율</h3>
+      <div class="consent-num" id="consentRate">-</div>
+      <div class="consent-sub" id="consentSub"></div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <div class="f-title">We Vape — 지점 고객 데이터 현황</div>
+  <div class="f-copy">Copyright © 2026 <span class="author">Dae Woon Jang</span>. All Rights Reserved.</div>
+  <div class="f-note">내부 운영 자료 · 개인 식별 정보는 포함되지 않습니다</div>
+</footer>
+
+<script>
+/* ==========================================================
+   설정: Apps Script 배포 후 받은 "웹 앱 URL"을 아래에 붙여넣으세요.
+   비워두면 샘플 데이터로 화면을 미리 볼 수 있습니다.
+   ========================================================== */
+const API_URL = "https://script.google.com/macros/s/AKfycbzOfdq2wwANbkzUg0_ltz_qMAeCzxQKNlGd-BtRoZA-gtOEfHRogeNJaFv5dMJwgyEL/exec";
+
+/* ---------- 상태 ---------- */
+let DATA = null;          // {updatedAt, branches:[{name,total,daily,dist}]}
+let period = "today";     // today | week | month | total
+let selected = null;      // 선택 지점명 (null = 전체)
+const charts = {};
+
+/* ---------- 날짜 유틸 ---------- */
+const fmt = d => d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+const daysAgo = n => { const d = new Date(); d.setDate(d.getDate()-n); return d; };
+function rangeSum(daily, from, to){ // from~to (yyyy-mm-dd 문자열, 양끝 포함)
+  let s = 0;
+  for (const k in daily) if (k >= from && k <= to) s += daily[k];
+  return s;
+}
+
+/* ---------- 지표 계산 ---------- */
+function metrics(daily, total){
+  const today = fmt(daysAgo(0)), yest = fmt(daysAgo(1));
+  const w0 = fmt(daysAgo(6)), pw1 = fmt(daysAgo(13)), pw2 = fmt(daysAgo(7));
+  const now = new Date();
+  const m0 = fmt(new Date(now.getFullYear(), now.getMonth(), 1));
+  const prevM0 = new Date(now.getFullYear(), now.getMonth()-1, 1);
+  const prevMEndSame = new Date(now.getFullYear(), now.getMonth()-1, Math.min(now.getDate(), new Date(now.getFullYear(), now.getMonth(), 0).getDate()));
+  return {
+    today: rangeSum(daily, today, today),
+    yesterday: rangeSum(daily, yest, yest),
+    week: rangeSum(daily, w0, today),
+    prevWeek: rangeSum(daily, pw1, pw2),
+    month: rangeSum(daily, m0, today),
+    prevMonth: rangeSum(daily, fmt(prevM0), fmt(prevMEndSame)),
+    total: total
+  };
+}
+function mergedDaily(){ // 전체 지점 합산 daily
+  const out = {};
+  DATA.branches.forEach(b => { for (const k in b.daily) out[k] = (out[k]||0) + b.daily[k]; });
+  return out;
+}
+function mergedDist(key){
+  const out = {};
+  const list = selected ? DATA.branches.filter(b=>b.name===selected) : DATA.branches;
+  list.forEach(b => { const d = b.dist[key]||{}; for (const k in d) out[k]=(out[k]||0)+d[k]; });
+  return out;
+}
+
+/* ---------- 렌더 ---------- */
+const deltaHtml = (cur, prev, label) => {
+  const diff = cur - prev;
+  if (diff > 0) return `<span class="delta up">▲ ${diff} (${label})</span>`;
+  if (diff < 0) return `<span class="delta down">▼ ${Math.abs(diff)} (${label})</span>`;
+  return `<span class="delta flat">— 동일 (${label})</span>`;
+};
+
+function renderSummary(){
+  const all = mergedDaily();
+  const total = DATA.branches.reduce((s,b)=>s+b.total,0);
+  const m = metrics(all, total);
+  const $ = id => document.getElementById(id);
+  $("sumToday").textContent = m.today.toLocaleString();
+  $("sumYesterday").textContent = m.yesterday.toLocaleString();
+  $("sumWeek").textContent = m.week.toLocaleString();
+  $("sumMonth").textContent = m.month.toLocaleString();
+  $("sumTotal").textContent = m.total.toLocaleString();
+  $("dToday").innerHTML = deltaHtml(m.today, m.yesterday, "전일 대비");
+  $("dWeek").innerHTML = deltaHtml(m.week, m.prevWeek, "이전 7일 대비");
+  $("dMonth").innerHTML = deltaHtml(m.month, m.prevMonth, "지난달 동기 대비");
+}
+
+function sparklineHtml(daily){ // 최근 14일 미니 막대 (오늘 = 노랑)
+  const vals = [];
+  for (let i=13;i>=0;i--){ const k = fmt(daysAgo(i)); vals.push(daily[k]||0); }
+  const max = Math.max(...vals, 1);
+  let rects = "";
+  vals.forEach((v,i)=>{
+    const h = v===0 ? 3 : Math.max(6, v/max*30);
+    const x = i*21.4 + 1.5;
+    const fill = i===13 ? "#FFC41E" : "#e5e7eb";
+    rects += `<rect x="${x.toFixed(1)}" y="${(33-h).toFixed(1)}" width="17" height="${h.toFixed(1)}" rx="2" fill="${fill}"/>`;
+  });
+  return `<svg viewBox="0 0 300 34" preserveAspectRatio="none">${rects}</svg>`;
+}
+
+const periodLabel = {today:"오늘", week:"최근 7일", month:"이번 달", total:"누적"};
+function renderBranches(){
+  const grid = document.getElementById("branchGrid");
+  grid.innerHTML = "";
+  DATA.branches.forEach(b => {
+    const m = metrics(b.daily, b.total);
+    let big = m[period], delta = "";
+    if (period === "today") delta = deltaHtml(m.today, m.yesterday, "전일");
+    else if (period === "week") delta = deltaHtml(m.week, m.prevWeek, "이전 7일");
+    else if (period === "month") delta = deltaHtml(m.month, m.prevMonth, "지난달 동기");
+    const card = document.createElement("div");
+    card.className = "b-card" + (selected===b.name ? " sel":"");
+    card.innerHTML = `
+      <div class="name">${b.name}</div>
+      <div class="row"><span class="big">${big.toLocaleString()}</span><span class="unit">건 · ${periodLabel[period]}</span></div>
+      <div>${delta}</div>
+      <div class="sub"><span>오늘 ${m.today}</span><span>7일 ${m.week}</span><span>이번달 ${m.month}</span><span>누적 ${m.total}</span></div>
+      ${sparklineHtml(b.daily)}`;
+    card.onclick = () => selectBranch(selected===b.name ? null : b.name);
+    grid.appendChild(card);
+  });
+}
+
+/* ---------- 차트 ---------- */
+const PALETTE = ["#FFC41E","#111111","#9ca3af","#f59e0b","#4b5563","#fde68a","#374151","#d1d5db","#a16207","#e5e7eb"];
+function doughnut(id, obj){
+  const entries = Object.entries(obj).sort((a,b)=>b[1]-a[1]);
+  if (charts[id]) charts[id].destroy();
+  charts[id] = new Chart(document.getElementById(id), {
+    type: "doughnut",
+    data: { labels: entries.map(e=>e[0]),
+      datasets: [{ data: entries.map(e=>e[1]), backgroundColor: PALETTE, borderColor:"#fff", borderWidth:2 }] },
+    options: { responsive:true, maintainAspectRatio:false, cutout:"58%",
+      plugins:{ legend:{ position:"right", labels:{ boxWidth:10, font:{size:11}, padding:8 } },
+        tooltip:{ callbacks:{ label: c => ` ${c.label}: ${c.parsed}건 (${(c.parsed/entries.reduce((s,e)=>s+e[1],0)*100).toFixed(1)}%)` } } } }
+  });
+}
+function renderTrend(){
+  const daily = selected ? DATA.branches.find(b=>b.name===selected).daily : mergedDaily();
+  const labels = [], vals = [];
+  for (let i=29;i>=0;i--){ const k = fmt(daysAgo(i)); labels.push(k.slice(5).replace("-","/")); vals.push(daily[k]||0); }
+  if (charts.trend) charts.trend.destroy();
+  charts.trend = new Chart(document.getElementById("chTrend"), {
+    type:"bar",
+    data:{ labels, datasets:[{ data:vals, backgroundColor:"#FFC41E", borderRadius:4,
+      hoverBackgroundColor:"#111111" }] },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label:c=>` ${c.parsed.y}건` } } },
+      scales:{ x:{ grid:{display:false}, ticks:{ font:{size:10}, maxRotation:0, autoSkip:true, maxTicksLimit:15 } },
+        y:{ beginAtZero:true, ticks:{ precision:0, font:{size:11} }, grid:{ color:"#f1f2f4" } } } }
+  });
+}
+function renderDetail(){
+  document.getElementById("detailChip").textContent = selected || "전체 지점 (9개 합산)";
+  document.getElementById("btnAll").style.display = selected ? "inline-block" : "none";
+  renderTrend();
+  doughnut("chGender", mergedDist("gender"));
+  doughnut("chAge", mergedDist("age"));
+  doughnut("chRoute", mergedDist("route"));
+  doughnut("chDevice", mergedDist("device"));
+  doughnut("chFlavor", mergedDist("flavor"));
+  const c = mergedDist("consent");
+  const yes = c["동의"]||0, no = c["미동의"]||0, tot = yes+no;
+  document.getElementById("consentRate").textContent = tot ? (yes/tot*100).toFixed(1)+"%" : "-";
+  document.getElementById("consentSub").textContent = tot ? `동의 ${yes}건 / 미동의 ${no}건` : "데이터 없음";
+}
+
+function selectBranch(name){
+  selected = name;
+  renderBranches();
+  renderDetail();
+  if (name) document.querySelector(".charts").scrollIntoView({behavior:"smooth", block:"start"});
+}
+
+document.getElementById("periodToggle").addEventListener("click", e => {
+  if (e.target.tagName !== "BUTTON") return;
+  period = e.target.dataset.p;
+  document.querySelectorAll("#periodToggle button").forEach(b=>b.classList.toggle("on", b===e.target));
+  renderBranches();
+});
+
+/* ---------- 데이터 로드 ---------- */
+async function loadData(){
+  const notice = document.getElementById("notice");
+  notice.className = "notice";
+  if (!API_URL){
+    DATA = demoData();
+    notice.className = "notice demo";
+    notice.textContent = "샘플 데이터를 표시 중입니다. 파일 상단 API_URL에 Apps Script 웹 앱 주소를 넣으면 실제 데이터가 표시됩니다.";
+    renderAll();
+    return;
+  }
+  try{
+    document.getElementById("updatedAt").textContent = "불러오는 중...";
+    const res = await fetch(API_URL);
+    DATA = await res.json();
+    renderAll();
+  }catch(err){
+    notice.className = "notice error";
+    notice.textContent = "데이터를 불러오지 못했습니다. 잠시 후 새로고침 해주세요. (" + err.message + ")";
+  }
+}
+function renderAll(){
+  document.getElementById("updatedAt").textContent = "업데이트: " + (DATA.updatedAt||"-");
+  renderSummary();
+  renderBranches();
+  renderDetail();
+}
+
+/* ---------- 샘플 데이터 (미리보기용) ---------- */
+function demoData(){
+  const names = ["구월 로데오점","구월 길병원점","부천 상동점","부천 신중동점","인천 검단점","인천 계산점","인천 공항점","인천 논현점","인천 연수점"];
+  const rnd = (a,b)=>Math.floor(Math.random()*(b-a+1))+a;
+  const branches = names.map((name,idx) => {
+    const daily = {}; let total = 0;
+    for (let i=0;i<60;i++){
+      const n = Math.max(0, rnd(-2, 6-idx%3));
+      if (n>0){ daily[fmt(daysAgo(i))] = n; total += n; }
+    }
+    return { name, total,
+      daily,
+      dist:{
+        gender:{ "남성":rnd(20,60), "여성":rnd(15,50) },
+        age:{ "20대":rnd(20,50), "30대":rnd(10,35), "40대":rnd(5,20), "50대 이상":rnd(0,8) },
+        route:{ "매장 간판":rnd(10,40), "인터넷 검색":rnd(10,35), "지인 추천":rnd(3,15), "SNS":rnd(2,12), "기타":rnd(2,10) },
+        device:{ "그래피티c":rnd(5,25), "그래피티2":rnd(5,20), "그래피티3":rnd(3,15), "롤리팟J":rnd(2,10), "기타(타브랜드)":rnd(10,30) },
+        flavor:{ "과일계열":rnd(20,60), "멘솔계열":rnd(10,30), "연초계열":rnd(5,15), "디저트계열":rnd(3,12) },
+        consent:{ "동의":rnd(30,70), "미동의":rnd(10,30) },
+        lang:{ "한국어":rnd(40,80), "English":rnd(0,8), "中文":rnd(0,10) }
+      }};
+  });
+  return { updatedAt: "샘플 데이터", branches };
+}
+
+/* ---------- 인트로 (스케줄 생성기와 동일) ---------- */
+function endIntro(){
+  const iv = document.getElementById("intro");
+  document.body.classList.add("ready");
+  if (!iv) return;
+  iv.classList.add("done");
+  setTimeout(() => iv.remove(), 950);
+}
+setTimeout(endIntro, 2800); // 약 3초 후 자동 전환 (클릭 시 즉시 건너뛰기)
+
+/* ---------- 웹앱 매니페스트 (홈 화면 추가 시 아이콘·이름, 스케줄 생성기와 동일) ---------- */
+(function(){
+  const LOGO = "https://github.com/user-attachments/assets/7ac07bf2-100b-4129-8124-d389a21c5cd9";
+  const manifest = {
+    name: "WE VAPE 지점 고객 데이터 현황",
+    short_name: "WE VAPE 현황",
+    start_url: ".",
+    display: "standalone",
+    background_color: "#ffffff",
+    theme_color: "#111111",
+    icons: [
+      {src: LOGO, sizes: "192x192", type: "image/png"},
+      {src: LOGO, sizes: "500x500", type: "image/png"}
+    ]
+  };
+  const blob = new Blob([JSON.stringify(manifest)], {type: "application/json"});
+  const link = document.createElement("link");
+  link.rel = "manifest";
+  link.href = URL.createObjectURL(blob);
+  document.head.appendChild(link);
+})();
+
+loadData();
+</script>
+</body>
+</html>
