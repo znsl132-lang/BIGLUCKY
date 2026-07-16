@@ -52,6 +52,9 @@
   .sec{display:flex;align-items:center;gap:12px;margin:30px 0 14px;flex-wrap:wrap}
   .sec h2{font-size:17px;font-weight:800}
   .sec .bar{width:5px;height:18px;background:var(--yellow);border-radius:3px}
+  .sec .tgl{display:flex;align-items:center;gap:12px;cursor:pointer;user-select:none}
+  .caret{font-size:12px;color:var(--sub);transition:transform .2s;margin-left:-2px}
+  .caret.closed{transform:rotate(-90deg)}
   .toggle{margin-left:auto;display:flex;background:#ebedf0;border-radius:9px;padding:3px}
   .toggle button{border:0;background:transparent;padding:6px 14px;font-size:12.5px;font-weight:700;
     border-radius:7px;cursor:pointer;color:var(--sub);font-family:inherit}
@@ -67,6 +70,9 @@
   .b-card .name{font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
   .badge-zero{font-size:10.5px;font-weight:700;color:#dc2626;background:#fef2f2;
     border:1px solid #fecaca;border-radius:10px;padding:2px 8px}
+  .sheet-link{margin-left:auto;font-size:11px;font-weight:600;color:var(--sub);text-decoration:none;
+    border:1px solid var(--line);border-radius:8px;padding:3px 8px;background:#fafafa;white-space:nowrap}
+  .sheet-link:hover{color:var(--black);border-color:var(--yellow);background:#fffdf3}
   .b-card .row{display:flex;align-items:baseline;gap:8px;margin-top:8px}
   .b-card .big{font-size:26px;font-weight:800;letter-spacing:-.5px}
   .b-card .unit{font-size:12px;color:var(--sub)}
@@ -165,7 +171,9 @@
 
   <!-- 지점 카드 -->
   <div class="sec">
-    <div class="bar"></div><h2>지점별 수집 현황</h2>
+    <div class="tgl" onclick="toggleSec('branch')">
+      <div class="bar"></div><h2>지점별 수집 현황</h2><span class="caret" id="caretBranch">▼</span>
+    </div>
     <div class="toggle" id="periodToggle">
       <button data-p="today" class="on">오늘</button>
       <button data-p="week">7일</button>
@@ -177,7 +185,9 @@
 
   <!-- 상세 -->
   <div class="sec">
-    <div class="bar"></div><h2>상세 분석</h2>
+    <div class="tgl" onclick="toggleSec('detail')">
+      <div class="bar"></div><h2>상세 분석</h2><span class="caret" id="caretDetail">▼</span>
+    </div>
     <div class="detail-head" style="margin-left:auto">
       <span class="chip" id="detailChip">전체 지점</span>
       <button class="btn-all" id="btnAll" onclick="selectBranch(null)">전체 보기로 돌아가기</button>
@@ -215,6 +225,35 @@ let DATA = null;          // {updatedAt, branches:[{name,total,daily,dist}]}
 let period = "today";     // today | week | month | total
 let selected = null;      // 선택 지점명 (null = 전체)
 const charts = {};
+
+/* ---------- 지점별 구글시트 바로가기 (드라이브 권한 있는 사람만 열림) ---------- */
+const FOLDER_URL = "https://drive.google.com/drive/folders/1ebUyZV0E0AFZMZAFgQ5xr1DaccyyC47K";
+const SHEET_URLS = {
+  "구월 로데오점": "https://docs.google.com/spreadsheets/d/1MNlbGBVrujH6SLVEQ5ZwJKjsHnilQ7m3M2vOl2CcCdk/edit",
+  "구월 길병원점": "https://docs.google.com/spreadsheets/d/1nqyXVo_Ahrw0XF7YtdDylVc_DCBRZHnWgniKbRA9biQ/edit",
+  "부천 상동점":   "https://docs.google.com/spreadsheets/d/1q4AOAdhWTWIDrUN28bVkgGEm2uswnYTOlqEBH2DcgaM/edit",
+  "부천 신중동점": "https://docs.google.com/spreadsheets/d/1Bfv7rYcveffd-YLKYjAwkn1I8OmpMjwD8Pw9AxQWeho/edit",
+  "인천 검단점":   "https://docs.google.com/spreadsheets/d/1fduisZqJ-au3zMVsWx0bMtHZgBkuC87eJNBykxxr9Cs/edit",
+  "인천 계산점":   "https://docs.google.com/spreadsheets/d/15Szn5rkhQKky8_dLCrzekhBQ5t7QlZ7G-VAtm6iIzC8/edit",
+  "인천 공항점":   "https://docs.google.com/spreadsheets/d/1GQXXxYEXBUkAgsWjqBcJE4K6FJtueweV7Anfv8ab0Dw/edit",
+  "인천 논현점":   "https://docs.google.com/spreadsheets/d/1gP3iEItXGR1c9_ET7Exaqz5v6BtbNRJhWGWT62H8CGY/edit",
+  "인천 연수점":   "https://docs.google.com/spreadsheets/d/1dNHzOKcWqbPYOUBm6s15YTz2-OM1NWhjIrX9MhMsjs4/edit"
+};
+
+/* ---------- 섹션 접기/펴기 ---------- */
+const secState = { branch: true, detail: true };
+function toggleSec(key){
+  secState[key] = !secState[key];
+  if (key === "branch"){
+    document.getElementById("branchGrid").style.display = secState.branch ? "" : "none";
+    document.getElementById("caretBranch").classList.toggle("closed", !secState.branch);
+    if (secState.branch && DATA) renderBranches();
+  } else {
+    document.querySelector(".charts").style.display = secState.detail ? "" : "none";
+    document.getElementById("caretDetail").classList.toggle("closed", !secState.detail);
+    if (secState.detail && DATA) renderDetail(); // 숨김 상태에서 그린 차트 다시 렌더
+  }
+}
 
 /* ---------- 날짜 유틸 ---------- */
 const fmt = d => d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
@@ -305,8 +344,10 @@ function renderBranches(){
     const zero = m.today === 0; // 오늘 수집 없는 지점 강조
     const card = document.createElement("div");
     card.className = "b-card" + (zero ? " zero":"") + (selected===b.name ? " sel":"");
+    const sheetUrl = SHEET_URLS[b.name] || FOLDER_URL;
     card.innerHTML = `
-      <div class="name">${b.name}${zero ? '<span class="badge-zero">오늘 수집 없음</span>' : ''}</div>
+      <div class="name">${b.name}${zero ? '<span class="badge-zero">오늘 수집 없음</span>' : ''}
+        <a class="sheet-link" href="${sheetUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()">시트 ↗</a></div>
       <div class="row"><span class="big">${big.toLocaleString()}</span><span class="unit">건 · ${periodLabel[period]}</span></div>
       <div>${delta}</div>
       <div class="sub"><span>오늘 ${m.today}</span><span>7일 ${m.week}</span><span>이번달 ${m.month}</span><span>누적 ${m.total}</span></div>
@@ -362,6 +403,7 @@ function renderDetail(){
 
 function selectBranch(name){
   selected = name;
+  if (name && !secState.detail) toggleSec("detail"); // 접혀 있으면 자동으로 펴기
   renderBranches();
   renderDetail();
   if (name) document.querySelector(".charts").scrollIntoView({behavior:"smooth", block:"start"});
