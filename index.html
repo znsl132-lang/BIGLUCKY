@@ -208,6 +208,7 @@
     <div class="c-card wide"><h3>최근 30일 수집 추이</h3><div class="c-box"><canvas id="chTrend"></canvas></div></div>
     <div class="c-card"><h3>성별</h3><div class="c-box"><canvas id="chGender"></canvas></div></div>
     <div class="c-card"><h3>연령대</h3><div class="c-box"><canvas id="chAge"></canvas></div></div>
+    <div class="c-card"><h3>국적</h3><div class="c-box"><canvas id="chNation"></canvas></div></div>
     <div class="c-card"><h3>방문 경로</h3><div class="c-box"><canvas id="chRoute"></canvas></div></div>
     <div class="c-card"><h3>구매 기기</h3><div class="c-box"><canvas id="chDevice"></canvas></div></div>
     <div class="c-card"><h3>선호 맛</h3><div class="c-box"><canvas id="chFlavor"></canvas></div></div>
@@ -445,12 +446,28 @@ function renderTrend(){
         y:{ beginAtZero:true, ticks:{ precision:0, font:{size:11} }, grid:{ color:"#f1f2f4" } } } }
   });
 }
+function nationDist(){
+  // 언어 데이터(lang)를 국적으로 변환: 한국어→한국, 일본어→일본, 중국어→중국, 그 외→영어권
+  const lang = mergedDist("lang");
+  const out = {};
+  for (const k in lang){
+    const s = String(k).toLowerCase();
+    let n;
+    if (k.includes("한국") || s.includes("korea")) n = "한국";
+    else if (k.includes("일본") || k.includes("日本") || s.includes("japan")) n = "일본";
+    else if (k.includes("중국") || k.includes("中文") || k.includes("中国") || s.includes("chin")) n = "중국";
+    else n = "그 외(영어권)";
+    out[n] = (out[n] || 0) + lang[k];
+  }
+  return out;
+}
 function renderDetail(){
   document.getElementById("detailChip").textContent = selected || "전체 지점 (9개 합산)";
   document.getElementById("btnAll").style.display = selected ? "inline-block" : "none";
   renderTrend();
   doughnut("chGender", mergedDist("gender"));
   doughnut("chAge", mergedDist("age"));
+  doughnut("chNation", nationDist());
   doughnut("chRoute", mergedDist("route"));
   doughnut("chDevice", mergedDist("device"));
   doughnut("chFlavor", mergedDist("flavor"));
