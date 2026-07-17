@@ -2,7 +2,7 @@ name: collect-reviews
 
 on:
   schedule:
-    - cron: "0 12 * * *"   # 매일 한국시간 오후 9시
+    - cron: "0 3,7,12 * * *"   # 매일 한국시간 낮 12시 / 오후 4시 / 밤 9시
   workflow_dispatch:        # Actions 탭에서 수동 실행 가능
 
 permissions:
