@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-07-17 19:30",
+  "updatedAt": "2026-07-17 19:43",
   "branches": {
     "구월 로데오점": {
       "naver": 2398,
@@ -10,13 +10,13 @@
     "구월 길병원점": {
       "naver": 1320,
       "kakao": 17,
-      "daangn": null,
+      "daangn": 1,
       "tmap": null
     },
     "부천 상동점": {
       "naver": 1354,
       "kakao": 1,
-      "daangn": null,
+      "daangn": 1,
       "tmap": null
     },
     "부천 신중동점": {
@@ -27,26 +27,26 @@
     },
     "인천 검단점": {
       "naver": 86,
-      "kakao": 26,
+      "kakao": 13,
       "daangn": null,
       "tmap": null
     },
     "인천 계산점": {
       "naver": 893,
-      "kakao": 44,
+      "kakao": 70,
       "daangn": null,
       "tmap": null
     },
     "인천 공항점": {
       "naver": 99,
-      "kakao": 19,
+      "kakao": 63,
       "daangn": null,
       "tmap": null
     },
     "인천 논현점": {
       "naver": 1016,
       "kakao": 26,
-      "daangn": null,
+      "daangn": 9,
       "tmap": null
     },
     "인천 연수점": {
@@ -58,13 +58,10 @@
   },
   "errors": [
     "구월 로데오점/daangn: 수집값 없음",
-    "구월 길병원점/daangn: 수집값 없음",
-    "부천 상동점/daangn: 수집값 없음",
     "부천 신중동점/daangn: 수집값 없음",
     "인천 검단점/daangn: 수집값 없음",
     "인천 계산점/daangn: 수집값 없음",
     "인천 공항점/daangn: 수집값 없음",
-    "인천 논현점/daangn: 수집값 없음",
     "인천 연수점/daangn: 수집값 없음"
   ]
 }
