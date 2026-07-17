@@ -116,13 +116,15 @@ def naver_count(page, url):
 
 
 def main():
-    # 이전 결과 로드 (수집 실패 시 이전 값 유지)
-    prev = {}
+    # 이전 결과 로드 (수집 실패 시 이전 값 유지 + 일별 스냅샷 이력)
+    prev_data = {}
     if OUT.exists():
         try:
-            prev = json.loads(OUT.read_text(encoding="utf-8")).get("branches", {})
+            prev_data = json.loads(OUT.read_text(encoding="utf-8"))
         except Exception:
-            prev = {}
+            prev_data = {}
+    prev = prev_data.get("branches", {})
+    history = prev_data.get("history", {})
 
     # 티맵 수동 입력값
     tmap = {}
@@ -165,9 +167,19 @@ def main():
         browser.close()
 
     kst = datetime.datetime.utcnow() + datetime.timedelta(hours=9)
+
+    # 오늘 날짜(KST)로 스냅샷 저장 → 기간별(오늘/7일/이번달) 작성 수 계산에 사용
+    today_key = kst.strftime("%Y-%m-%d")
+    history[today_key] = {
+        name: {k: row[k] for k in ("naver", "kakao", "daangn", "tmap")}
+        for name, row in result.items()
+    }
+    history = {k: history[k] for k in sorted(history)[-400:]}  # 최근 400일만 유지
+
     OUT.write_text(json.dumps({
         "updatedAt": kst.strftime("%Y-%m-%d %H:%M"),
         "branches": result,
+        "history": history,
         "errors": errors,
     }, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"\nreviews.json 저장 완료. 오류 {len(errors)}건: {errors}")
