@@ -73,10 +73,23 @@ def to_int(s):
     return int(str(s).replace(",", "").strip())
 
 
-def daangn_count(url):
-    """당근: 일반 요청으로 HTML에 '후기 N개'가 그대로 들어있음"""
-    html = requests.get(url, headers={"User-Agent": MOBILE_UA}, timeout=25).text
-    m = re.search(r"후기\s*([\d,]+)\s*개", html)
+def daangn_count(page, url):
+    """당근: 일반 요청 → 실패 시 브라우저 렌더링으로 재시도"""
+    try:
+        html = requests.get(url, headers={"User-Agent": MOBILE_UA}, timeout=25).text
+        # 태그/주석이 숫자 사이에 끼는 경우 대비: 태그 전부 제거 후 검색
+        cleaned = re.sub(r"<!--.*?-->", "", html, flags=re.S)
+        cleaned = re.sub(r"<[^>]+>", " ", cleaned)
+        m = re.search(r"후기\s*([\d,]+)\s*개", cleaned)
+        if m:
+            return to_int(m.group(1))
+    except Exception:
+        pass
+    # 브라우저 렌더링 재시도
+    page.goto(url, wait_until="domcontentloaded", timeout=45000)
+    page.wait_for_timeout(4000)
+    text = page.inner_text("body")
+    m = re.search(r"후기\s*([\d,]+)", text)
     return to_int(m.group(1)) if m else None
 
 
@@ -135,7 +148,7 @@ def main():
 
             for platform, fn in (("naver", lambda u: naver_count(pg_m, u)),
                                  ("kakao", lambda u: kakao_count(pg_d, u)),
-                                 ("daangn", daangn_count)):
+                                 ("daangn", lambda u: daangn_count(pg_m, u))):
                 try:
                     row[platform] = fn(urls[platform])
                 except Exception as e:
@@ -162,3 +175,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+# v2: 당근 수집 보강 (태그 제거 + 브라우저 재시도)
