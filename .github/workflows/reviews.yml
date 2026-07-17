@@ -1,0 +1,35 @@
+name: collect-reviews
+
+on:
+  schedule:
+    - cron: "0 12 * * *"   # 매일 한국시간 오후 9시
+  workflow_dispatch:        # Actions 탭에서 수동 실행 가능
+
+permissions:
+  contents: write
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install requests playwright
+          playwright install --with-deps chromium
+
+      - name: Collect review counts
+        run: python collect_reviews.py
+
+      - name: Commit reviews.json
+        run: |
+          git config user.name "review-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add reviews.json
+          git diff --cached --quiet || git commit -m "리뷰 수 자동 업데이트 $(date -u -d '+9 hours' +'%Y-%m-%d')"
+          git push
