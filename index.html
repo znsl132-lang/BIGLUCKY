@@ -62,16 +62,16 @@
 
   /* 지점 카드 그리드 */
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
-  .b-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;
+  .b-card{position:relative;background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;
     cursor:pointer;border:2px solid transparent;transition:border-color .15s, transform .1s}
   .b-card:hover{transform:translateY(-2px)}
   .b-card.zero{border-color:#fca5a5}
   .b-card.sel{border-color:var(--yellow)}
-  .b-card .name{font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px;flex-wrap:nowrap;min-width:0}
+  .b-card .name{font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px;flex-wrap:nowrap;min-width:0;padding-right:46px}
   .b-card .name .bname{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
   .badge-zero{font-size:10.5px;font-weight:700;color:#dc2626;background:#fef2f2;
     border:1px solid #fecaca;border-radius:10px;padding:2px 8px;flex-shrink:0}
-  .sheet-link{margin-left:auto;font-size:11px;font-weight:600;color:var(--sub);text-decoration:none;
+  .sheet-link{position:absolute;top:15px;right:15px;font-size:11px;font-weight:600;color:var(--sub);text-decoration:none;
     border:1px solid var(--line);border-radius:8px;padding:3px 8px;background:#fafafa;white-space:nowrap;flex-shrink:0}
   .sheet-link:hover{color:var(--black);border-color:var(--yellow);background:#fffdf3}
   .b-card .row{display:flex;align-items:baseline;gap:8px;margin-top:8px}
