@@ -67,11 +67,12 @@
   .b-card:hover{transform:translateY(-2px)}
   .b-card.zero{border-color:#fca5a5}
   .b-card.sel{border-color:var(--yellow)}
-  .b-card .name{font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .b-card .name{font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px;flex-wrap:nowrap;min-width:0}
+  .b-card .name .bname{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
   .badge-zero{font-size:10.5px;font-weight:700;color:#dc2626;background:#fef2f2;
-    border:1px solid #fecaca;border-radius:10px;padding:2px 8px}
+    border:1px solid #fecaca;border-radius:10px;padding:2px 8px;flex-shrink:0}
   .sheet-link{margin-left:auto;font-size:11px;font-weight:600;color:var(--sub);text-decoration:none;
-    border:1px solid var(--line);border-radius:8px;padding:3px 8px;background:#fafafa;white-space:nowrap}
+    border:1px solid var(--line);border-radius:8px;padding:3px 8px;background:#fafafa;white-space:nowrap;flex-shrink:0}
   .sheet-link:hover{color:var(--black);border-color:var(--yellow);background:#fffdf3}
   .b-card .row{display:flex;align-items:baseline;gap:8px;margin-top:8px}
   .b-card .big{font-size:26px;font-weight:800;letter-spacing:-.5px}
@@ -275,7 +276,7 @@ function reviewValue(name, platform, current){
 function reviewsHtml(name){
   const r = REVIEWS && REVIEWS.branches && REVIEWS.branches[name];
   if (!r) return "";
-  const v = x => (x === null || x === undefined) ? "–" : x.toLocaleString() + "건";
+  const v = x => (x === null || x === undefined) ? "0건" : x.toLocaleString() + "건";
   const label = period === "total" ? "누적 총 리뷰 수" : periodLabel[period] + " 작성된 리뷰 수 (수집 시작일 이후 집계)";
   return `<div class="rv-row" title="${label} · ${REVIEWS.updatedAt || ""} 수집 기준 (네이버 방문자리뷰/카카오맵/티맵/당근)">
     <span class="rv"><i class="nv">N</i>${v(reviewValue(name, "naver", r.naver))}</span>
@@ -405,7 +406,7 @@ function renderBranches(){
     card.className = "b-card" + (zero ? " zero":"") + (selected===b.name ? " sel":"");
     const sheetUrl = SHEET_URLS[b.name] || FOLDER_URL;
     card.innerHTML = `
-      <div class="name">${b.name}${zero ? '<span class="badge-zero">오늘 수집 없음</span>' : ''}
+      <div class="name"><span class="bname">${b.name}</span>${zero ? '<span class="badge-zero">오늘 수집 없음</span>' : ''}
         <a class="sheet-link" href="${sheetUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()">시트 ↗</a></div>
       <div class="row"><span class="big">${big.toLocaleString()}</span><span class="unit">건 · ${periodLabel[period]}</span></div>
       <div>${delta}</div>
