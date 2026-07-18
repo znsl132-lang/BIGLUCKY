@@ -94,12 +94,21 @@ def daangn_count(page, url):
 
 
 def kakao_count(page, url):
-    """카카오맵: JS 렌더링 후 본문에서 '후기 N' 추출 (별점 다음, 블로그 앞)"""
+    """카카오맵: 상단 헤더의 '후기 N개 블로그' 패턴만 읽는다.
+    - 블로그 옆 숫자는 읽지 않음
+    - 하단 '이 지역 랭킹'의 주변 장소 후기 수도 읽지 않음
+    - 헤더에 후기가 없고 블로그만 있는 장소는 카카오 후기 0으로 처리"""
     page.goto(url, wait_until="domcontentloaded", timeout=45000)
     page.wait_for_timeout(5000)
     text = page.inner_text("body")
-    m = re.search(r"후기\s*\n?\s*([\d,]+)", text)
-    return to_int(m.group(1)) if m else None
+    # 헤더: '후기 27 개 블로그' 처럼 후기 수 바로 뒤에 블로그가 오는 경우만
+    m = re.search(r"후기\s*([\d,]+)\s*개?\s*블로그", text)
+    if m:
+        return to_int(m.group(1))
+    # 페이지는 정상적으로 떴는데(블로그 존재) 헤더 후기가 없음 = 후기 0개
+    if "블로그" in text:
+        return 0
+    return None
 
 
 def naver_count(page, url):
@@ -187,4 +196,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-# v2: 당근 수집 보강 (태그 제거 + 브라우저 재시도)
+# v3: 카카오 후기 정확도 개선 (헤더 '후기 N개 블로그'만 읽고 블로그/랭킹 숫자 제외)
