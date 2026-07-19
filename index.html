@@ -95,6 +95,8 @@
   .rv i.kk{background:#FEE500;color:#191919}
   .rv i.tm{background:#EB1C24}
   .rv i.dg{background:#FF6F0F}
+  a.rv{color:#374151;text-decoration:none;cursor:pointer}
+  a.rv:hover{border-color:var(--yellow);background:#fffdf3}
 
   /* 상세 */
   .detail-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
@@ -308,13 +310,23 @@ function reviewsHtml(name){
   const r = REVIEWS && REVIEWS.branches && REVIEWS.branches[name];
   if (!r) return "";
   const v = x => (x === null || x === undefined) ? "0건" : x.toLocaleString() + "건";
-  const label = period === "total" ? "누적 총 리뷰 수" : period === "custom" ? (customFrom + "~" + customTo + " 작성된 리뷰 수") : periodLabel[period] + " 작성된 리뷰 수 (수집 시작일 이후 집계)";
-  return `<div class="rv-row" title="${label} · ${REVIEWS.updatedAt || ""} 수집 기준 (네이버 방문자리뷰/카카오맵/티맵/당근)">
-    <span class="rv"><i class="nv">N</i>${v(reviewValue(name, "naver", r.naver))}</span>
-    <span class="rv"><i class="kk">K</i>${v(reviewValue(name, "kakao", r.kakao))}</span>
-    <span class="rv"><i class="tm">T</i>${v(reviewValue(name, "tmap", r.tmap))}</span>
-    <span class="rv"><i class="dg">당</i>${v(reviewValue(name, "daangn", r.daangn))}</span>
-  </div>`;
+  const when = REVIEWS.updatedAt || "-";
+  const urls = REVIEW_URLS[name] || {};
+  const plat = [
+    {k:"naver",  cls:"nv", ico:"N",  nm:"네이버"},
+    {k:"kakao",  cls:"kk", ico:"K",  nm:"카카오맵"},
+    {k:"tmap",   cls:"tm", ico:"T",  nm:"티맵"},
+    {k:"daangn", cls:"dg", ico:"당", nm:"당근"}
+  ];
+  const cells = plat.map(p => {
+    const inner = `<i class="${p.cls}">${p.ico}</i>${v(reviewValue(name, p.k, r[p.k]))}`;
+    const tip = `${p.nm} · 수집 ${when}`;
+    const url = urls[p.k];
+    return url
+      ? `<a class="rv" href="${url}" target="_blank" rel="noopener" title="${tip}" onclick="event.stopPropagation()">${inner}</a>`
+      : `<span class="rv" title="${tip}">${inner}</span>`;
+  }).join("");
+  return `<div class="rv-row">${cells}</div>`;
 }
 
 /* ---------- 지점별 구글시트 바로가기 (드라이브 권한 있는 사람만 열림) ---------- */
@@ -329,6 +341,19 @@ const SHEET_URLS = {
   "인천 공항점":   "https://docs.google.com/spreadsheets/d/1GQXXxYEXBUkAgsWjqBcJE4K6FJtueweV7Anfv8ab0Dw/edit",
   "인천 논현점":   "https://docs.google.com/spreadsheets/d/1gP3iEItXGR1c9_ET7Exaqz5v6BtbNRJhWGWT62H8CGY/edit",
   "인천 연수점":   "https://docs.google.com/spreadsheets/d/1dNHzOKcWqbPYOUBm6s15YTz2-OM1NWhjIrX9MhMsjs4/edit"
+};
+
+/* ---------- 지점별 리뷰 플랫폼 페이지 (네이버/카카오/당근 — 배지 클릭 시 이동) ---------- */
+const REVIEW_URLS = {
+  "구월 로데오점": {naver:"https://naver.me/F36TJCpJ", kakao:"https://place.map.kakao.com/1168620629", daangn:"https://www.daangn.com/kr/local-profile/j8ymzr23et7m/"},
+  "구월 길병원점": {naver:"https://naver.me/5gi1oYI5", kakao:"https://place.map.kakao.com/633298339", daangn:"https://www.daangn.com/kr/local-profile/m2neojss44pe/"},
+  "부천 상동점":   {naver:"https://naver.me/GhEQIO4I", kakao:"https://place.map.kakao.com/1296224657", daangn:"https://www.daangn.com/kr/local-profile/1kprrijr9775/"},
+  "부천 신중동점": {naver:"https://naver.me/GmFf6N0p", kakao:"https://place.map.kakao.com/2143803668", daangn:"https://www.daangn.com/kr/local-profile/7v6122quh54b/"},
+  "인천 검단점":   {naver:"https://naver.me/G8h9ie9c", kakao:"https://place.map.kakao.com/935044085", daangn:"https://www.daangn.com/kr/local-profile/sqm9gmq2s5vi/"},
+  "인천 계산점":   {naver:"https://naver.me/Fn6tCOcu", kakao:"https://place.map.kakao.com/1174093631", daangn:"https://www.daangn.com/kr/local-profile/k9w7mqyriumz/"},
+  "인천 공항점":   {naver:"https://naver.me/FMTgXjBC", kakao:"https://place.map.kakao.com/846947831", daangn:"https://www.daangn.com/kr/local-profile/vej8jykqfqf6/"},
+  "인천 논현점":   {naver:"https://naver.me/Gye3JExC", kakao:"https://place.map.kakao.com/630219080", daangn:"https://www.daangn.com/kr/local-profile/cz4f7jad4ffh/"},
+  "인천 연수점":   {naver:"https://naver.me/5JJpEkvx", kakao:"https://place.map.kakao.com/580096181", daangn:"https://www.daangn.com/kr/local-profile/2f8xtnhnrrb2/"}
 };
 
 /* ---------- 섹션 접기/펴기 ---------- */
