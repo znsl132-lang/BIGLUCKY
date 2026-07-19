@@ -59,6 +59,11 @@
   .toggle button{border:0;background:transparent;padding:6px 14px;font-size:12.5px;font-weight:700;
     border-radius:7px;cursor:pointer;color:var(--sub);font-family:inherit}
   .toggle button.on{background:var(--black);color:var(--yellow)}
+  .cust-range{display:none;align-items:center;gap:8px;margin:14px 0 0;flex-wrap:wrap;font-size:13px;color:var(--text)}
+  .cust-range.on{display:flex}
+  .cust-range input[type=date]{font-family:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--text)}
+  .cust-range #custApply{border:0;background:var(--black);color:var(--yellow);font-weight:700;border-radius:8px;padding:7px 14px;cursor:pointer;font-family:inherit;font-size:12.5px}
+  .cust-range .cust-note{color:var(--sub);font-size:12px}
 
   /* 지점 카드 그리드 */
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
@@ -191,7 +196,14 @@
       <button data-p="week">7일</button>
       <button data-p="month">이번 달</button>
       <button data-p="total">누적</button>
+      <button data-p="custom">기간</button>
     </div>
+  </div>
+  <div class="cust-range" id="custRange">
+    <span>기간 조회:</span>
+    <input type="date" id="custFrom"> ~ <input type="date" id="custTo">
+    <button id="custApply">조회</button>
+    <span class="cust-note" id="custNote"></span>
   </div>
   <div class="grid" id="branchGrid"></div>
 
@@ -235,7 +247,9 @@ const API_URL = "https://script.google.com/macros/s/AKfycbzOfdq2wwANbkzUg0_ltz_q
 
 /* ---------- 상태 ---------- */
 let DATA = null;          // {updatedAt, branches:[{name,total,daily,dist}]}
-let period = "today";     // today | week | month | total
+let period = "today";     // today | week | month | total | custom
+let customFrom = null, customTo = null;      // 기간 조회 (시작~종료)
+const DATA_START = "2026-07-17";             // 리뷰 이력 수집 시작일
 let selected = null;      // 선택 지점명 (null = 전체)
 const charts = {};
 
@@ -265,10 +279,27 @@ function reviewBaseline(name, platform){
   const v = hist[pick] && hist[pick][name] ? hist[pick][name][platform] : null;
   return (v === null || v === undefined) ? null : v;
 }
+function snapAt(name, platform, dateStr){
+  // dateStr 이하 최신 스냅샷의 값 (없으면 null)
+  const hist = (REVIEWS && REVIEWS.history) || {};
+  const dates = Object.keys(hist).sort();
+  let pick = null;
+  for (const k of dates){ if (k <= dateStr) pick = k; else break; }
+  if (pick === null) return null;
+  const v = hist[pick] && hist[pick][name] ? hist[pick][name][platform] : null;
+  return (v === null || v === undefined) ? null : v;
+}
 function reviewValue(name, platform, current){
   // 누적 탭 = 총 리뷰 수, 나머지 탭 = 해당 기간에 새로 작성된 수(스냅샷 차이)
   if (current === null || current === undefined) return null;
   if (period === "total") return current;
+  if (period === "custom"){
+    if (!customFrom || !customTo) return null;
+    const base = snapAt(name, platform, customFrom);
+    const end = customTo >= fmt(daysAgo(0)) ? current : snapAt(name, platform, customTo);
+    if (base === null || end === null) return null;
+    return end - base;
+  }
   const base = reviewBaseline(name, platform);
   if (base === null) return null;
   return current - base;
@@ -277,7 +308,7 @@ function reviewsHtml(name){
   const r = REVIEWS && REVIEWS.branches && REVIEWS.branches[name];
   if (!r) return "";
   const v = x => (x === null || x === undefined) ? "0건" : x.toLocaleString() + "건";
-  const label = period === "total" ? "누적 총 리뷰 수" : periodLabel[period] + " 작성된 리뷰 수 (수집 시작일 이후 집계)";
+  const label = period === "total" ? "누적 총 리뷰 수" : period === "custom" ? (customFrom + "~" + customTo + " 작성된 리뷰 수") : periodLabel[period] + " 작성된 리뷰 수 (수집 시작일 이후 집계)";
   return `<div class="rv-row" title="${label} · ${REVIEWS.updatedAt || ""} 수집 기준 (네이버 방문자리뷰/카카오맵/티맵/당근)">
     <span class="rv"><i class="nv">N</i>${v(reviewValue(name, "naver", r.naver))}</span>
     <span class="rv"><i class="kk">K</i>${v(reviewValue(name, "kakao", r.kakao))}</span>
@@ -397,7 +428,7 @@ function renderBranches(){
   grid.innerHTML = "";
   DATA.branches.forEach(b => {
     const m = metrics(b.daily, b.total);
-    let big = m[period], delta = "";
+    let big = period === "custom" ? rangeSum(b.daily, customFrom, customTo) : m[period], delta = "";
     if (period === "today") delta = deltaHtml(m.today, m.yesterday, "전일");
     else if (period === "week") delta = deltaHtml(m.week, m.prevWeek, "이전 7일");
     else if (period === "month") delta = deltaHtml(m.month, m.prevMonth, "지난달 동기");
@@ -408,7 +439,7 @@ function renderBranches(){
     card.innerHTML = `
       <div class="name"><span class="bname">${b.name}</span>${zero ? '<span class="badge-zero">오늘 수집 없음</span>' : ''}
         <a class="sheet-link" href="${sheetUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()">시트 ↗</a></div>
-      <div class="row"><span class="big">${big.toLocaleString()}</span><span class="unit">건 · ${periodLabel[period]}</span></div>
+      <div class="row"><span class="big">${big.toLocaleString()}</span><span class="unit">건 · ${period === "custom" ? (customFrom + "~" + customTo) : periodLabel[period]}</span></div>
       <div>${delta}</div>
       <div class="sub"><span>오늘 ${m.today}</span><span>7일 ${m.week}</span><span>이번달 ${m.month}</span><span>누적 ${m.total}</span></div>
       ${reviewsHtml(b.name)}
@@ -490,6 +521,26 @@ document.getElementById("periodToggle").addEventListener("click", e => {
   if (e.target.tagName !== "BUTTON") return;
   period = e.target.dataset.p;
   document.querySelectorAll("#periodToggle button").forEach(b=>b.classList.toggle("on", b===e.target));
+  const panel = document.getElementById("custRange");
+  if (period === "custom"){
+    const today = fmt(daysAgo(0));
+    const f = document.getElementById("custFrom"), t = document.getElementById("custTo");
+    f.min = DATA_START; f.max = today; t.min = DATA_START; t.max = today;
+    if (!f.value) f.value = DATA_START;
+    if (!t.value) t.value = today;
+    customFrom = f.value; customTo = t.value;
+    document.getElementById("custNote").textContent = "리뷰 이력은 " + DATA_START + "부터 조회됩니다.";
+    panel.classList.add("on");
+  } else {
+    panel.classList.remove("on");
+  }
+  renderBranches();
+});
+document.getElementById("custApply").addEventListener("click", () => {
+  let f = document.getElementById("custFrom").value, t = document.getElementById("custTo").value;
+  if (f && t && f > t){ const tmp = f; f = t; t = tmp;
+    document.getElementById("custFrom").value = f; document.getElementById("custTo").value = t; }
+  customFrom = f; customTo = t;
   renderBranches();
 });
 
