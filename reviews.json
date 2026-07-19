@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-07-19 00:35",
+  "updatedAt": "2026-07-19 13:35",
   "branches": {
     "구월 로데오점": {
       "naver": 2399,
@@ -8,9 +8,9 @@
       "tmap": null
     },
     "구월 길병원점": {
-      "naver": 1319,
+      "naver": 1320,
       "kakao": 17,
-      "daangn": 1,
+      "daangn": 2,
       "tmap": null
     },
     "부천 상동점": {
@@ -44,13 +44,13 @@
       "tmap": null
     },
     "인천 논현점": {
-      "naver": 1019,
+      "naver": 1020,
       "kakao": 27,
       "daangn": 10,
       "tmap": null
     },
     "인천 연수점": {
-      "naver": 1186,
+      "naver": 1185,
       "kakao": 69,
       "daangn": null,
       "tmap": null
@@ -177,9 +177,9 @@
         "tmap": null
       },
       "구월 길병원점": {
-        "naver": 1319,
+        "naver": 1320,
         "kakao": 17,
-        "daangn": 1,
+        "daangn": 2,
         "tmap": null
       },
       "부천 상동점": {
@@ -213,13 +213,13 @@
         "tmap": null
       },
       "인천 논현점": {
-        "naver": 1019,
+        "naver": 1020,
         "kakao": 27,
         "daangn": 10,
         "tmap": null
       },
       "인천 연수점": {
-        "naver": 1186,
+        "naver": 1185,
         "kakao": 69,
         "daangn": null,
         "tmap": null
