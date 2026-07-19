@@ -279,7 +279,7 @@ function reviewBaseline(name, platform){
   for (const k of dates){ if (k <= d) pick = k; else break; }
   if (pick === null) pick = dates[0]; // 수집 시작 전 데이터는 없음 → 시작일 기준 부분 집계
   const v = hist[pick] && hist[pick][name] ? hist[pick][name][platform] : null;
-  return (v === null || v === undefined) ? null : v;
+  return (v === null || v === undefined) ? 0 : v;  // 이전 스냅샷이 미수집/0이면 0으로 취급 → 신규 발생분이 증가로 잡힘
 }
 function snapAt(name, platform, dateStr){
   // dateStr 이하 최신 스냅샷의 값 (없으면 null)
@@ -289,7 +289,7 @@ function snapAt(name, platform, dateStr){
   for (const k of dates){ if (k <= dateStr) pick = k; else break; }
   if (pick === null) return null;
   const v = hist[pick] && hist[pick][name] ? hist[pick][name][platform] : null;
-  return (v === null || v === undefined) ? null : v;
+  return (v === null || v === undefined) ? 0 : v;  // 이전 스냅샷이 미수집/0이면 0으로 취급 → 신규 발생분이 증가로 잡힘
 }
 function reviewValue(name, platform, current){
   // 누적 탭 = 총 리뷰 수, 나머지 탭 = 해당 기간에 새로 작성된 수(스냅샷 차이)
