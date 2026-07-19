@@ -12,10 +12,14 @@
     --off:#5b6cff; --sun:#e5484d; --sat:#3b82f6; --ok:#16a34a; --okbg:#eafaf0;
   }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);
+  body{margin:0;background:#e7eaf3;color:var(--ink);
     font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
     -webkit-font-smoothing:antialiased}
-  .wrap{max-width:460px;margin:0 auto;min-height:100vh;background:#f4f5fa}
+  .wrap{max-width:600px;margin:0 auto;min-height:100vh;background:#f4f5fa}
+  @media(min-width:640px){
+    body{padding:28px 16px}
+    .wrap{min-height:auto;border-radius:22px;overflow:hidden;box-shadow:0 12px 44px rgba(20,20,44,.14)}
+  }
   header{background:linear-gradient(135deg,#1a1f38,#2a2350);color:#fff;padding:22px 20px 18px}
   .brand{font-weight:800;letter-spacing:.14em;font-size:13px;opacity:.85}
   header h1{margin:6px 0 2px;font-size:20px;font-weight:800}
@@ -211,7 +215,7 @@ async function submitReq(){
   const arr=[...picked].sort((a,b)=>a-b);
   const days=arr.join(',');
   const memo=arr.filter(d=>(reasons[d]||'').trim())
-    .map(d=>`${d}일: ${reasons[d].trim()}`).join(', ');
+    .map(d=>`${d}일: ${reasons[d].trim()}`).join('; ');
   const payload={action:'submit',month:META.month,name,type:'휴무요청',days,memo};
 
   try{
