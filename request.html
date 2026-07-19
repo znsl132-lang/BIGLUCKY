@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>위베이프 휴무 요청</title>
+<style>
+  :root{
+    --bg:#0f1220; --card:#fff; --ink:#1c2333; --sub:#6b7280;
+    --line:#e6e8ef; --accent:#5b6cff; --accent2:#eef0ff;
+    --off:#5b6cff; --sun:#e5484d; --sat:#3b82f6; --ok:#16a34a; --okbg:#eafaf0;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+    -webkit-font-smoothing:antialiased}
+  .wrap{max-width:460px;margin:0 auto;min-height:100vh;background:#f4f5fa}
+  header{background:linear-gradient(135deg,#1a1f38,#2a2350);color:#fff;padding:22px 20px 18px}
+  .brand{font-weight:800;letter-spacing:.14em;font-size:13px;opacity:.85}
+  header h1{margin:6px 0 2px;font-size:20px;font-weight:800}
+  header p{margin:0;font-size:13px;opacity:.8}
+  .body{padding:16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px;
+    box-shadow:0 1px 2px rgba(20,20,40,.04)}
+  .label{font-size:12px;font-weight:700;color:var(--sub);margin:0 0 8px;letter-spacing:.02em}
+  select,.txt{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:12px;font-size:16px;
+    background:#fff;color:var(--ink);appearance:none}
+  select:disabled{opacity:.5}
+  .mlabel{font-size:16px;font-weight:800;text-align:center;margin-bottom:12px}
+  .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+  .dow{text-align:center;font-size:11px;font-weight:700;color:var(--sub);padding:2px 0}
+  .dow.s0{color:var(--sun)} .dow.s6{color:var(--sat)}
+  .cell{aspect-ratio:1/1;border:1px solid var(--line);border-radius:12px;background:#fff;
+    display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;cursor:pointer;
+    user-select:none}
+  .cell.empty{border:none;background:transparent;cursor:default}
+  .cell.s0{color:var(--sun)} .cell.s6{color:var(--sat)}
+  .cell.sel{background:var(--off);border-color:var(--off);color:#fff}
+  .cell.past{opacity:.35;pointer-events:none}
+  .count{font-size:13px;color:var(--sub);margin-top:12px}
+  .count b{color:var(--accent)}
+  .rlist{margin-top:12px;display:flex;flex-direction:column;gap:8px}
+  .rrow{display:flex;align-items:center;gap:8px}
+  .rday{flex:0 0 52px;background:var(--accent2);color:var(--accent);border-radius:10px;
+    padding:9px 0;text-align:center;font-size:14px;font-weight:800}
+  .rrow input{flex:1;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-size:14px;background:#fff}
+  .submit{width:100%;padding:15px;border:none;border-radius:14px;background:var(--accent);color:#fff;
+    font-size:16px;font-weight:800;cursor:pointer;margin-top:4px}
+  .submit:disabled{opacity:.4;cursor:default}
+  .note{font-size:12px;color:var(--sub);line-height:1.5;margin:10px 2px 0}
+  .done{background:var(--okbg);border:1px solid #bbf0cf}
+  .done h3{margin:0 0 6px;color:var(--ok);font-size:16px}
+  .done p{margin:2px 0;font-size:14px;color:var(--ink);white-space:pre-line}
+  .linkbtn{background:none;border:none;color:var(--accent);font-weight:700;font-size:13px;cursor:pointer;padding:6px 0}
+  .banner{border-radius:12px;padding:10px 12px;font-size:12px;margin:0 16px 14px;line-height:1.5}
+  .banner.demo{background:#fff7e6;border:1px solid #ffe1a8;color:#8a6d1a}
+  .banner.err{background:#fff0f0;border:1px solid #ffc9c9;color:#c0392b}
+  .loading{padding:40px 16px;text-align:center;color:var(--sub);font-size:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">WE&nbsp;VAPE</div>
+    <h1>휴무 요청</h1>
+    <p>이름을 선택하고 원하는 휴무일을 달력에서 고르세요.</p>
+  </header>
+
+  <div id="banner"></div>
+  <div id="loading" class="loading">불러오는 중…</div>
+
+  <div class="body" id="form" style="display:none">
+    <div class="card">
+      <p class="label">직원 이름</p>
+      <select id="emp"></select>
+      <p class="note">이미 제출한 직원은 목록에서 흐리게(✔) 표시됩니다.</p>
+    </div>
+
+    <div class="card">
+      <div class="mlabel" id="mlabel"></div>
+      <div class="grid" id="dow"></div>
+      <div class="grid" id="cal" style="margin-top:6px"></div>
+      <div class="count">선택한 날짜 <b id="cnt">0</b>일</div>
+    </div>
+
+    <div class="card" id="reasonCard" style="display:none">
+      <p class="label">날짜별 사유 <span style="font-weight:500">(선택 — 꼭 필요한 날만 적어주세요)</span></p>
+      <div class="rlist" id="rlist"></div>
+    </div>
+
+    <button class="submit" id="submit" onclick="submitReq()">제출하기</button>
+    <p class="note">제출 후에도 마감 전까지 다시 열어 수정할 수 있습니다.</p>
+  </div>
+
+  <div class="body" id="doneView" style="display:none">
+    <div class="card done">
+      <h3>✔ 제출 완료</h3>
+      <p id="doneWho"></p>
+      <p id="doneWhat"></p>
+    </div>
+    <button class="linkbtn" onclick="reopen()">← 다른 직원으로 다시 요청하기</button>
+  </div>
+</div>
+
+<script>
+/* ===== 설정 ===== 아래 따옴표 안에 Apps Script 웹앱 주소를 붙여넣으세요.
+   비워두면 데모 모드(이 브라우저에만 저장)로 동작합니다. */
+const API_URL = "https://script.google.com/macros/s/AKfycbwmuQObAwxghbrNSEFc_Qv4_fp9pbFWCgdJ39efwFrHsdkD2lEkzQd4ZasTj3kH2NiyKA/exec";
+
+let META = {month:"", employees:[], submitted:[]};
+let picked = new Set();
+let reasons = {};            // { day: "사유" }
+const DEMO = !API_URL;
+
+/* ---------- JSONP ---------- */
+function jsonp(params){
+  return new Promise((resolve,reject)=>{
+    const cb = 'cb_'+Math.random().toString(36).slice(2);
+    const s = document.createElement('script');
+    const q = Object.entries(params).map(([k,v])=>`${k}=${encodeURIComponent(v)}`).join('&');
+    window[cb] = (data)=>{ delete window[cb]; s.remove(); resolve(data); };
+    s.onerror = ()=>{ delete window[cb]; s.remove(); reject(new Error('network')); };
+    s.src = API_URL + '?callback=' + cb + '&' + q;
+    document.body.appendChild(s);
+  });
+}
+
+/* ---------- 데모 저장 ---------- */
+const DEMO_EMPS = ["김민준","이서연","박지훈","최유나","정도윤","한소희"];
+function demoKey(){ return 'req_'+META.month; }
+function demoLoad(){ try{return JSON.parse(localStorage.getItem(demoKey()))||{}}catch(e){return{}} }
+
+/* ---------- 초기 로드 ---------- */
+async function init(){
+  const now=new Date();
+  const nextY = now.getMonth()===11?now.getFullYear()+1:now.getFullYear();
+  const nextM = now.getMonth()===11?1:now.getMonth()+2;
+  const defMonth = nextY+'-'+String(nextM).padStart(2,'0');
+
+  if(DEMO){
+    META={month:defMonth, employees:DEMO_EMPS, submitted:Object.keys(demoLoad())};
+    banner('demo','🧪 데모 모드 — 설정(API 주소)이 아직 안 붙어 이 브라우저에만 저장됩니다.');
+  } else {
+    try{
+      const r=await jsonp({action:'meta'});
+      if(!r||!r.ok) throw new Error(r&&r.error||'meta 실패');
+      META.month=r.month||defMonth;
+      META.employees=r.employees||[];
+      META.submitted=r.submitted||[];
+      if(!META.employees.length) banner('err','설정 시트에 직원 이름이 없습니다. 관리자에게 문의하세요.');
+    }catch(e){
+      show('loading',false);
+      banner('err','연결에 실패했습니다. 잠시 후 다시 시도하거나 관리자에게 문의하세요.');
+      return;
+    }
+  }
+  show('loading',false); show('form',true);
+  renderEmps(); renderCal(); renderReasons();
+}
+
+function banner(kind,msg){ document.getElementById('banner').innerHTML=`<div class="banner ${kind}">${msg}</div>`; }
+function show(id,on){ document.getElementById(id).style.display=on?(id==='form'||id==='doneView'?'block':''):'none'; }
+
+function renderEmps(){
+  const done=new Set(META.submitted);
+  const sel=document.getElementById('emp');
+  sel.innerHTML='<option value="">— 이름 선택 —</option>'+
+    META.employees.map(n=>`<option value="${n}">${n}${done.has(n)?'  ✔ (제출됨)':''}</option>`).join('');
+  sel.onchange=refreshSubmit;
+}
+
+function renderCal(){
+  const [y,m]=META.month.split('-').map(Number);
+  const DOW=['일','월','화','수','목','금','토'];
+  document.getElementById('dow').innerHTML=DOW.map((d,i)=>`<div class="dow s${i}">${d}</div>`).join('');
+  document.getElementById('mlabel').textContent=`${y}년 ${m}월`;
+  const first=new Date(y,m-1,1).getDay();
+  const days=new Date(y,m,0).getDate();
+  const today=new Date(); today.setHours(0,0,0,0);
+  let html='';
+  for(let i=0;i<first;i++) html+='<div class="cell empty"></div>';
+  for(let d=1;d<=days;d++){
+    const wd=new Date(y,m-1,d).getDay();
+    const past=new Date(y,m-1,d)<today;
+    html+=`<div class="cell s${wd} ${picked.has(d)?'sel':''} ${past?'past':''}" ${past?'':`onclick="toggle(${d})"`}>${d}</div>`;
+  }
+  document.getElementById('cal').innerHTML=html;
+  document.getElementById('cnt').textContent=picked.size;
+}
+function toggle(d){
+  if(picked.has(d)){ picked.delete(d); delete reasons[d]; }
+  else picked.add(d);
+  renderCal(); renderReasons(); refreshSubmit();
+}
+function renderReasons(){
+  const arr=[...picked].sort((a,b)=>a-b);
+  document.getElementById('reasonCard').style.display=arr.length?'block':'none';
+  document.getElementById('rlist').innerHTML=arr.map(d=>
+    `<div class="rrow"><div class="rday">${d}일</div>`+
+    `<input type="text" placeholder="사유 (선택)" value="${(reasons[d]||'').replace(/"/g,'&quot;')}" `+
+    `oninput="reasons[${d}]=this.value"></div>`).join('');
+}
+function refreshSubmit(){
+  document.getElementById('submit').disabled=!(document.getElementById('emp').value && picked.size>0);
+}
+
+async function submitReq(){
+  const name=document.getElementById('emp').value; if(!name||!picked.size) return;
+  const btn=document.getElementById('submit'); btn.disabled=true; btn.textContent='제출 중…';
+  const arr=[...picked].sort((a,b)=>a-b);
+  const days=arr.join(',');
+  const memo=arr.filter(d=>(reasons[d]||'').trim())
+    .map(d=>`${d}일: ${reasons[d].trim()}`).join(', ');
+  const payload={action:'submit',month:META.month,name,type:'휴무요청',days,memo};
+
+  try{
+    if(DEMO){
+      const o=demoLoad(); o[name]={days,memo}; localStorage.setItem(demoKey(),JSON.stringify(o));
+      META.submitted=Object.keys(o);
+    } else {
+      const r=await jsonp(payload);
+      if(!r||!r.ok) throw new Error(r&&r.error||'제출 실패');
+      META.submitted=r.submitted||META.submitted;
+    }
+  }catch(e){
+    btn.disabled=false; btn.textContent='제출하기';
+    alert('제출에 실패했습니다. 인터넷 연결을 확인하고 다시 시도하세요.');
+    return;
+  }
+  const [y,m]=META.month.split('-').map(Number);
+  document.getElementById('doneWho').textContent=`${name} · ${y}년 ${m}월`;
+  document.getElementById('doneWhat').textContent=
+    `휴무 요청: ${arr.join(', ')}일`+(memo?`\n${memo}`:'');
+  show('form',false); show('doneView',true); window.scrollTo(0,0);
+  btn.disabled=false; btn.textContent='제출하기';
+}
+function reopen(){
+  picked=new Set(); reasons={};
+  document.getElementById('emp').value='';
+  show('doneView',false); show('form',true);
+  renderEmps(); renderCal(); renderReasons(); refreshSubmit();
+}
+
+init();
+</script>
+</body>
+</html>
