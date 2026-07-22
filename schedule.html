@@ -1024,6 +1024,29 @@ function genOnce(y,m,nDays,reqs,mk,seed,preset){
       arr[t]=OFF;
     }
   });
+  // 4.8) 소속 정규직이 정원 초과인 매장: 같은 날 초과 근무자는 모자란 매장 지원, 없으면 휴무(교대)
+  {
+    const _isW=v=>v&&v!==OFF&&!['휴가','병가','훈련','출장','전휴무'].includes(v);
+    const _base=v=>v?v.replace(/\((OP|CL|PT)\)$/,''):v;
+    const _cnt=(stn,dd)=>S.emps.reduce((a,o)=>a+((!isTrainee(o)&&_isW(cells[o.name][dd])&&_base(cells[o.name][dd])===stn)?1:0),0);
+    const _offN=nm=>cells[nm].reduce((a,v)=>a+(v===OFF?1:0),0);
+    S.stores.forEach(st=>{
+      const homeStaff=S.emps.filter(e=>!isTrainee(e)&&e.home===st.n);
+      if(homeStaff.length<=st.need) return;
+      for(let d=0;d<nDays;d++){
+        if(isHol[d]) continue;
+        let atSt=homeStaff.filter(e=>_isW(cells[e.name][d])&&_base(cells[e.name][d])===st.n&&!isLocked(e.name,d));
+        while(atSt.length>st.need){
+          atSt.sort((a,b)=>_offN(a.name)-_offN(b.name)||(a.name<b.name?-1:1));
+          const cand=atSt[0];
+          const sh=S.stores.find(s2=>s2.n!==st.n&&_cnt(s2.n,d)<s2.need);
+          if(sh){ cells[cand.name][d]=sh.n; }
+          else { cells[cand.name][d]=OFF; if(fixedOff[cand.name]) fixedOff[cand.name].add(d); }
+          atSt=atSt.filter(e=>e.name!==cand.name);
+        }
+      }
+    });
+  }
   // 5) 최종 검증: 공백 매장이 없는지 전수 확인, 발견 시 잉여 근무일과 휴무를 맞교환해 복구
   const cntAt=(stn,dd)=>S.emps.reduce((a,o)=>a+((!isTrainee(o)&&isWork(cells[o.name][dd])&&baseOf(cells[o.name][dd])===stn)?1:0),0);
   for(let d=0;d<nDays;d++){
