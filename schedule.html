@@ -2271,6 +2271,23 @@ function renderCapacity(){
   }catch(e){}
 })();
 
+
+
+/* 안내창(경고·잉여) 표 아래로 이동 — Cowork */
+(function(){
+  function moveNotices(){
+    var box=document.getElementById('schedBox');
+    var warn=document.getElementById('warnBox');
+    var extra=document.getElementById('extraBox');
+    var note=document.getElementById('reviewNote');
+    if(!box||!warn||!extra) return;
+    var anchor=note||box.nextSibling;
+    box.parentNode.insertBefore(warn, anchor);
+    box.parentNode.insertBefore(extra, anchor);
+  }
+  if(document.readyState!=='loading') moveNotices(); else document.addEventListener('DOMContentLoaded',moveNotices);
+})();
+
 </script>
 </body>
 </html>
