@@ -443,7 +443,7 @@ function renderEmps(){
 function addEmp(){
   const n=document.getElementById('newEmpName').value.trim();
   if(!n) return;
-  S.emps.push({name:n,home:'순환',role:'',type:'정규직'});
+  S.emps.push({name:n,home:'순환',role:'',type:'정규직',title:'주임'});
   document.getElementById('newEmpName').value='';
   save(); renderEmps();
 }
@@ -2255,6 +2255,20 @@ function renderCapacity(){
   ['renderEmps','renderStores','renderReqs','renderHols'].forEach(hook);
   function init(){ var mp=document.getElementById('monthPick'); if(mp) mp.addEventListener('change',function(){ try{renderCapacity();}catch(e){} }); try{ renderCapacity(); }catch(e){} }
   if(document.readyState!=='loading') init(); else document.addEventListener('DOMContentLoaded',init);
+})();
+
+
+
+/* 직책 기본 셋팅 (1회) — Cowork */
+(function(){
+  try{
+    if(S.titleSetup) return;
+    var map={ '장현진':'팀장','김형진':'팀장','신재현':'실장','오명록':'매니저','홍다운':'매니저' };
+    S.emps.forEach(function(e){ e.title = map[e.name] || '주임'; });
+    S.titleSetup=true;
+    save();
+    if(typeof renderEmps==='function') renderEmps();
+  }catch(e){}
 })();
 
 </script>
