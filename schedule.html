@@ -193,6 +193,7 @@
     </div>
     <p class="hint">설정은 이 브라우저에 자동 저장됩니다.</p>
   </div>
+  <div class="card"><h3>📊 근무 수급 미리보기 <span class="hint">(생성 전 참고 · 실시간)</span></h3><div id="capBox"></div></div>
 </div>
 
 <!-- 특이사항 -->
@@ -2210,6 +2211,50 @@ function reviewReqOff(){
     [].forEach.call(hs,function(h){ if(h.dataset.tog) return; h.dataset.tog='1'; h.addEventListener('click',function(){ h.parentElement.classList.toggle('collapsed'); }); });
   }
   if(document.readyState!=='loading') wire(); else document.addEventListener('DOMContentLoaded',wire);
+})();
+
+
+
+/* ===== 근무 수급 미리보기 — Cowork ===== */
+function renderCapacity(){
+  var box=document.getElementById('capBox'); if(!box) return;
+  var mk=monthKey();
+  var D=30,H=0;
+  if(mk){ var p=mk.split('-'); D=new Date(+p[0],+p[1],0).getDate(); H=((S.hols&&S.hols[mk])||[]).length; }
+  var op=Math.max(0,D-H);
+  var isTr=function(e){return e.role==='교육';};
+  var totalNeed=S.stores.reduce(function(a,st){return a+(+st.need||0);},0);
+  var required=totalNeed*op;
+  var reqs=(mk&&S.reqs&&S.reqs[mk])||[];
+  var vacCnt={};
+  reqs.forEach(function(r){ if(['휴가','병가','훈련','출장'].indexOf(r.type)>=0){ vacCnt[r.emp]=(vacCnt[r.emp]||0)+1; } });
+  var supply=0, rows=[];
+  S.emps.forEach(function(e){ if(isTr(e)) return; var off=offTarget(e); var v=vacCnt[e.name]||0; var w=Math.max(0,op-off-v); supply+=w; rows.push({name:e.name,w:w,off:off,v:v}); });
+  var diff=supply-required;
+  var mkLabel=mk?(mk.replace('-','년 ')+'월'):'(월 미선택 · 30일 가정)';
+  var diffHtml = diff>=0
+    ? '<span style="color:#2e7d32;font-weight:700">잉여 예상 휴무일 +'+diff+'일</span> <span class="hint">(추가 휴무로 분배 가능)</span>'
+    : '<span style="color:#c62828;font-weight:700">부족 '+(-diff)+'일</span> <span class="hint">(이만큼 공백 예상 — 직원 추가/휴무 축소 필요)</span>';
+  var bar = required>0 ? Math.min(100, Math.round(supply/required*100)) : 100;
+  var barColor = diff>=0?'#2e7d32':'#c62828';
+  var h='';
+  h+='<div style="font-size:13px;color:#555;margin-bottom:8px">대상: '+mkLabel+' · 운영 '+op+'일'+(H?(' (전매장 휴무 '+H+'일 제외)'):'')+' · 하루 필요 '+totalNeed+'명</div>';
+  h+='<div style="display:flex;gap:20px;flex-wrap:wrap;align-items:baseline;margin-bottom:8px">';
+  h+='<div><div class="hint">필요 근무일수</div><div style="font-size:22px;font-weight:800">'+required+'<span style="font-size:13px">일</span></div></div>';
+  h+='<div><div class="hint">배치 가능 근무일수</div><div style="font-size:22px;font-weight:800">'+supply+'<span style="font-size:13px">일</span></div></div>';
+  h+='<div style="align-self:center">'+diffHtml+'</div>';
+  h+='</div>';
+  h+='<div style="height:8px;background:#eee;border-radius:5px;overflow:hidden;margin-bottom:10px"><div style="height:100%;width:'+bar+'%;background:'+barColor+'"></div></div>';
+  h+='<div style="display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px">';
+  h+=rows.map(function(r){ return '<span style="white-space:nowrap"><b>'+r.name+'</b> 실근무 '+r.w+'일<span class="hint"> (휴무 '+r.off+(r.v?('+휴가등'+r.v):'')+')</span></span>'; }).join('');
+  h+='</div>';
+  box.innerHTML=h;
+}
+(function(){
+  function hook(name){ var o=window[name]; if(typeof o==='function'){ window[name]=function(){ var r=o.apply(this,arguments); try{ renderCapacity(); }catch(e){} return r; }; } }
+  ['renderEmps','renderStores','renderReqs','renderHols'].forEach(hook);
+  function init(){ var mp=document.getElementById('monthPick'); if(mp) mp.addEventListener('change',function(){ try{renderCapacity();}catch(e){} }); try{ renderCapacity(); }catch(e){} }
+  if(document.readyState!=='loading') init(); else document.addEventListener('DOMContentLoaded',init);
 })();
 
 </script>
