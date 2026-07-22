@@ -74,7 +74,8 @@ def to_int(s):
 
 
 def daangn_count(page, url):
-    """당근: 일반 요청 → 실패 시 브라우저 렌더링으로 재시도"""
+    """당근: 일반 요청 → 실패 시 브라우저 렌더링으로 재시도.
+    페이지는 열렸으나 후기 섹션이 없으면(전자제품 카테고리 등) 실제 0건으로 처리."""
     try:
         html = requests.get(url, headers={"User-Agent": MOBILE_UA}, timeout=25).text
         # 태그/주석이 숫자 사이에 끼는 경우 대비: 태그 전부 제거 후 검색
@@ -86,11 +87,17 @@ def daangn_count(page, url):
     except Exception:
         pass
     # 브라우저 렌더링 재시도
-    page.goto(url, wait_until="domcontentloaded", timeout=45000)
-    page.wait_for_timeout(4000)
-    text = page.inner_text("body")
+    try:
+        page.goto(url, wait_until="domcontentloaded", timeout=45000)
+        page.wait_for_timeout(4000)
+        text = page.inner_text("body")
+    except Exception:
+        return None  # 페이지 로드 자체 실패 → 진짜 수집 실패
     m = re.search(r"후기\s*([\d,]+)", text)
-    return to_int(m.group(1)) if m else None
+    if m:
+        return to_int(m.group(1))
+    # 페이지는 정상 로드됐지만 후기 섹션 없음 → 실제 0건
+    return 0
 
 
 def kakao_count(page, url):
