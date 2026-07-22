@@ -1,10 +1,10 @@
 {
-  "updatedAt": "2026-07-22 12:03",
+  "updatedAt": "2026-07-22 17:09",
   "branches": {
     "구월 로데오점": {
-      "naver": 2401,
+      "naver": 2405,
       "kakao": 16,
-      "daangn": 3,
+      "daangn": 4,
       "tmap": null
     },
     "구월 길병원점": {
@@ -20,31 +20,31 @@
       "tmap": null
     },
     "부천 신중동점": {
-      "naver": 1114,
+      "naver": 1115,
       "kakao": 9,
-      "daangn": null,
+      "daangn": 0,
       "tmap": null
     },
     "인천 검단점": {
       "naver": 87,
       "kakao": 0,
-      "daangn": null,
+      "daangn": 0,
       "tmap": null
     },
     "인천 계산점": {
       "naver": 898,
-      "kakao": 0,
-      "daangn": null,
+      "kakao": 1,
+      "daangn": 0,
       "tmap": null
     },
     "인천 공항점": {
       "naver": 99,
       "kakao": 0,
-      "daangn": null,
+      "daangn": 0,
       "tmap": null
     },
     "인천 논현점": {
-      "naver": 1022,
+      "naver": 1023,
       "kakao": 27,
       "daangn": 11,
       "tmap": null
@@ -339,9 +339,9 @@
     },
     "2026-07-22": {
       "구월 로데오점": {
-        "naver": 2401,
+        "naver": 2405,
         "kakao": 16,
-        "daangn": 3,
+        "daangn": 4,
         "tmap": null
       },
       "구월 길병원점": {
@@ -357,31 +357,31 @@
         "tmap": null
       },
       "부천 신중동점": {
-        "naver": 1114,
+        "naver": 1115,
         "kakao": 9,
-        "daangn": null,
+        "daangn": 0,
         "tmap": null
       },
       "인천 검단점": {
         "naver": 87,
         "kakao": 0,
-        "daangn": null,
+        "daangn": 0,
         "tmap": null
       },
       "인천 계산점": {
         "naver": 898,
-        "kakao": 0,
-        "daangn": null,
+        "kakao": 1,
+        "daangn": 0,
         "tmap": null
       },
       "인천 공항점": {
         "naver": 99,
         "kakao": 0,
-        "daangn": null,
+        "daangn": 0,
         "tmap": null
       },
       "인천 논현점": {
-        "naver": 1022,
+        "naver": 1023,
         "kakao": 27,
         "daangn": 11,
         "tmap": null
@@ -394,10 +394,5 @@
       }
     }
   },
-  "errors": [
-    "부천 신중동점/daangn: 수집값 없음",
-    "인천 검단점/daangn: 수집값 없음",
-    "인천 계산점/daangn: 수집값 없음",
-    "인천 공항점/daangn: 수집값 없음"
-  ]
+  "errors": []
 }
