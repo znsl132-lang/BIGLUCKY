@@ -1902,7 +1902,7 @@ function exportXlsx(){
   const ws=XLSX.utils.aoa_to_sheet(aoa);
   const totalCols=4+nDays+2;
   ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:totalCols-1}}];
-  ws['!cols']=[{wch:7},{wch:8},{wch:7},{wch:6},...Array(nDays).fill({wch:6}),{wch:5},{wch:8}];
+  ws['!cols']=[{wch:11},{wch:9},{wch:8},{wch:10},...Array(nDays).fill({wch:6}),{wch:5},{wch:8}];
   ws['!rows']=[{hpt:28},{hpt:18},{hpt:16},...Array(Math.max(0,aoa.length-3)).fill({hpt:32})];
   const bd={style:'thin',color:{rgb:'D9D9D9'}};
   const border={top:bd,bottom:bd,left:bd,right:bd};
@@ -1914,12 +1914,12 @@ function exportXlsx(){
     if(r===0){
       s.font={sz:14,bold:true};
     } else if(r===1||r===2){
-      s.fill={fgColor:{rgb:'2B2D42'}};
+      s.fill={fgColor:{rgb:c<4?'4A4E69':'2B2D42'}};
       s.font={sz:10,bold:true,color:{rgb:'FFFFFF'}};
       if(r===2&&cell.v==='토') s.font.color={rgb:'8FBAFF'};
       if(r===2&&cell.v==='일') s.font.color={rgb:'FF9D9D'};
     } else if(c<4){
-      s.fill={fgColor:{rgb:'F5F5F5'}};
+      s.fill={fgColor:{rgb:'DDE1EA'}};
       if(c===1) s.font={sz:10,bold:true};
     } else if(c>=4+nDays){
       s.font={sz:10,bold:true};
