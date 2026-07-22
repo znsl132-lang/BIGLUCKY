@@ -275,17 +275,17 @@ function reviewBaseline(name, platform){
   if (period === "today") d = fmt(daysAgo(1));
   else if (period === "week") d = fmt(daysAgo(7));
   else { const now = new Date(); d = fmt(new Date(now.getFullYear(), now.getMonth(), 0)); } // 지난달 말일
-  // null(미수집) 구간은 건너뛰고, 기준일 이하 마지막 실측 스냅샷 값을 찾는다 (부풀림 방지)
+  // null(미수집) 구간은 건너뛰고, 기준일 이하 마지막 실측 스냅샷 값을 찾는다 (중간 실패 보정)
   for (let i = dates.length - 1; i >= 0; i--){
     const k = dates[i];
     if (k > d) continue;
     const v = hist[k] && hist[k][name] ? hist[k][name][platform] : null;
     if (v !== null && v !== undefined) return v;
   }
-  return null; // 기준 시점 이전 실측값 없음 → 비교 불가(신규 0건 처리)
+  return 0; // 이전 실측값이 전혀 없음(수집 첫날 등) → 0 기준 → 첫 수집분을 해당 기간 신규로 표시
 }
 function snapAt(name, platform, dateStr){
-  // dateStr 이하에서 실제 수집된(비-null) 최신 스냅샷 값 (없으면 null)
+  // dateStr 이하에서 실제 수집된(비-null) 최신 스냅샷 값 (이전 실측값 없으면 0)
   const hist = (REVIEWS && REVIEWS.history) || {};
   const dates = Object.keys(hist).sort();
   for (let i = dates.length - 1; i >= 0; i--){
@@ -294,7 +294,7 @@ function snapAt(name, platform, dateStr){
     const v = hist[k] && hist[k][name] ? hist[k][name][platform] : null;
     if (v !== null && v !== undefined) return v;
   }
-  return null;
+  return 0;
 }
 function reviewValue(name, platform, current){
   // 누적 탭 = 총 리뷰 수, 나머지 탭 = 해당 기간에 새로 작성된 수(스냅샷 차이)
