@@ -2079,7 +2079,7 @@ function importXlsx(){
     var btn = document.getElementById('wvPullBtn');
     if (btn) { btn.disabled = true; btn.textContent = '불러오는 중…'; }
     try {
-      var r = await jsonp({ action: 'export', month: mk });
+      var r = await jsonp({ action: 'list', month: mk });
       if (!r || !r.ok) throw new Error(r && r.error || '실패');
       if (!r.rows.length) { alert(mk + ' 에 제출된 직원 요청이 없습니다.'); }
       else importRows(r.rows);
