@@ -246,4 +246,33 @@ async function load(){
 load();
 </script>
 </body>
+<script>
+/* 병가 열 표시 수정: 시트 집계 열을 그대로 렌더(2열 옛 탭·3열 새 탭 자동). 원본 render 오버라이드 */
+render = function(rows){
+  var board=document.getElementById('board');
+  if(!rows||!rows.length){ board.innerHTML=''; return; }
+  var hi=-1; for(var i=0;i<rows.length;i++){ if((rows[i]||[]).some(function(x){return String(x).trim()==='성명';})){ hi=i; break; } }
+  if(hi<0) hi=1;
+  var header=rows[hi]||[], wk=rows[hi+1]||[];
+  var dayIdx=[]; for(var c=0;c<header.length;c++){ if(/^\d{1,2}$/.test(String(header[c]).trim())) dayIdx.push(c); }
+  var nameCol=header.map(function(x){return String(x).trim();}).indexOf('성명'); if(nameCol<0) nameCol=1;
+  var titleCol=nameCol+1, homeCol=nameCol+2;
+  var lastDay=dayIdx.length?dayIdx[dayIdx.length-1]:homeCol;
+  var sumIdx=[]; for(var c=lastDay+1;c<header.length;c++) sumIdx.push(c);
+  var h='<table id="schedTable"><tr><th class="namecol">성명</th><th class="homecol">소속</th>';
+  dayIdx.forEach(function(c){ h+='<th>'+esc(String(header[c]).trim())+'<br><small>'+esc(String(wk[c]||'').trim())+'</small></th>'; });
+  sumIdx.forEach(function(c){ h+='<th>'+esc(String(header[c]).trim()).replace('/','<br>')+'</th>'; });
+  h+='</tr>';
+  for(var r=hi+2;r<rows.length;r++){ var row=rows[r]||[]; var nm=String(row[nameCol]||'').trim(); if(!nm) continue;
+    var ttl=String(row[titleCol]||'').trim();
+    h+='<tr><td class="namecol"><b>'+esc(nm)+'</b>'+(ttl?'<span class="ttl">'+esc(ttl)+'</span>':'')+'</td>';
+    h+='<td class="homecol">'+esc(String(row[homeCol]||'').trim())+'</td>';
+    dayIdx.forEach(function(c){ var ci=classify(String(row[c]||'').trim()); var inner=esc(ci.txt||''); if(ci.opcl) inner=esc(ci.base||ci.txt||'')+'<span class="opcl">'+esc(ci.opcl)+'</span>'; h+='<td class="day '+ci.cls+'">'+inner+'</td>'; });
+    sumIdx.forEach(function(c){ h+='<td class="sum">'+esc(String(row[c]||'').trim())+'</td>'; });
+    h+='</tr>';
+  }
+  h+='</table>';
+  board.innerHTML=h;
+};
+</script>
 </html>
