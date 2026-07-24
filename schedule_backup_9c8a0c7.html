@@ -1620,21 +1620,21 @@ function renderSched(warns){
     const wd=new Date(year,month-1,d).getDay();
     h+=`<th class="${wd===0?'sun':wd===6?'sat':''}">${d}<br><small>${DAYNAMES[wd]}</small></th>`;
   }
-  h+='<th>휴무</th><th>훈련</th><th>병가</th></tr></thead><tbody>';
+  h+='<th>휴무</th><th>휴가<br>훈련</th></tr></thead><tbody>';
   const bonusMap={};
   ((S.extraLog&&S.extraLog[monthKey()])||[]).forEach(x=>{ if(x.bulk) bonusMap[x.name]=(bonusMap[x.name]||0)+1; });
   S.emps.forEach(e=>{
     const arr=cells[e.name]; if(!arr) return;
-    let offN=0,trainN=0,sickN=0;
+    let offN=0,vacN=0;
     let row=`<tr data-n="${e.name}"><td class="namecol"><b>${e.name}</b>${e.title?`<span class="ttl">${e.title}</span>`:''}</td><td class="homecol">${e.home}</td>`;
     for(let d=0;d<nDays;d++){
       const v=arr[d];
       let cls='',style='',txt=v;
       if(v===OFF){ cls='off'; txt=''; offN++; }
       else if(v==='전휴무'){ cls='cell-hol'; }
-      else if(v==='휴가'){ cls='cell-vac'; }
-      else if(v==='병가'){ cls='cell-sick'; sickN++; }
-      else if(v==='훈련'){ cls='cell-train'; trainN++; }
+      else if(v==='휴가'){ cls='cell-vac'; vacN++; }
+      else if(v==='병가'){ cls='cell-sick'; vacN++; }
+      else if(v==='훈련'){ cls='cell-train'; vacN++; }
       else if(v==='출장'){ cls='cell-trip'; }
       else {
         const m2=v.match(/^(.+?)\((OP|CL)\)$/);
@@ -1645,7 +1645,7 @@ function renderSched(warns){
       }
       row+=`<td data-d="${d}" class="${cls}${dupCells.has(e.name+'|'+d)?' dup':''}" style="${style}" onclick="editCell(event,'${e.name}',${d})">${txt}</td>`;
     }
-    row+=`<td class="sum"><b>${offN}</b>/${offTarget(e)+(bonusMap[e.name]||0)}</td><td class="sum">${trainN}</td><td class="sum">${sickN}</td></tr>`;
+    row+=`<td class="sum"><b>${offN}</b>/${offTarget(e)+(bonusMap[e.name]||0)}</td><td class="sum">${vacN}</td></tr>`;
     h+=row;
   });
   h+='</tbody></table>';
@@ -1883,26 +1883,26 @@ function exportXlsx(){
     dateRow.push(d);
     dayRow.push(DAYNAMES[new Date(year,month-1,d).getDay()]);
   }
-  dateRow.push('휴무','훈련','병가'); dayRow.push('','','');
+  dateRow.push('휴무','휴가/훈련'); dayRow.push('','');
   aoa.push(dateRow,dayRow);
   S.emps.forEach(e=>{
     const arr=cells[e.name]; if(!arr) return;
     const row=['위베이프',e.name,e.title||'',e.home];
-    let offN=0,trainN=0,sickN=0;
+    let offN=0,vacN=0;
     arr.forEach(v=>{
       let out=v===OFF?'':v;
       if(e.role==='교육'&&out&&!['휴가','병가','훈련','출장','전휴무'].includes(out)) out+='(PT)';
       row.push(out);
       if(v===OFF) offN++;
-      if(v==='훈련') trainN++; else if(v==='병가') sickN++;
+      if(v==='휴가'||v==='훈련'||v==='병가') vacN++;
     });
-    row.push(offN,trainN,sickN);
+    row.push(offN,vacN);
     aoa.push(row);
   });
   const ws=XLSX.utils.aoa_to_sheet(aoa);
-  const totalCols=4+nDays+3;
+  const totalCols=4+nDays+2;
   ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:totalCols-1}}];
-  ws['!cols']=[{wch:11},{wch:9},{wch:8},{wch:10},...Array(nDays).fill({wch:6}),{wch:6},{wch:6},{wch:6}];
+  ws['!cols']=[{wch:11},{wch:9},{wch:8},{wch:10},...Array(nDays).fill({wch:6}),{wch:5},{wch:8}];
   ws['!rows']=[{hpt:28},{hpt:18},{hpt:16},...Array(Math.max(0,aoa.length-3)).fill({hpt:32})];
   const bd={style:'thin',color:{rgb:'D9D9D9'}};
   const border={top:bd,bottom:bd,left:bd,right:bd};
