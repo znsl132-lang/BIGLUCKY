@@ -2290,4 +2290,38 @@ function renderCapacity(){
 
 </script>
 </body>
+
+<script>
+// ---------- 구글시트로 복사 (뷰어 연동용) ----------
+function copySheetTSV(){
+  if(typeof sched==='undefined'||!sched){ alert('먼저 스케줄을 생성해주세요.'); return; }
+  const {year,month,nDays,cells}=sched;
+  const rows=[[`${year}년 ${month}월 직원 스케줄`]];
+  const dateRow=['소속','성명','직책','구분'], dayRow=['','','',''];
+  for(let d=1;d<=nDays;d++){ dateRow.push(d); dayRow.push(DAYNAMES[new Date(year,month-1,d).getDay()]); }
+  dateRow.push('휴무','휴가/훈련'); dayRow.push('','');
+  rows.push(dateRow, dayRow);
+  S.emps.forEach(e=>{
+    const arr=cells[e.name]; if(!arr) return;
+    const row=['위베이프',e.name,e.title||'',e.home];
+    let offN=0,vacN=0;
+    arr.forEach(v=>{ row.push(v===OFF?'':v); if(v===OFF)offN++; if(v==='휴가'||v==='훈련')vacN++; });
+    row.push(offN,vacN); rows.push(row);
+  });
+  const tsv=rows.map(r=>r.join('\t')).join('\n');
+  const done=()=>alert('복사됐습니다. 구글시트 A1을 누르고 Ctrl+V로 붙여넣으세요.');
+  const fb=t=>{ const ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select(); try{document.execCommand('copy');}catch(e){} document.body.removeChild(ta); done(); };
+  if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(tsv).then(done).catch(()=>fb(tsv)); } else fb(tsv);
+}
+(function(){
+  const dl=document.getElementById('dlBtn'); if(!dl) return;
+  const b=document.createElement('button');
+  b.className=dl.className; b.textContent='📋 구글시트로 복사'; b.style.marginLeft='6px';
+  b.addEventListener('click',copySheetTSV);
+  dl.parentNode.insertBefore(b, dl.nextSibling);
+  const sync=()=>{ b.style.display=dl.style.display; };
+  sync();
+  try{ new MutationObserver(sync).observe(dl,{attributes:true,attributeFilter:['style']}); }catch(e){}
+})();
+</script>
 </html>
