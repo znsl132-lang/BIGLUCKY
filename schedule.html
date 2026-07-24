@@ -2292,7 +2292,9 @@ function renderCapacity(){
 </body>
 
 <script>
-// ---------- 구글시트로 복사 (뷰어 연동용) ----------
+// ---------- 구글시트로 자동 전송 (뷰어 연동) ----------
+var SHEET_WEBAPP_URL='https://script.google.com/macros/s/AKfycbxTkORMjTnG904crrghKNmEA2laN4WcVUpDItmbNuwArjRWlkpaZZOoxcFkTyHfBC1f/exec';
+var SHEET_TOKEN='wevape2026';
 function copySheetTSV(){
   if(typeof sched==='undefined'||!sched){ alert('먼저 스케줄을 생성해주세요.'); return; }
   const {year,month,nDays,cells}=sched;
@@ -2308,15 +2310,16 @@ function copySheetTSV(){
     arr.forEach(v=>{ row.push(v===OFF?'':v); if(v===OFF)offN++; if(v==='휴가'||v==='훈련')vacN++; });
     row.push(offN,vacN); rows.push(row);
   });
-  const tsv=rows.map(r=>r.join('\t')).join('\n');
-  const done=()=>alert('복사됐습니다. 구글시트 A1을 누르고 Ctrl+V로 붙여넣으세요.');
-  const fb=t=>{ const ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select(); try{document.execCommand('copy');}catch(e){} document.body.removeChild(ta); done(); };
-  if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(tsv).then(done).catch(()=>fb(tsv)); } else fb(tsv);
+  const fb=()=>{ const tsv=rows.map(r=>r.join('\t')).join('\n'); const ta=document.createElement('textarea'); ta.value=tsv; document.body.appendChild(ta); ta.select(); try{document.execCommand('copy');}catch(e){} document.body.removeChild(ta); alert('시트 자동전송에 실패해 대신 클립보드에 복사했습니다. 구글시트 A1에 붙여넣으세요.'); };
+  if(!SHEET_WEBAPP_URL){ fb(); return; }
+  fetch(SHEET_WEBAPP_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({token:SHEET_TOKEN,rows:rows})})
+    .then(()=>alert('구글시트에 자동 반영됐습니다. 잠시 후 공유 링크에서 확인하세요.'))
+    .catch(()=>fb());
 }
 (function(){
   const dl=document.getElementById('dlBtn'); if(!dl) return;
   const b=document.createElement('button');
-  b.className=dl.className; b.textContent='📋 구글시트로 복사'; b.style.marginLeft='6px';
+  b.className=dl.className; b.textContent='📤 구글시트로 전송'; b.style.marginLeft='6px';
   b.addEventListener('click',copySheetTSV);
   dl.parentNode.insertBefore(b, dl.nextSibling);
   const sync=()=>{ b.style.display=dl.style.display; };
@@ -2324,4 +2327,4 @@ function copySheetTSV(){
   try{ new MutationObserver(sync).observe(dl,{attributes:true,attributeFilter:['style']}); }catch(e){}
 })();
 </script>
-</html>
+ </html>
