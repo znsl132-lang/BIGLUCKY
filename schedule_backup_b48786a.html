@@ -2099,18 +2099,10 @@ function importXlsx(){
     card.id = 'wvPullCard';
     card.innerHTML =
       '<h3>직원 휴무 요청 <span class="hint">직원들이 링크에서 제출한 요청을 불러옵니다</span></h3>' +
-      '<div class="rowbtns" style="margin-bottom:8px"><label class="hint" style="align-self:center;margin:0">대상 월</label><input type="month" id="reqMonthPick"></div>' +
       '<div class="rowbtns"><button class="btn small" id="wvPullBtn">📥 직원 요청 불러오기</button></div>' +
       '<p class="hint">대상 월 기준으로 제출된 요청을 ②특이사항에 반영합니다. 같은 직원·같은 날짜는 최신 제출로 덮어씁니다.</p>';
     panel.insertBefore(card, panel.firstChild);
     document.getElementById('wvPullBtn').addEventListener('click', fetchRequests);
-    var rmp=document.getElementById('reqMonthPick'), hmp=document.getElementById('monthPick');
-    if(rmp&&hmp){
-      rmp.value=hmp.value;
-      rmp.addEventListener('change',function(){ hmp.value=rmp.value; hmp.dispatchEvent(new Event('change',{bubbles:true})); });
-      hmp.addEventListener('change',function(){ if(rmp.value!==hmp.value) rmp.value=hmp.value; });
-      setTimeout(function(){ if(hmp.value && rmp.value!==hmp.value) rmp.value=hmp.value; },300);
-    }
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', inject);
