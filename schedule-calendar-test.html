@@ -9,39 +9,47 @@
   :root{
     --head:#2b2d42; --sat:#2f6fed; --sun:#e0384e;
     --line:#e7e8ee; --ink:#1e1f26; --muted:#8a8b93; --card:#ffffff;
-    --off:#f3f4f6; --hol:#fce4ec; --holT:#c62828; --vac:#ffe0e4; --vacT:#b00020;
-    --train:#fff1d6; --trip:#e3effb;
+    --off:#eef0f3; --offT:#5a5e66; --hol:#fce4ec; --holT:#c62828; --vac:#ffe0e4; --vacT:#b00020;
+    --train:#fff1d6; --trainT:#7a4b00; --trip:#e3effb; --tripT:#245b8c;
   }
   *{box-sizing:border-box}
   html,body{margin:0;background:#eef0f4;color:var(--ink);
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic","Apple SD Gothic Neo",sans-serif;
     -webkit-text-size-adjust:100%}
-  .wrap{max-width:1200px;margin:0 auto;padding:16px 12px 48px}
-  .head{position:sticky;top:0;z-index:5;background:#eef0f4;padding:8px 4px 12px;margin:-8px -4px 8px}
-  h1{font-size:20px;margin:0;font-weight:800;letter-spacing:-.3px}
+  .wrap{max-width:1200px;margin:0 auto;padding:14px 12px 48px}
+  .head{position:sticky;top:0;z-index:6;background:#eef0f4;padding:8px 4px 8px;margin:-14px -4px 8px}
+  h1{font-size:19px;margin:0;font-weight:800;letter-spacing:-.3px}
   .sub{font-size:12px;color:var(--muted);margin-top:2px}
+  .names{display:flex;flex-wrap:wrap;gap:6px;margin:9px 0 2px}
+  .chip{font-size:13.5px;padding:6px 12px;border-radius:999px;border:1px solid var(--line);
+    background:#fff;color:#333;cursor:pointer;font-weight:700;user-select:none}
+  .chip.on{background:var(--head);color:#fff;border-color:var(--head)}
+  .chip.all{color:#2f6fed}
+  .chip.all.on{background:#2f6fed;color:#fff;border-color:#2f6fed}
   .grid{display:grid;grid-template-columns:1fr;gap:12px}
   @media(min-width:620px){ .grid{grid-template-columns:1fr 1fr;} }
-  @media(min-width:960px){ .grid{grid-template-columns:1fr 1fr 1fr;} }
+  @media(min-width:980px){ .grid{grid-template-columns:1fr 1fr 1fr;} }
   .day{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;
     box-shadow:0 1px 2px rgba(0,0,0,.04)}
-  .day .dh{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line);
+  .day .dh{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line);
     background:var(--head);color:#fff}
-  .day .dnum{font-size:20px;font-weight:800;line-height:1}
+  .day .dnum{font-size:19px;font-weight:800;line-height:1}
   .day .dwk{font-size:13px;font-weight:700;opacity:.9}
   .day.sat .dh{background:linear-gradient(90deg,#2f6fed,#3a4a86)}
   .day.sun .dh{background:linear-gradient(90deg,#e0384e,#8f3550)}
   .day.hol .dh{background:linear-gradient(90deg,#c2185b,#7a2f4a)}
   .day .cnt{margin-left:auto;font-size:11.5px;font-weight:700;opacity:.9}
-  .body{padding:8px 10px 12px}
-  .store{margin:6px 0;padding:8px 10px;border-radius:10px;border-left:5px solid #ccc}
-  .store .sn{font-size:12.5px;font-weight:800;margin-bottom:3px;color:#333}
-  .store .ppl{font-size:13.5px;line-height:1.5;color:#1e1f26}
-  .op,.cl{font-size:10px;font-weight:800;vertical-align:super;margin-left:1px}
-  .op{color:#1b6b2f} .cl{color:#8a4b00}
-  .allholiday{padding:14px;text-align:center;color:var(--holT);font-weight:800;background:var(--hol);border-radius:10px}
-  .misc{margin-top:8px;font-size:11.5px;color:var(--muted);line-height:1.5}
-  .misc b{color:#555}
+  .body{padding:9px 10px 11px}
+  .store{margin:5px 0;padding:7px 10px;border-radius:10px;border-left:5px solid #ccc}
+  .store .sn{font-size:12px;font-weight:800;margin-bottom:2px;color:#444}
+  .store .ppl{font-size:15px;font-weight:700;line-height:1.55;color:#17181e}
+  .role{font-size:10px;font-weight:800;vertical-align:super;margin-left:1px}
+  .op .role,.op{color:#1b6b2f} .cl .role{color:#8a4b00}
+  .offrow{margin-top:9px;padding-top:8px;border-top:1px dashed var(--line);font-size:13px;color:var(--offT);line-height:1.7}
+  .offrow b{display:inline-block;min-width:52px;color:#333;font-weight:800;font-size:11.5px}
+  .allholiday{padding:16px;text-align:center;color:var(--holT);font-weight:800;background:var(--hol);border-radius:10px;font-size:15px}
+  .big{padding:18px 14px;text-align:center;border-radius:12px;font-size:19px;font-weight:800;letter-spacing:-.2px}
+  .big .role{font-size:12px;margin-left:3px}
   .state{padding:48px 16px;text-align:center;color:var(--muted);font-size:14px;line-height:1.7}
   .state b{color:var(--ink)}
   .foot{margin:16px 4px 0;font-size:11.5px;color:var(--muted);text-align:center}
@@ -54,15 +62,31 @@
   <div class="head">
     <h1 id="title">위베이프 스케줄 <span class="badge">달력 테스트</span></h1>
     <div class="sub" id="sub">불러오는 중…</div>
+    <div class="names" id="names"></div>
   </div>
   <div class="grid" id="grid"></div>
   <div class="foot" id="foot"></div>
 </div>
+
 <script>
 const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSqbB04rvR8IEjNuyR7hueC4jjqrn2R8ro90ok0P1xhbsFX_hgMig3JrqlSdQBxOnNY-c-Ee4mnTv3Z/pub?output=csv";
 const PALETTE=['#ffe9ec','#fff3d6','#e3f2fd','#e8f5e9','#f3e5f5','#e0f7fa','#fff8e1','#efebe9','#ede7f6','#f1f8e9','#fde2ff','#e2fff3'];
 const BORDER=['#ff9db0','#ffd166','#5aa9f0','#7ecb8a','#c58edb','#5fd0dd','#f0cf5a','#b09a8a','#a58ed6','#9bcf6a','#e58ad6','#5fd6a8'];
 const DAYNAMES=['일','월','화','수','목','금','토'];
+
+let EMPS=[], HEAD=[], WEEK=[], DAYCOLS=[], NAMECOL=1, YEAR=null, MONTH=null, TITLE='';
+let COLIDX={}, CI=0, selected=null;
+
+function esc(s){return String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function short(full){ full=String(full||'').trim(); return full.length>=3 ? full.slice(1) : full; }
+function colOf(n){ if(!(n in COLIDX)) COLIDX[n]=CI++; return COLIDX[n]; }
+function cls(v){
+  v=String(v||'').trim();
+  if(v===''||v==='전���무'||v==='휴가'||v==='훈련'||v==='출장') return {t:v||'off'};
+  const m=v.match(/^(.+?)\((OP|CL)\)$/); const base=m?m[1].trim():v;
+  return {t:'store',base:base,op:m?m[2]:''};
+}
+function weekdayOf(dc,dnum){ return WEEK[dc] || (YEAR&&MONTH? DAYNAMES[new Date(YEAR,MONTH-1,+dnum).getDay()] : ''); }
 
 function parseCSV(text){
   const rows=[]; let row=[], cur='', q=false;
@@ -75,67 +99,83 @@ function parseCSV(text){
   row.push(cur); rows.push(row);
   return rows.filter(r=>r.some(x=>String(x).trim()!==''));
 }
-function esc(s){return String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
 
-function build(rows){
-  let title='위베이프 스케줄';
-  outer: for(const r of rows){ for(const c of r){ if(String(c).trim()){ title=String(c).trim(); break outer; } } }
+function prep(rows){
+  TITLE='위베이프 스케줄';
+  outer: for(const r of rows){ for(const c of r){ if(String(c).trim()){ TITLE=String(c).trim(); break outer; } } }
   const hi=rows.findIndex(r=>r.some(c=>String(c).trim()==='성명'));
   if(hi<0) throw new Error('표 형식을 찾지 못했습니다.');
-  const head=rows[hi].map(c=>String(c).trim());
-  const week=(rows[hi+1]||[]).map(c=>String(c).trim());
-  const nameCol=head.indexOf('성명');
-  const dayCols=[]; head.forEach((c,i)=>{ if(/^\d{1,2}$/.test(c)) dayCols.push(i); });
-  const emps=rows.slice(hi+2).filter(r=>String(r[nameCol]||'').trim()!=='');
+  HEAD=rows[hi].map(c=>String(c).trim());
+  WEEK=(rows[hi+1]||[]).map(c=>String(c).trim());
+  NAMECOL=HEAD.indexOf('성명');
+  DAYCOLS=[]; HEAD.forEach((c,i)=>{ if(/^\d{1,2}$/.test(c)) DAYCOLS.push(i); });
+  EMPS=rows.slice(hi+2).filter(r=>String(r[NAMECOL]||'').trim()!=='')
+    .map(r=>({ full:String(r[NAMECOL]).trim(), short:short(r[NAMECOL]), row:r }));
+  const mt=TITLE.match(/(\d{4})\D+(\d{1,2})/);
+  YEAR=mt?+mt[1]:null; MONTH=mt?+mt[2]:null;
+  COLIDX={}; CI=0;
+  EMPS.forEach(e=>DAYCOLS.forEach(dc=>{ const k=cls(e.row[dc]); if(k.t==='store') colOf(k.base); }));
+}
 
-  const mt=title.match(/(\d{4})\D+(\d{1,2})/);
-  const year=mt?+mt[1]:null, month=mt?+mt[2]:null;
+function renderChips(){
+  let h='<span class="chip all'+(selected===null?' on':'')+'" onclick="pick(-1)">전체</span>';
+  h+=EMPS.map((e,i)=>`<span class="chip${selected===e.full?' on':''}" onclick="pick(${i})">${esc(e.short)}</span>`).join('');
+  document.getElementById('names').innerHTML=h;
+}
+function pick(i){ selected = (i<0)?null:EMPS[i].full; renderChips(); renderGrid(); updateSub(); window.scrollTo({top:0,behavior:'smooth'}); }
 
-  const cidx={}; let ci=0;
-  const colOf=n=>{ if(!(n in cidx)) cidx[n]=ci++; return cidx[n]; };
-  function cls(v){ v=String(v||'').trim();
-    if(v===''||v==='전휴무'||v==='휴가'||v==='훈련'||v==='출장') return {t:v||'off'};
-    const m=v.match(/^(.+?)\((OP|CL)\)$/); const base=m?m[1].trim():v;
-    return {t:'store',base:base,op:m?m[2]:''};
-  }
-  emps.forEach(r=>dayCols.forEach(dc=>{ const k=cls(r[dc]); if(k.t==='store') colOf(k.base); }));
+function bigChip(k){
+  if(k.t==='store'){ const i=colOf(k.base); const bg=PALETTE[i%PALETTE.length], bd=BORDER[i%BORDER.length];
+    return `<div class="big" style="background:${bg};border:2px solid ${bd}">${esc(k.base)}${k.op?`<span class="role">${k.op}</span>`:''}</div>`; }
+  const map={'off':['var(--off)','var(--offT)','휴무'],'전휴무':['var(--hol)','var(--holT)','전휴무'],
+    '휴가':['var(--vac)','var(--vacT)','휴가'],'훈련':['var(--train)','var(--trainT)','훈련'],'출장':['var(--trip)','var(--tripT)','출장']};
+  const m=map[k.t]||map['off'];
+  return `<div class="big" style="background:${m[0]};color:${m[1]}">${m[2]}</div>`;
+}
 
+function renderGrid(){
   let html='';
-  dayCols.forEach(dc=>{
-    const dnum=head[dc];
-    const wk=week[dc]|| (year&&month? DAYNAMES[new Date(year,month-1,+dnum).getDay()] : '');
-    const cls2=wk==='토'?'sat':wk==='일'?'sun':'';
-    const byStore={}; let allHol=true; let off=0,vac=0,trip=0;
-    emps.forEach(r=>{
-      const k=cls(r[dc]);
-      if(k.t==='store'){ allHol=false; (byStore[k.base]=byStore[k.base]||[]).push({n:String(r[nameCol]).trim(),op:k.op}); }
-      else if(k.t==='off'){ off++; }
-      else if(k.t==='전휴무'){ }
-      else if(k.t==='휴가'||k.t==='훈련'){ vac++; allHol=false; }
-      else if(k.t==='출장'){ trip++; allHol=false; }
-    });
-    const working=Object.values(byStore).reduce((a,v)=>a+v.length,0);
-    let inner='';
-    if(allHol && working===0){ inner='<div class="allholiday">전 매장 휴무</div>'; }
-    else{
-      const names=Object.keys(byStore).sort((a,b)=>colOf(a)-colOf(b));
-      names.forEach(sn=>{
-        const i=colOf(sn);
-        const bg=PALETTE[i%PALETTE.length], bd=BORDER[i%BORDER.length];
-        const ppl=byStore[sn].map(p=>esc(p.n)+(p.op?`<span class="${p.op==='OP'?'op':'cl'}">${p.op}</span>`:'')).join(', ');
-        inner+=`<div class="store" style="background:${bg};border-left-color:${bd}"><div class="sn">${esc(sn)} <span style="color:#888;font-weight:600">· ${byStore[sn].length}명</span></div><div class="ppl">${ppl}</div></div>`;
+  DAYCOLS.forEach(dc=>{
+    const dnum=HEAD[dc], wk=weekdayOf(dc,dnum), cls2=wk==='토'?'sat':wk==='일'?'sun':'';
+    let inner='', headExtra='';
+    if(selected){
+      const emp=EMPS.find(e=>e.full===selected);
+      inner=bigChip(cls(emp?emp.row[dc]:''));
+    }else{
+      const byStore={}, off=[], vac=[], trip=[];
+      EMPS.forEach(e=>{ const k=cls(e.row[dc]);
+        if(k.t==='store'){ (byStore[k.base]=byStore[k.base]||[]).push({s:e.short,op:k.op}); }
+        else if(k.t==='off'||k.t==='전휴무'){ off.push(e.short); }
+        else if(k.t==='휴가'||k.t==='훈련'){ vac.push(e.short); }
+        else if(k.t==='출장'){ trip.push(e.short); }
       });
-      const misc=[]; if(off)misc.push('휴무 '+off); if(vac)misc.push('휴가/훈련 '+vac); if(trip)misc.push('출장 '+trip);
-      if(misc.length) inner+=`<div class="misc">${misc.join(' · ')}</div>`;
+      const working=Object.values(byStore).reduce((a,v)=>a+v.length,0);
+      if(working===0){ inner='<div class="allholiday">전 매장 휴무</div>'; }
+      else{
+        const names=Object.keys(byStore).sort((a,b)=>colOf(a)-colOf(b));
+        names.forEach(sn=>{
+          const i=colOf(sn), bg=PALETTE[i%PALETTE.length], bd=BORDER[i%BORDER.length];
+          const ppl=byStore[sn].map(p=>esc(p.s)+(p.op?`<span class="role ${p.op==='OP'?'op':'cl'}">${p.op}</span>`:'')).join(', ');
+          inner+=`<div class="store" style="background:${bg};border-left-color:${bd}"><div class="sn">${esc(sn)}</div><div class="ppl">${ppl}</div></div>`;
+        });
+        let ex='';
+        if(off.length) ex+=`<div class="offrow"><b>휴무</b> ${off.map(esc).join(' ')}</div>`;
+        if(vac.length) ex+=`<div class="offrow"><b>휴가·훈련</b> ${vac.map(esc).join(' ')}</div>`;
+        if(trip.length) ex+=`<div class="offrow"><b>출장</b> ${trip.map(esc).join(' ')}</div>`;
+        inner+=ex;
+      }
+      headExtra=`<span class="cnt">근무 ${working}명</span>`;
     }
-    html+=`<div class="day ${cls2}"><div class="dh"><span class="dnum">${esc(dnum)}</span><span class="dwk">${esc(wk)}</span><span class="cnt">근무 ${working}명</span></div><div class="body">${inner}</div></div>`;
+    html+=`<div class="day ${cls2}"><div class="dh"><span class="dnum">${esc(dnum)}</span><span class="dwk">${esc(wk)}</span>${headExtra}</div><div class="body">${inner}</div></div>`;
   });
-
-  document.getElementById('title').innerHTML=esc(title)+' <span class="badge">달력 테스트</span>';
   document.getElementById('grid').innerHTML=html;
+}
+
+function updateSub(){
   const now=new Date(), p=n=>String(n).padStart(2,'0');
-  document.getElementById('sub').textContent=`날짜별 근무 배치 · 열람 ${now.getFullYear()}.${p(now.getMonth()+1)}.${p(now.getDate())} ${p(now.getHours())}:${p(now.getMinutes())}`;
-  document.getElementById('foot').textContent='시트가 수정되면 새로고침 시 반영됩니다(최대 5분 지연). 이 페이지는 테스트용입니다.';
+  const stamp=`열람 ${now.getFullYear()}.${p(now.getMonth()+1)}.${p(now.getDate())} ${p(now.getHours())}:${p(now.getMinutes())}`;
+  const emp=selected?EMPS.find(e=>e.full===selected):null;
+  document.getElementById('sub').textContent=(emp? `${emp.short} 근무표` : '날짜별 근무 배치')+' · '+stamp;
 }
 
 async function load(){
@@ -143,8 +183,11 @@ async function load(){
     const sep=SHEET_CSV_URL.indexOf('?')>=0?'&':'?';
     const res=await fetch(SHEET_CSV_URL+sep+'t='+Date.now());
     if(!res.ok) throw new Error('시트를 불러오지 못했습니다 ('+res.status+').');
-    build(parseCSV(await res.text()));
-  }catch(e){ document.getElementById('grid').innerHTML=`<div class="state"><b>먃하지 오맘옄는 중…</b><br>${esc(e.message||e)}</div>`; document.getElementById('sub').textContent=''; }
+    prep(parseCSV(await res.text()));
+    document.getElementById('title').innerHTML=esc(TITLE)+' <span class="badge">달력 테스트</span>';
+    renderChips(); renderGrid(); updateSub();
+    document.getElementById('foot').textContent='이름을 누르면 그 사람만 표시됩니다. 시트 수정 시 새로고침하면 반영(최대 5분). 테스트용 페이지입니다.';
+  }catch(e){ document.getElementById('grid').innerHTML=`<div class="state"><b>불러오기 오류</b><br>${esc(e.message||e)}</div>`; document.getElementById('sub').textContent=''; }
 }
 load();
 </script>
