@@ -2312,7 +2312,7 @@ function copySheetTSV(){
   });
   const fb=()=>{ const tsv=rows.map(r=>r.join('\t')).join('\n'); const ta=document.createElement('textarea'); ta.value=tsv; document.body.appendChild(ta); ta.select(); try{document.execCommand('copy');}catch(e){} document.body.removeChild(ta); alert('시트 자동전송에 실패해 대신 클립보드에 복사했습니다. 구글시트 A1에 붙여넣으세요.'); };
   if(!SHEET_WEBAPP_URL){ fb(); return; }
-  fetch(SHEET_WEBAPP_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({token:SHEET_TOKEN,rows:rows})})
+  fetch(SHEET_WEBAPP_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({token:SHEET_TOKEN,month:(year+'-'+('0'+month).slice(-2)),rows:rows})})
     .then(()=>alert('구글시트에 자동 반영됐습니다. 잠시 후 공유 링크에서 확인하세요.'))
     .catch(()=>fb());
 }
