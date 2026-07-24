@@ -97,6 +97,9 @@
   .rv i.dg{background:#FF6F0F}
   a.rv{color:#374151;text-decoration:none;cursor:pointer}
   a.rv:hover{border-color:var(--yellow);background:#fffdf3}
+  /* 4개 플랫폼 합계 배지 */
+  .rv.rv-sum{background:var(--yellow);color:#111;border-color:var(--yellow);padding:2px 9px}
+  .rv.rv-sum b{font-weight:900}
 
   /* 상세 */
   .detail-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
@@ -266,6 +269,16 @@ async function loadReviews(){
     }
   }catch(e){ /* reviews.json이 아직 없으면 배지 없이 표시 */ }
 }
+function oldestSnap(name, platform){
+  const hist = (REVIEWS && REVIEWS.history) || {};
+  const dates = Object.keys(hist).sort();
+  for (let i = 0; i < dates.length; i++){
+    const k = dates[i];
+    const v = hist[k] && hist[k][name] ? hist[k][name][platform] : null;
+    if (v !== null && v !== undefined) return v;
+  }
+  return null;
+}
 function reviewBaseline(name, platform){
   // 기준 기간(period)의 시작 시점. 그 시점 이하에서 실제 수집된(비-null) 마지막 값을 사용.
   const hist = REVIEWS.history || {};
@@ -282,7 +295,7 @@ function reviewBaseline(name, platform){
     const v = hist[k] && hist[k][name] ? hist[k][name][platform] : null;
     if (v !== null && v !== undefined) return v;
   }
-  return 0; // 이전 실측값이 전혀 없음(수집 첫날 등) → 0 기준 → 첫 수집분을 해당 기간 신규로 표시
+  return oldestSnap(name, platform); // 기준일 이전 스냅샷이 없으면 가장 오래된 실측값 기준
 }
 function snapAt(name, platform, dateStr){
   // dateStr 이하에서 실제 수집된(비-null) 최신 스냅샷 값 (이전 실측값 없으면 0)
@@ -294,7 +307,7 @@ function snapAt(name, platform, dateStr){
     const v = hist[k] && hist[k][name] ? hist[k][name][platform] : null;
     if (v !== null && v !== undefined) return v;
   }
-  return 0;
+  return oldestSnap(name, platform);
 }
 function reviewValue(name, platform, current){
   // 누적 탭 = 총 리뷰 수, 나머지 탭 = 해당 기간에 새로 작성된 수(스냅샷 차이)
@@ -305,11 +318,11 @@ function reviewValue(name, platform, current){
     const base = snapAt(name, platform, customFrom);
     const end = customTo >= fmt(daysAgo(0)) ? current : snapAt(name, platform, customTo);
     if (base === null || end === null) return null;
-    return end - base;
+    return Math.max(0, end - base);
   }
   const base = reviewBaseline(name, platform);
   if (base === null) return null;
-  return current - base;
+  return Math.max(0, current - base);
 }
 function reviewsHtml(name){
   const r = REVIEWS && REVIEWS.branches && REVIEWS.branches[name];
@@ -323,15 +336,20 @@ function reviewsHtml(name){
     {k:"tmap",   cls:"tm", ico:"T",  nm:"티맵"},
     {k:"daangn", cls:"dg", ico:"당", nm:"당근"}
   ];
+  let sum = 0, hasAny = false;
   const cells = plat.map(p => {
-    const inner = `<i class="${p.cls}">${p.ico}</i>${v(reviewValue(name, p.k, r[p.k]))}`;
+    const _val = reviewValue(name, p.k, r[p.k]);
+    if (_val !== null && _val !== undefined){ sum += _val; hasAny = true; }
+    const inner = `<i class="${p.cls}">${p.ico}</i>${v(_val)}`;
     const tip = `${p.nm} · 수집 ${when}`;
     const url = urls[p.k];
     return url
       ? `<a class="rv" href="${url}" target="_blank" rel="noopener" title="${tip}" onclick="event.stopPropagation()">${inner}</a>`
       : `<span class="rv" title="${tip}">${inner}</span>`;
   }).join("");
-  return `<div class="rv-row">${cells}</div>`;
+  const sumLabel = period === "total" ? "누적 합계" : (period === "custom" ? "기간 합계" : (periodLabel[period] + " 합계"));
+  const sumCell = `<span class="rv rv-sum" title="네이버+카카오+티맵+당근 합계">${sumLabel} <b>${hasAny ? sum.toLocaleString() : 0}건</b></span>`;
+  return `<div class="rv-row">${sumCell}${cells}</div>`;
 }
 
 /* ---------- 지점별 구글시트 바로가기 (드라이브 권한 있는 사람만 열림) ---------- */
