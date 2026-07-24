@@ -247,10 +247,12 @@ load();
 </script>
 </body>
 <script>
-/* 병가 열 표시 수정: 시트 집계 열을 그대로 렌더(2열 옛 탭·3열 새 탭 자동). 원본 render 오버라이드 */
+/* 병가 열 표시 수정 + 매장 색상 복원: 시트 집계열 그대로 렌더(2열/3열 자동), 매장별 배경색 자체 팔레트 적용 */
 render = function(rows){
   var board=document.getElementById('board');
   if(!rows||!rows.length){ board.innerHTML=''; return; }
+  var PAL=['#ffe9ec','#fff3d6','#e3f2fd','#e8f5e9','#f3e5f5','#e0f7fa','#fff8e1','#efebe9','#ede7f6','#f1f8e9','#fde2ff','#e2fff3'];
+  var cmap={}, pci=0; function scolor(n){ if(!(n in cmap)){ cmap[n]=PAL[pci%PAL.length]; pci++; } return cmap[n]; }
   var hi=-1; for(var i=0;i<rows.length;i++){ if((rows[i]||[]).some(function(x){return String(x).trim()==='성명';})){ hi=i; break; } }
   if(hi<0) hi=1;
   var header=rows[hi]||[], wk=rows[hi+1]||[];
@@ -267,7 +269,7 @@ render = function(rows){
     var ttl=String(row[titleCol]||'').trim();
     h+='<tr><td class="namecol"><b>'+esc(nm)+'</b>'+(ttl?'<span class="ttl">'+esc(ttl)+'</span>':'')+'</td>';
     h+='<td class="homecol">'+esc(String(row[homeCol]||'').trim())+'</td>';
-    dayIdx.forEach(function(c){ var ci=classify(String(row[c]||'').trim()); var inner=esc(ci.txt||''); if(ci.opcl) inner=esc(ci.base||ci.txt||'')+'<span class="opcl">'+esc(ci.opcl)+'</span>'; h+='<td class="day '+ci.cls+'">'+inner+'</td>'; });
+    dayIdx.forEach(function(c){ var ci=classify(String(row[c]||'').trim()); var inner=esc(ci.txt||''); if(ci.opcl) inner=esc(ci.base||ci.txt||'')+'<span class="opcl">'+esc(ci.opcl)+'</span>'; var stl=(ci.cls==='store'&&ci.base)?' style="background:'+scolor(ci.base)+'"':''; h+='<td class="day '+ci.cls+'"'+stl+'>'+inner+'</td>'; });
     sumIdx.forEach(function(c){ h+='<td class="sum">'+esc(String(row[c]||'').trim())+'</td>'; });
     h+='</tr>';
   }
