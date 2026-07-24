@@ -76,14 +76,6 @@
 
   <div class="body" id="form" style="display:none">
     <div class="card">
-      <p class="label">요청할 월 선택</p>
-      <div style="display:flex;gap:8px">
-        <select id="selYear"></select>
-        <select id="selMonth"></select>
-      </div>
-      <p class="note">월을 바꾸면 선택한 날짜가 초기화됩니다.</p>
-    </div>
-    <div class="card">
       <p class="label">직원 이름</p>
       <select id="emp"></select>
       <p class="note">이미 제출한 직원은 목록에서 흐리게(✔) 표시됩니다.</p>
@@ -168,7 +160,6 @@ async function init(){
     }
   }
   show('loading',false); show('form',true);
-  buildMonthPicker();
   renderEmps(); renderCal(); renderReasons();
 }
 
@@ -183,29 +174,6 @@ function renderEmps(){
   sel.onchange=refreshSubmit;
 }
 
-function buildMonthPicker(){
-  const now=new Date(); const baseY=now.getFullYear();
-  const [my,mm]=META.month.split('-').map(Number);
-  const years=[baseY, baseY+1]; if(my && !years.includes(my)) years.unshift(my);
-  const sy=document.getElementById('selYear'), sm=document.getElementById('selMonth');
-  sy.innerHTML=years.map(y=>`<option value="${y}" ${y===my?'selected':''}>${y}년</option>`).join('');
-  sm.innerHTML=Array.from({length:12},(_,i)=>i+1).map(m=>`<option value="${m}" ${m===mm?'selected':''}>${m}월</option>`).join('');
-  sy.onchange=changeMonth; sm.onchange=changeMonth;
-}
-async function changeMonth(){
-  const y=document.getElementById('selYear').value;
-  const m=String(document.getElementById('selMonth').value).padStart(2,'0');
-  const mk=y+'-'+m;
-  if(mk===META.month) return;
-  META.month=mk; picked=new Set(); reasons={};
-  if(DEMO){ META.submitted=Object.keys(demoLoad()); }
-  else{
-    try{ const r=await jsonp({action:'export',month:mk});
-      if(r&&r.ok){ META.submitted=r.submitted||[]; if(r.employees&&r.employees.length) META.employees=r.employees; } }
-    catch(e){ META.submitted=[]; }
-  }
-  renderEmps(); renderCal(); renderReasons(); refreshSubmit();
-}
 function renderCal(){
   const [y,m]=META.month.split('-').map(Number);
   const DOW=['일','월','화','수','목','금','토'];
