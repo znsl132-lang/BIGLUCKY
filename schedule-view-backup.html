@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
+<meta name="robots" content="noindex, nofollow">
+<title>위베이프 직원 스케줄</title>
+<style>
+  :root{
+    --head:#2b2d42; --sat:#8fbaff; --sun:#ff9d9d;
+    --off:#f1f1f1; --hol:#fce4ec; --holT:#c62828;
+    --vac:#ffc7ce; --vacT:#9c0006; --train:#ffe9c9; --trip:#ddebf7;
+    --line:#e2e2e6; --ink:#22232b; --muted:#8a8b93;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:#f5f6f8;color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic","Apple SD Gothic Neo",sans-serif;
+    -webkit-text-size-adjust:100%}
+  .wrap{max-width:100%;padding:14px 10px 40px}
+  .top{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin:2px 4px 10px;flex-wrap:wrap}
+  h1{font-size:19px;margin:0;font-weight:800;letter-spacing:-.3px}
+  .sub{font-size:11.5px;color:var(--muted)}
+  .legend{display:flex;flex-wrap:wrap;gap:8px 12px;margin:0 4px 10px;font-size:11.5px;color:#444}
+  .legend .lg{display:inline-flex;align-items:center;gap:5px}
+  .legend i{width:13px;height:13px;border-radius:3px;border:1px solid rgba(0,0,0,.08);display:inline-block}
+  .scroll{overflow:auto;border:1px solid var(--line);border-radius:12px;background:#fff;
+    -webkit-overflow-scrolling:touch;max-height:82vh}
+  table{border-collapse:separate;border-spacing:0;font-size:13.5px;white-space:nowrap;min-width:100%}
+  th,td{border-right:1px solid var(--line);border-bottom:1px solid var(--line);
+    padding:8px 6px;text-align:center;vertical-align:middle}
+  thead th{position:sticky;top:0;z-index:3;background:var(--head);color:#fff;font-weight:700;
+    font-size:13px;line-height:1.15;padding:8px 5px}
+  thead th small{font-weight:600;font-size:11px;opacity:.9}
+  thead th.sat{color:var(--sat)} thead th.sun{color:var(--sun)}
+  .namecol{position:sticky;left:0;z-index:2;background:#fafafb;text-align:left;
+    min-width:88px;padding-left:11px;box-shadow:1px 0 0 var(--line)}
+  thead .namecol{z-index:5;background:var(--head)}
+  tbody .namecol b{font-size:14.5px}
+  tbody .namecol .ttl{display:block;font-size:11px;color:var(--muted);font-weight:600}
+  .homecol{position:sticky;left:88px;z-index:2;background:#fafafb;min-width:60px;
+    font-size:12px;color:#555;box-shadow:1px 0 0 var(--line)}
+  thead .homecol{z-index:5;background:var(--head);color:#fff}
+  td.day{min-width:46px;font-weight:600}
+  .opcl{font-size:8.5px;vertical-align:super;margin-left:1px;opacity:.7}
+  td.off{background:var(--off);color:transparent}
+  td.hol{background:var(--hol);color:var(--holT);font-weight:800;font-size:10.5px}
+  td.vac{background:var(--vac);color:var(--vacT);font-weight:700}
+  td.train{background:var(--train)}
+  td.trip{background:var(--trip)}
+  td.sum{background:#fafafb;font-weight:700;color:#444;font-size:11px}
+  tbody tr:last-child td{border-bottom:none}
+  .state{padding:40px 16px;text-align:center;color:var(--muted);font-size:13.5px;line-height:1.7}
+  .state b{color:var(--ink)}
+  .foot{margin:12px 4px 0;font-size:11px;color:var(--muted);text-align:center}
+  .hint{font-size:12px;color:var(--muted);margin:0 4px 7px;text-align:right}
+  @media(min-width:720px){ .hint{display:none} }
+  .err{color:#b3261e}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <h1 id="title">위베이프 직원 스케줄</h1>
+    <span class="sub" id="stamp"></span>
+  </div>
+  <div class="legend" id="legend"></div>
+  <div class="hint">← 좌우로 넘겨서 전체 날짜 보기 →</div>
+  <div class="scroll" id="board">
+    <div class="state">불러오는 중…</div>
+  </div>
+  <div class="foot" id="foot"></div>
+</div>
+
+<script>
+/* ============================================================
+   설정 — 여기 한 줄만 실장님 구글시트 주소로 바꾸세요.
+   구글시트 → 파일 → 공유 → 웹에 게시 → "쉼표로 구분된 값(.csv)"
+   으로 게시하고 나온 주소를 아래 따옴표 안에 붙여넣으면 됩니다.
+   ============================================================ */
+const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSqbB04rvR8IEjNuyR7hueC4jjqrn2R8ro90ok0P1xhbsFX_hgMig3JrqlSdQBxOnNY-c-Ee4mnTv3Z/pub?output=csv";
+
+/* ---- 색상 (엑셀/생성기와 동일) ---- */
+const STORE_PALETTE=['#ffe9ec','#fff3d6','#e3f2fd','#e8f5e9','#f3e5f5','#e0f7fa','#fff8e1','#efebe9','#ede7f6','#f1f8e9','#fde2ff','#e2fff3'];
+const DAYNAMES=['일','월','화','수','목','금','토'];
+
+/* ---- CSV 파서 (따옴표·줄바꿈 처리) ---- */
+function parseCSV(text){
+  const rows=[]; let row=[], cur='', q=false;
+  text=text.replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+  for(let i=0;i<text.length;i++){
+    const c=text[i];
+    if(q){
+      if(c==='"'){ if(text[i+1]==='"'){cur+='"';i++;} else q=false; }
+      else cur+=c;
+    }else{
+      if(c==='"') q=true;
+      else if(c===','){ row.push(cur); cur=''; }
+      else if(c==='\n'){ row.push(cur); rows.push(row); row=[]; cur=''; }
+      else cur+=c;
+    }
+  }
+  row.push(cur); rows.push(row);
+  // 완전 빈 줄 제거
+  return rows.filter(r=>r.some(x=>String(x).trim()!==''));
+}
+
+/* ---- 셀 종류 판정 ---- */
+function classify(v){
+  v=(v==null?'':String(v)).trim();
+  if(v==='') return {cls:'off',txt:''};
+  if(v==='전���무') return {cls:'hol',txt:'전휴무'};
+  if(v==='휴가') return {cls:'vac',txt:'휴가'};
+  if(v==='훈련') return {cls:'train',txt:'훈련'};
+  if(v==='출장') return {cls:'trip',txt:'출장'};
+  const m=v.match(/^(.+?)\((OP|CL)\)$/);
+  const base=m?m[1].trim():v;
+  return {cls:'store',base:base,txt:base,opcl:m?m[2]:''};
+}
+
+function esc(s){return String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+
+function render(rows){
+  // 제목: 첫 비어있지 않은 셀
+  let title='위베이프 직원 스케줄';
+  outer: for(const r of rows){ for(const c of r){ if(String(c).trim()){ title=String(c).trim(); break outer; } } }
+
+  // 헤더행: '성명' 이 들어있는 행
+  let hi=rows.findIndex(r=>r.some(c=>String(c).trim()==='성명'));
+  if(hi<0) throw new Error('표 형식을 찾지 못했습니다. 생성기에서 내보낸 형식(소속·성명·직책·구분)이어야 합니다.');
+  const head=rows[hi].map(c=>String(c).trim());
+  const week=(rows[hi+1]||[]).map(c=>String(c).trim());
+
+  const nameCol=head.indexOf('성명');
+  const titleCol=head.indexOf('직책');
+  const homeCol=head.indexOf('구분');
+  const offCol=head.indexOf('휴무');
+  const vacCol=head.findIndex(c=>c.replace(/\s/g,'').startsWith('휴가'));
+  // 근무일 열: 숫자 헤더인 열
+  const dayCols=[];
+  head.forEach((c,idx)=>{ if(/^\d{1,2}$/.test(c)) dayCols.push(idx); });
+
+  // 매장 색상: 첫 등장 순서로 팔레트 배정
+  const colorOf={}; let ci=0;
+  const storeColor=name=>{ if(!(name in colorOf)){ colorOf[name]=STORE_PALETTE[ci%STORE_PALETTE.length]; ci++; } return colorOf[name]; };
+
+  // 본문
+  const emps=rows.slice(hi+2).filter(r=>String(r[nameCol]||'').trim()!=='');
+  // 매장 색을 먼저 확정(범례 순서용)
+  emps.forEach(r=>dayCols.forEach(dc=>{ const k=classify(r[dc]); if(k.cls==='store') storeColor(k.base); }));
+
+  let h='<table><thead><tr>';
+  h+='<th class="namecol">성명</th><th class="homecol">소속</th>';
+  dayCols.forEach(dc=>{
+    const d=head[dc]; const w=week[dc]||'';
+    const cls=w==='토'?'sat':w==='일'?'sun':'';
+    h+=`<th class="${cls}">${esc(d)}<br><small>${esc(w)}</small></th>`;
+  });
+  h+='<th>휴무</th><th>휴가<br>훈련</th></tr></thead><tbody>';
+
+  emps.forEach(r=>{
+    const nm=String(r[nameCol]||'').trim();
+    const tt=titleCol>=0?String(r[titleCol]||'').trim():'';
+    const hm=homeCol>=0?String(r[homeCol]||'').trim():'';
+    let offN=0,vacN=0;
+    h+=`<tr><td class="namecol"><b>${esc(nm)}</b>${tt?`<span class="ttl">${esc(tt)}</span>`:''}</td><td class="homecol">${esc(hm)}</td>`;
+    dayCols.forEach(dc=>{
+      const k=classify(r[dc]);
+      if(k.cls==='off'){ offN++; h+='<td class="day off"></td>'; }
+      else if(k.cls==='hol'){ h+='<td class="day hol">전휴무</td>'; }
+      else if(k.cls==='vac'){ vacN++; h+='<td class="day vac">휴가</td>'; }
+      else if(k.cls==='train'){ vacN++; h+='<td class="day train">훈련</td>'; }
+      else if(k.cls==='trip'){ h+='<td class="day trip">출장</td>'; }
+      else{ h+=`<td class="day store" style="background:${storeColor(k.base)}">${esc(k.txt)}${k.opcl?`<span class="opcl">${k.opcl}</span>`:''}</td>`; }
+    });
+    const offShown = offCol>=0 && String(r[offCol]||'').trim()!=='' ? String(r[offCol]).trim() : offN;
+    const vacShown = vacCol>=0 && String(r[vacCol]||'').trim()!=='' ? String(r[vacCol]).trim() : vacN;
+    h+=`<td class="sum">${esc(offShown)}</td><td class="sum">${esc(vacShown)}</td></tr>`;
+  });
+  h+='</tbody></table>';
+
+  document.getElementById('title').textContent=title;
+  document.getElementById('board').innerHTML=h;
+
+  // 범례
+  const legs=Object.keys(colorOf).map(n=>`<span class="lg"><i style="background:${colorOf[n]}"></i>${esc(n)}</span>`).join('')
+    +'<span class="lg"><i style="background:var(--off)"></i>휴무</span>'
+    +'<span class="lg"><i style="background:var(--hol)"></i>전휴무</span>'
+    +'<span class="lg"><i style="background:var(--vac)"></i>휴가</span>'
+    +'<span class="lg"><i style="background:var(--train)"></i>훈련</span>'
+    +'<span class="lg"><i style="background:var(--trip)"></i>출장</span>';
+  document.getElementById('legend').innerHTML=legs;
+}
+
+function showError(msg){
+  document.getElementById('board').innerHTML=`<div class="state err">${esc(msg)}</div>`;
+}
+
+async function load(){
+  if(!SHEET_CSV_URL || SHEET_CSV_URL.indexOf('http')!==0){
+    document.getElementById('board').innerHTML=
+      '<div class="state">아직 <b>구글시트 주소</b>가 연결되지 않았습니다.<br>파일 안 <b>SHEET_CSV_URL</b> 값을 게시된 CSV 주소로 바꿔주세요.</div>';
+    return;
+  }
+  try{
+    const sep=SHEET_CSV_URL.indexOf('?')>=0?'&':'?';
+    const res=await fetch(SHEET_CSV_URL+sep+'t='+Date.now());
+    if(!res.ok) throw new Error('시트를 불러오지 못했습니다 ('+res.status+'). 게시 상태와 주소를 확인해주세요.');
+    const text=await res.text();
+    render(parseCSV(text));
+    const now=new Date();
+    const p=n=>String(n).padStart(2,'0');
+    document.getElementById('stamp').textContent=`열람 ${now.getFullYear()}.${p(now.getMonth()+1)}.${p(now.getDate())} ${p(now.getHours())}:${p(now.getMinutes())}`;
+    document.getElementById('foot').textContent='시트가 수정되면 새로고침 시 반영됩니다(구글 게시 특성상 최대 5분 지연될 수 있음).';
+  }catch(e){
+    showError(e.message||'불러오기 오류');
+  }
+}
+load();
+</script>
+</body>
+</html>
