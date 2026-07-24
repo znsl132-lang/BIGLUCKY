@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>위베이프 직원 스케줄</title>
 <style>
@@ -10,6 +10,7 @@
     --head:#2b2d42; --sat:#8fbaff; --sun:#ff9d9d;
     --off:#f1f1f1; --hol:#fce4ec; --holT:#c62828;
     --vac:#ffc7ce; --vacT:#9c0006; --train:#ffe9c9; --trip:#ddebf7;
+    --sick:#e7dcff; --sickT:#4b2ea6;
     --line:#e2e2e6; --ink:#22232b; --muted:#8a8b93;
   }
   *{box-sizing:border-box}
@@ -47,14 +48,38 @@
   td.vac{background:var(--vac);color:var(--vacT);font-weight:700}
   td.train{background:var(--train)}
   td.trip{background:var(--trip)}
+  td.sick{background:var(--sick);color:var(--sickT);font-weight:800;font-size:10.5px}
   td.sum{background:#fafafb;font-weight:700;color:#444;font-size:11px}
   tbody tr:last-child td{border-bottom:none}
+  tbody .namecol{cursor:pointer}
+  #schedTable.has-sel tbody tr:not(.sel){opacity:.28}
+  #schedTable tbody tr.sel .namecol{background:#fff3d6}
+  #schedTable tbody tr.sel td.off{background:#ffcf99;color:#7a3e00;font-weight:800}
+  #schedTable tbody tr.sel td.off::after{content:'휴무';font-size:11px}
   .state{padding:40px 16px;text-align:center;color:var(--muted);font-size:13.5px;line-height:1.7}
   .state b{color:var(--ink)}
   .foot{margin:12px 4px 0;font-size:11px;color:var(--muted);text-align:center}
-  .hint{font-size:12px;color:var(--muted);margin:0 4px 7px;text-align:right}
-  @media(min-width:720px){ .hint{display:none} }
+  .hint{font-size:12px;color:var(--muted);margin:0 4px 7px;text-align:center;display:none}
   .err{color:#b3261e}
+  /* 모바일: 한 달 전체를 화면 폭에 맞춰 보여주고, 손가락으로 확대해서 보기 */
+  @media(max-width:720px){
+    .hint{display:block}
+    .wrap{padding:12px 6px 32px}
+    .scroll{overflow-x:hidden;max-height:none;border-radius:8px}
+    table{min-width:0;width:100%;table-layout:fixed;font-size:8px}
+    th,td{padding:2px 1px;border-right:1px solid #eee;border-bottom:1px solid #eee}
+    thead th{font-size:8px;padding:3px 1px}
+    thead th small{font-size:6.5px}
+    td.day{min-width:0;font-weight:600}
+    .namecol,thead .namecol{position:static;min-width:0;padding-left:3px;box-shadow:none;width:9%}
+    .homecol,thead .homecol{position:static;min-width:0;box-shadow:none;width:8%}
+    tbody .namecol b{font-size:8.5px}
+    tbody .namecol .ttl{display:none}
+    .opcl{font-size:6px}
+    td.hol,td.vac,td.train,td.trip,td.sick{font-size:7px}
+    td.sum{font-size:8px}
+    #schedTable tbody tr.sel td.off::after{font-size:7px}
+  }
 </style>
 </head>
 <body>
@@ -64,7 +89,7 @@
     <span class="sub" id="stamp"></span>
   </div>
   <div class="legend" id="legend"></div>
-  <div class="hint">← 좌우로 넘겨서 전체 날짜 보기 →</div>
+  <div class="hint">두 손가락으로 확대해서 보세요 · 이름을 누르면 그 사람 휴무가 강조됩니다</div>
   <div class="scroll" id="board">
     <div class="state">불러오는 중…</div>
   </div>
@@ -111,6 +136,7 @@ function classify(v){
   if(v==='전���무') return {cls:'hol',txt:'전휴무'};
   if(v==='휴가') return {cls:'vac',txt:'휴가'};
   if(v==='훈련') return {cls:'train',txt:'훈련'};
+  if(v==='병가') return {cls:'sick',txt:'병가'};
   if(v==='출장') return {cls:'trip',txt:'출장'};
   const m=v.match(/^(.+?)\((OP|CL)\)$/);
   const base=m?m[1].trim():v;
@@ -148,7 +174,7 @@ function render(rows){
   // 매장 색을 먼저 확정(범례 순서용)
   emps.forEach(r=>dayCols.forEach(dc=>{ const k=classify(r[dc]); if(k.cls==='store') storeColor(k.base); }));
 
-  let h='<table><thead><tr>';
+  let h='<table id="schedTable"><thead><tr>';
   h+='<th class="namecol">성명</th><th class="homecol">소속</th>';
   dayCols.forEach(dc=>{
     const d=head[dc]; const w=week[dc]||'';
@@ -162,13 +188,14 @@ function render(rows){
     const tt=titleCol>=0?String(r[titleCol]||'').trim():'';
     const hm=homeCol>=0?String(r[homeCol]||'').trim():'';
     let offN=0,vacN=0;
-    h+=`<tr><td class="namecol"><b>${esc(nm)}</b>${tt?`<span class="ttl">${esc(tt)}</span>`:''}</td><td class="homecol">${esc(hm)}</td>`;
+    h+=`<tr><td class="namecol" onclick="selEmp(this)"><b>${esc(nm)}</b>${tt?`<span class="ttl">${esc(tt)}</span>`:''}</td><td class="homecol">${esc(hm)}</td>`;
     dayCols.forEach(dc=>{
       const k=classify(r[dc]);
       if(k.cls==='off'){ offN++; h+='<td class="day off"></td>'; }
       else if(k.cls==='hol'){ h+='<td class="day hol">전휴무</td>'; }
       else if(k.cls==='vac'){ vacN++; h+='<td class="day vac">휴가</td>'; }
       else if(k.cls==='train'){ vacN++; h+='<td class="day train">훈련</td>'; }
+      else if(k.cls==='sick'){ vacN++; h+='<td class="day sick">병가</td>'; }
       else if(k.cls==='trip'){ h+='<td class="day trip">출장</td>'; }
       else{ h+=`<td class="day store" style="background:${storeColor(k.base)}">${esc(k.txt)}${k.opcl?`<span class="opcl">${k.opcl}</span>`:''}</td>`; }
     });
@@ -187,8 +214,19 @@ function render(rows){
     +'<span class="lg"><i style="background:var(--hol)"></i>전휴무</span>'
     +'<span class="lg"><i style="background:var(--vac)"></i>휴가</span>'
     +'<span class="lg"><i style="background:var(--train)"></i>훈련</span>'
+    +'<span class="lg"><i style="background:var(--sick)"></i>병가</span>'
     +'<span class="lg"><i style="background:var(--trip)"></i>출장</span>';
   document.getElementById('legend').innerHTML=legs;
+}
+
+/* ---- 이름 클릭: 그 사람 행 강조 + 휴무 부각 (다시 누르면 해제) ---- */
+function selEmp(td){
+  const tr=td.closest('tr'); if(!tr) return;
+  const tbl=document.getElementById('schedTable'); if(!tbl) return;
+  const was=tr.classList.contains('sel');
+  tbl.querySelectorAll('tr.sel').forEach(x=>x.classList.remove('sel'));
+  if(was){ tbl.classList.remove('has-sel'); }
+  else{ tr.classList.add('sel'); tbl.classList.add('has-sel'); }
 }
 
 function showError(msg){
@@ -210,7 +248,7 @@ async function load(){
     const now=new Date();
     const p=n=>String(n).padStart(2,'0');
     document.getElementById('stamp').textContent=`열람 ${now.getFullYear()}.${p(now.getMonth()+1)}.${p(now.getDate())} ${p(now.getHours())}:${p(now.getMinutes())}`;
-    document.getElementById('foot').textContent='시트가 수정되면 새로고침 시 반영됩니다(구글 게시 특성상 최대 5분 지연될 수 있음).';
+    document.getElementById('foot').textContent='이름을 누르면 그 사람 휴무가 강조됩니다(다시 누르면 해제). 시트가 수정되면 새로고침 시 반영(최대 5분).';
   }catch(e){
     showError(e.message||'불러오기 오류');
   }
