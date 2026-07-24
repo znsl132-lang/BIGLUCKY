@@ -111,6 +111,48 @@
   .cell-reqoff { background: #e8e8e8; font-size: 10px; color: #999; }
   .rowbtns { display: flex; gap: 8px; margin: 12px 0; flex-wrap: wrap; align-items: center; }
   .hint { font-size: 12px; color: #666; margin: 6px 0; }
+
+  /* ===== 모바일 UX: 날짜 근무 강조 & 직원 월 달력 ===== */
+  #schedTable thead th[data-dh]{ cursor:pointer; }
+  #schedTable thead th[data-dh]:hover{ background:#33364f; }
+  #schedTable td.namecol{ cursor:pointer; }
+  #schedTable td.namecol:hover{ background:#eef0ff; }
+  #schedTable td.dsel{ box-shadow: inset 0 0 0 2px #5b6cff; font-weight:700; }
+  #schedTable td.dsel.off{ opacity:.28; box-shadow:none; }
+  #schedTable thead th.dsel{ background:#5b6cff !important; color:#fff; }
+  #schedTable thead th.dsel small{ color:#dfe2ff; }
+  #dayInfo{ position:fixed; left:50%; bottom:16px; transform:translateX(-50%); background:#23253a; color:#fff; padding:9px 14px; border-radius:12px; font-size:13px; z-index:9999; box-shadow:0 10px 30px rgba(0,0,0,.3); max-width:94vw; display:none; }
+  #dayInfo .dclose{ margin-left:10px; cursor:pointer; opacity:.75; font-weight:700; }
+  #empModal{ position:fixed; inset:0; background:rgba(10,12,25,.5); z-index:10001; display:none; align-items:center; justify-content:center; padding:16px; }
+  .ec-card{ background:#fff; border-radius:18px; width:min(440px,94vw); max-height:88vh; overflow:auto; padding:16px 16px 18px; box-shadow:0 24px 70px rgba(0,0,0,.35); }
+  .ec-head{ display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+  .ec-name b{ font-size:17px; }
+  .ec-ttl{ font-size:12px; color:#888; margin-left:4px; }
+  .ec-sub{ font-size:12px; color:#999; margin-top:2px; }
+  .ec-x{ border:none; background:#f0f1f5; width:32px; height:32px; border-radius:50%; font-size:15px; cursor:pointer; color:#555; flex:none; }
+  .ec-summ{ font-size:12.5px; color:#666; margin:10px 2px 12px; }
+  .ec-dow{ display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin-bottom:4px; }
+  .ec-dow>div{ text-align:center; font-size:11px; color:#999; font-weight:700; }
+  .ec-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
+  .ec-cell{ min-height:48px; border-radius:9px; background:#f4f4f5; border:1px solid #eceef3; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:3px 1px; text-align:center; overflow:hidden; }
+  .ec-cell.ec-empty{ background:transparent; border:none; }
+  .ec-d{ font-size:10px; color:#8a8f9c; font-weight:700; }
+  .ec-v{ font-size:11px; font-weight:700; line-height:1.15; margin-top:1px; color:#2b2f3a; }
+  .ec-cell.ec-off .ec-v{ color:#b7bcc7; font-weight:600; }
+  .ec-vac{ background:#fff4e0 !important; } .ec-sick{ background:#fde3e3 !important; } .ec-train{ background:#e6f0ff !important; } .ec-trip{ background:#efe7fb !important; }
+  .ec-sun .ec-d{ color:#e5484d; } .ec-sat .ec-d{ color:#3b82f6; }
+  .ec-dow .ec-sun{ color:#e5484d; } .ec-dow .ec-sat{ color:#3b82f6; }
+  @media (max-width:680px){
+    #schedTable{ font-size:12px; }
+    #schedTable td, #schedTable th{ padding:7px 4px; }
+    #schedTable td{ min-width:46px; }
+    #schedTable thead th{ min-width:42px; }
+    #schedTable td.namecol, #schedTable th.namecol{ min-width:62px; }
+    .schedwrap{ -webkit-overflow-scrolling:touch; max-height:70vh; }
+    .ec-cell{ min-height:54px; }
+    #dayInfo{ font-size:12.5px; white-space:normal; }
+  }
+
 </style>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <style>
@@ -160,6 +202,8 @@
   <div class="intro-logo" id="introTxt" style="display:none"><span>WE</span><span class="vv">V</span><span>APE</span></div>
 </div>
 <div id="cellMenu"></div>
+<div id="empModal" onclick="closeEmpCal()"></div>
+<div id="dayInfo"></div>
 <header>
   <h1>위베이프 직원 스케줄 생성기</h1>
   <label style="font-size:14px">대상 월 <input type="month" id="monthPick"></label>
@@ -1618,7 +1662,7 @@ function renderSched(warns){
   h+='<table id="schedTable"><thead><tr><th class="namecol">성명</th><th class="homecol">소속</th>';
   for(let d=1;d<=nDays;d++){
     const wd=new Date(year,month-1,d).getDay();
-    h+=`<th class="${wd===0?'sun':wd===6?'sat':''}">${d}<br><small>${DAYNAMES[wd]}</small></th>`;
+    h+=`<th class="${wd===0?'sun':wd===6?'sat':''}" data-dh="${d}" onclick="highlightDay(${d})">${d}<br><small>${DAYNAMES[wd]}</small></th>`;
   }
   h+='<th>휴무</th><th>훈련</th><th>병가</th></tr></thead><tbody>';
   const bonusMap={};
@@ -1626,7 +1670,7 @@ function renderSched(warns){
   S.emps.forEach(e=>{
     const arr=cells[e.name]; if(!arr) return;
     let offN=0,trainN=0,sickN=0;
-    let row=`<tr data-n="${e.name}"><td class="namecol"><b>${e.name}</b>${e.title?`<span class="ttl">${e.title}</span>`:''}</td><td class="homecol">${e.home}</td>`;
+    let row=`<tr data-n="${e.name}"><td class="namecol" onclick="showEmpCal('${e.name}')"><b>${e.name}</b>${e.title?`<span class="ttl">${e.title}</span>`:''}</td><td class="homecol">${e.home}</td>`;
     for(let d=0;d<nDays;d++){
       const v=arr[d];
       let cls='',style='',txt=v;
@@ -1650,6 +1694,7 @@ function renderSched(warns){
   });
   h+='</tbody></table>';
   document.getElementById('schedBox').innerHTML=h;
+  _daySel=null; var _di=document.getElementById('dayInfo'); if(_di) _di.style.display='none';
   renderExtra();
   renderChangeCards();
 }
@@ -1871,6 +1916,58 @@ document.addEventListener('click',e=>{
   const m=document.getElementById('cellMenu');
   if(m&&m.style.display!=='none'&&!m.contains(e.target)) closeCellMenu();
 });
+
+
+/* ===== 모바일 UX: 날짜 근무 강조 & 직원 월 달력 팝업 ===== */
+var _daySel=null;
+function _wvBase(v){ var b=String(v); var pi=b.indexOf('('); if(pi>=0) b=b.slice(0,pi); return b.trim(); }
+function _wvOpcl(v){ var s=String(v); if(s.indexOf('(OP)')>=0) return 'OP'; if(s.indexOf('(CL)')>=0) return 'CL'; return ''; }
+function highlightDay(day){
+  var tb=document.getElementById('schedTable'); if(!tb||typeof sched==='undefined'||!sched) return;
+  var same=(_daySel===day);
+  var old=tb.querySelectorAll('.dsel'); for(var i=0;i<old.length;i++) old[i].classList.remove('dsel');
+  var info=document.getElementById('dayInfo');
+  if(same){ _daySel=null; if(info) info.style.display='none'; return; }
+  _daySel=day; var ci=day-1;
+  var sel=tb.querySelectorAll('th[data-dh="'+day+'"], td[data-d="'+ci+'"]');
+  for(var j=0;j<sel.length;j++) sel[j].classList.add('dsel');
+  var Y=sched.year, M=sched.month, cells=sched.cells, byStore={}, work=0;
+  for(var k=0;k<S.emps.length;k++){
+    var e=S.emps[k]; var arr=cells[e.name]||[]; var v=arr[ci];
+    if(v===undefined||v===OFF) continue;
+    if(v==='휴가'||v==='병가'||v==='훈련'||v==='출장'||v==='전휴무') continue;
+    var b=_wvBase(v); byStore[b]=(byStore[b]||0)+1; work++;
+  }
+  var wd=new Date(Y,M-1,day).getDay(); var dn=['일','월','화','수','목','금','토'][wd];
+  var keys=Object.keys(byStore).sort();
+  var parts=keys.map(function(x){return x+' '+byStore[x];}).join(' · ');
+  if(info){ info.innerHTML='<b>'+M+'/'+day+'('+dn+')</b> 근무 <b style="color:#8fe3a0">'+work+'</b>명'+(parts?' &nbsp; <span style="opacity:.85">'+parts+'</span>':'')+' <span class="dclose" onclick="highlightDay('+day+')">✕</span>'; info.style.display='block'; }
+}
+function showEmpCal(name){
+  if(typeof sched==='undefined'||!sched) return;
+  var Y=sched.year, M=sched.month, nD=sched.nDays, arr=(sched.cells[name]||[]);
+  var first=new Date(Y,M-1,1).getDay(); var DOW=['일','월','화','수','목','금','토'];
+  var off=0,tr=0,sick=0,vac=0,g='';
+  for(var i=0;i<first;i++) g+='<div class="ec-cell ec-empty"></div>';
+  for(var d=1;d<=nD;d++){
+    var v=arr[d-1]; var wd=new Date(Y,M-1,d).getDay(); var label='',cls='',bg='';
+    if(v===undefined||v===OFF){ label='휴무'; cls='ec-off'; off++; }
+    else if(v==='전휴무'){ label='전휴무'; cls='ec-off'; }
+    else if(v==='휴가'){ label='휴가'; cls='ec-vac'; vac++; }
+    else if(v==='병가'){ label='병가'; cls='ec-sick'; sick++; }
+    else if(v==='훈련'){ label='훈련'; cls='ec-train'; tr++; }
+    else if(v==='출장'){ label='출장'; cls='ec-trip'; }
+    else { var b=_wvBase(v); var oc=_wvOpcl(v); label=b+(oc?'<br><small>'+oc+'</small>':''); bg=storeColor(b); }
+    var wc=(wd===0?' ec-sun':wd===6?' ec-sat':'');
+    g+='<div class="ec-cell '+cls+wc+'"'+(bg?' style="background:'+bg+'"':'')+'><span class="ec-d">'+d+'</span><span class="ec-v">'+label+'</span></div>';
+  }
+  var emp=null; for(var q=0;q<S.emps.length;q++){ if(S.emps[q].name===name){ emp=S.emps[q]; break; } } emp=emp||{};
+  var modal=document.getElementById('empModal');
+  modal.innerHTML='<div class="ec-card" onclick="event.stopPropagation()"><div class="ec-head"><div class="ec-name"><b>'+name+'</b>'+(emp.title?' <span class="ec-ttl">'+emp.title+'</span>':'')+'<div class="ec-sub">'+Y+'년 '+M+'월'+(emp.home?' · '+emp.home:'')+'</div></div><button class="ec-x" onclick="closeEmpCal()">✕</button></div><div class="ec-summ">휴무 <b>'+off+'</b> · 훈련 <b>'+tr+'</b> · 병가 <b>'+sick+'</b>'+(vac?' · 휴가 <b>'+vac+'</b>':'')+'</div><div class="ec-dow">'+DOW.map(function(x,i){return '<div class="'+(i===0?'ec-sun':i===6?'ec-sat':'')+'">'+x+'</div>';}).join('')+'</div><div class="ec-grid">'+g+'</div></div>';
+  modal.style.display='flex';
+}
+function closeEmpCal(){ var m=document.getElementById('empModal'); if(m){ m.style.display='none'; m.innerHTML=''; } }
+document.addEventListener('keydown',function(e){ if(e.key==='Escape') closeEmpCal(); });
 
 // ---------- 엑셀 내보내기 ----------
 function exportXlsx(){
