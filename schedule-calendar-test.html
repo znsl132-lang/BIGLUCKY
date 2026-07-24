@@ -20,6 +20,7 @@
   .head{position:sticky;top:0;z-index:7;background:#eef0f4;padding:8px 4px 8px;margin:-14px -4px 8px}
   h1{font-size:19px;margin:0;font-weight:800;letter-spacing:-.3px}
   .sub{font-size:12px;color:var(--muted);margin-top:2px}
+  #monthSel{font-size:14px;font-weight:700;padding:5px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:#1e1f26}
   .names{display:flex;flex-wrap:wrap;gap:6px;margin:9px 0 2px}
   .chip{font-size:13.5px;padding:6px 12px;border-radius:999px;border:1px solid var(--line);
     background:#fff;color:#333;cursor:pointer;font-weight:700;user-select:none}
@@ -65,6 +66,7 @@
   <div class="head">
     <h1 id="title">위베이프 스케줄 <span class="badge">달력 테스트</span></h1>
     <div class="sub" id="sub">불러오는 중…</div>
+    <div style="margin:8px 0 2px"><select id="monthSel" style="display:none"></select></div>
     <div class="names" id="names"></div>
   </div>
   <div class="hint" id="hint">← 좌우로 넘겨서 전체 요일 보기 →</div>
@@ -73,7 +75,7 @@
 </div>
 
 <script>
-const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSqbB04rvR8IEjNuyR7hueC4jjqrn2R8ro90ok0P1xhbsFX_hgMig3JrqlSdQBxOnNY-c-Ee4mnTv3Z/pub?output=csv";
+const WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxTkORMjTnG904crrghKNmEA2laN4WcVUpDItmbNuwArjRWlkpaZZOoxcFkTyHfBC1f/exec";
 const PALETTE=['#ffe9ec','#fff3d6','#e3f2fd','#e8f5e9','#f3e5f5','#e0f7fa','#fff8e1','#efebe9','#ede7f6','#f1f8e9','#fde2ff','#e2fff3'];
 const BORDER=['#ff9db0','#ffd166','#5aa9f0','#7ecb8a','#c58edb','#5fd0dd','#f0cf5a','#b09a8a','#a58ed6','#9bcf6a','#e58ad6','#5fd6a8'];
 const DAYNAMES=['일','월','화','수','목','금','토'];
@@ -190,16 +192,32 @@ function updateSub(){
   document.getElementById('sub').textContent=(emp? `${emp.short} 근무표` : '주간 달력 · 날짜별 근무')+' · '+stamp;
 }
 
-async function load(){
+async function loadMonth(m){
   try{
-    const sep=SHEET_CSV_URL.indexOf('?')>=0?'&':'?';
-    const res=await fetch(SHEET_CSV_URL+sep+'t='+Date.now());
-    if(!res.ok) throw new Error('시트를 불러오지 못했습니다 ('+res.status+').');
+    selected=null;
+    const res=await fetch(WEBAPP_URL+'?month='+encodeURIComponent(m||'')+'&t='+Date.now());
+    if(!res.ok) throw new Error('데이터를 불러오지 못했습니다 ('+res.status+').');
     prep(parseCSV(await res.text()));
     document.getElementById('title').innerHTML=esc(TITLE)+' <span class="badge">달력 테스트</span>';
     renderChips(); renderCal(); updateSub();
-    document.getElementById('foot').textContent='이름을 누르면 그 사람만 달력에 표시됩니다. 시트 수정 시 새로고침하면 반영(최대 5분). 테스트용 페이지입니다.';
+    document.getElementById('foot').textContent='이름을 누르면 그 사람만 달력에 표시됩니다. 위에서 달을 바꾸면 지난달도 볼 수 있어요. 테스트용 페이지입니다.';
   }catch(e){ document.getElementById('cal').innerHTML=`<div class="state" style="grid-column:1/-1"><b>불러오기 오류</b><br>${esc(e.message||e)}</div>`; document.getElementById('sub').textContent=''; }
+}
+async function load(){
+  try{
+    const lr=await fetch(WEBAPP_URL+'?mode=list&t='+Date.now());
+    let months=[]; try{ months=JSON.parse(await lr.text()); }catch(_){}
+    const sel=document.getElementById('monthSel');
+    if(months && months.length){
+      sel.innerHTML=months.map(m=>`<option value="${m}">${esc(m.replace('-','년 ')+'월')}</option>`).join('');
+      sel.style.display='';
+      sel.onchange=()=>loadMonth(sel.value);
+      await loadMonth(months[0]);
+    }else{
+      sel.style.display='none';
+      await loadMonth('');
+    }
+  }catch(e){ document.getElementById('cal').innerHTML=`<div class="state" style="grid-column:1/-1"><b>연결 오류</b><br>${esc(e.message||e)}</div>`; }
 }
 load();
 </script>
