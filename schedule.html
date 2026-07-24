@@ -2433,4 +2433,60 @@ function copySheetTSV(){
   try{ new MutationObserver(sync).observe(dl,{attributes:true,attributeFilter:['style']}); }catch(e){}
 })();
 </script>
+<script>
+/* ===== 스케줄 후처리 최적화: 공백매장 채우기 + 3연속휴무 해소 (원본 무수정, 생성 후 1회 적용) ===== */
+function wvOptimize(sc){
+  try{
+  if(!sc||!sc.cells||!sc.nDays) return sc;
+  var nDays=sc.nDays, cells=sc.cells;
+  var mk=sc.year+'-'+String(sc.month).padStart(2,'0');
+  var SPECIAL=['휴가','병가','훈련','출장','전휴무'];
+  var isW=function(v){return v!=null&&v!==''&&SPECIAL.indexOf(v)<0;};
+  var baseOf=function(v){var i=String(v).indexOf('(');return (i>=0?String(v).slice(0,i):String(v)).trim();};
+  var emps=S.emps.filter(function(e){return e.role!=='교육';});
+  var hol=new Set(((S.hols&&S.hols[mk])||[]).map(function(d){return d-1;}));
+  var req=new Set(); ((S.reqs&&S.reqs[mk])||[]).forEach(function(r){ if(r.type&&r.type.indexOf('휴무')>=0&&r.day) req.add(r.emp+'|'+(r.day-1)); });
+  var homeCnt={}; S.stores.forEach(function(s){homeCnt[s.n]=0;}); S.emps.forEach(function(e){ if(homeCnt[e.home]!=null)homeCnt[e.home]++; });
+  var selfOnly={}; S.stores.forEach(function(s){ selfOnly[s.n]=(homeCnt[s.n]>=2&&s.need<homeCnt[s.n]); });
+  var needOf={}; S.stores.forEach(function(s){needOf[s.n]=s.need;});
+  function canWork(e,st){ var p=e.pref||[],b=e.ban||[]; if(b.indexOf(st)>=0)return false; if(selfOnly[st])return e.home===st; return p.indexOf(st)>=0||e.home===st; }
+  function consecWorkOK(nm,d){ var run=1,k; for(k=d-1;k>=0&&isW(cells[nm][k]);k--)run++; for(k=d+1;k<nDays&&isW(cells[nm][k]);k++)run++; return run<=6; }
+  function staffOn(d){ var c={}; S.stores.forEach(function(s){c[s.n]=0;}); emps.forEach(function(e){var v=cells[e.name][d]; if(isW(v)){var b=baseOf(v); if(c[b]!=null)c[b]++;}}); return c; }
+  function offCount(nm){ var n=0,d; for(d=0;d<nDays;d++) if(cells[nm][d]==='')n++; return n; }
+  function labelFor(e,st){ if(needOf[st]>=2){ if(e.role==='오픈')return st+'(OP)'; if(e.role==='마감')return st+'(CL)'; } return st; }
+  // PASS A: fill empties
+  var d,s;
+  for(d=0;d<nDays;d++){ if(hol.has(d))continue;
+    var c=staffOn(d);
+    var order=S.stores.slice().sort(function(a,b){return (b.need-c[b.n])-(a.need-c[a.n]);});
+    for(var oi=0;oi<order.length;oi++){ s=order[oi]; var guard=0;
+      while(c[s.n]<s.need&&guard++<20){
+        var cand=emps.filter(function(e){ return cells[e.name][d]===''&&!req.has(e.name+'|'+d)&&canWork(e,s.n)&&consecWorkOK(e.name,d); });
+        if(!cand.length)break;
+        cand.sort(function(a,b){return offCount(b.name)-offCount(a.name);});
+        var pk=cand[0]; cells[pk.name][d]=labelFor(pk,s.n); c[s.n]++;
+      }
+    }
+  }
+  // PASS B: break 3+ consecutive plain-off (swap-preferred)
+  function offRunAt(nm,w){ var run=1,k; for(k=w-1;k>=0&&cells[nm][k]==='';k--)run++; for(k=w+1;k<nDays&&cells[nm][k]==='';k++)run++; return run; }
+  emps.forEach(function(e){ var nm=e.name, arr=cells[nm], d=0;
+    while(d<nDays){ if(arr[d]===''){ var j=d; while(j<nDays&&arr[j]==='')j++; var L=j-d;
+      if(L>=3){ for(var p=d+1;p<j-1;p+=3){ if(req.has(nm+'|'+p)||hol.has(p))continue; if(!consecWorkOK(nm,p))continue;
+        var c=staffOn(p), store=null;
+        var sh=S.stores.filter(function(s){return c[s.n]<s.need&&canWork(e,s.n);}).sort(function(a,b){return (b.need-c[b.n])-(a.need-c[a.n]);});
+        if(sh.length)store=sh[0].n; else { var ok=S.stores.filter(function(s){return canWork(e,s.n)&&!selfOnly[s.n];}); if(ok.length){ ok.sort(function(a,b){return (c[a.n]-a.need)-(c[b.n]-b.need);}); store=ok[0].n; } }
+        if(!store)continue;
+        var wasShort=c[store]<needOf[store];
+        arr[p]=labelFor(e,store);
+        if(!wasShort){ var done=false; for(var w=0;w<nDays&&!done;w++){ if(w===p||hol.has(w)||req.has(nm+'|'+w))continue; if(!isW(arr[w]))continue; var b=baseOf(arr[w]); var cw=staffOn(w); if(cw[b]-needOf[b]>=1){ var save=arr[w]; arr[w]=''; if(offRunAt(nm,w)<=2)done=true; else arr[w]=save; } } }
+      } }
+      d=j;
+    } else d++; }
+  });
+  }catch(e){ /* never break generation */ }
+  return sc;
+}
+(function(){ if(typeof generate==='function' && !generate.__wv){ var _g=generate; var wrapped=function(){ var r=_g.apply(this,arguments); try{ if(typeof sched!=='undefined'&&sched&&sched.cells){ wvOptimize(sched); if(typeof renderSched==='function') renderSched(); } }catch(e){} return r; }; wrapped.__wv=true; generate=wrapped; } })();
+</script>
 </html>
