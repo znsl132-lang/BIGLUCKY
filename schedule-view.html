@@ -21,6 +21,7 @@
   .top{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin:2px 4px 10px;flex-wrap:wrap}
   h1{font-size:19px;margin:0;font-weight:800;letter-spacing:-.3px}
   .sub{font-size:11.5px;color:var(--muted)}
+  #monthSel{font-size:13px;font-weight:700;padding:3px 7px;border:1px solid var(--line);border-radius:7px;background:#fff;color:#222;margin-right:6px}
   .legend{display:flex;flex-wrap:wrap;gap:8px 12px;margin:0 4px 10px;font-size:11.5px;color:#444}
   .legend .lg{display:inline-flex;align-items:center;gap:5px}
   .legend i{width:13px;height:13px;border-radius:3px;border:1px solid rgba(0,0,0,.08);display:inline-block}
@@ -86,7 +87,7 @@
 <div class="wrap">
   <div class="top">
     <h1 id="title">위베이프 직원 스케줄</h1>
-    <span class="sub" id="stamp"></span>
+    <span class="sub"><select id="monthSel" style="display:none"></select><span id="stamp"></span></span>
   </div>
   <div class="legend" id="legend"></div>
   <div class="hint">두 손가락으로 확대해서 보세요 · 이름을 누르면 그 사람 휴무가 강조됩니다</div>
@@ -102,7 +103,7 @@
    구글시트 → 파일 → 공유 → 웹에 게시 → "쉼표로 구분된 값(.csv)"
    으로 게시하고 나온 주소를 아래 따옴표 안에 붙여넣으면 됩니다.
    ============================================================ */
-const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSqbB04rvR8IEjNuyR7hueC4jjqrn2R8ro90ok0P1xhbsFX_hgMig3JrqlSdQBxOnNY-c-Ee4mnTv3Z/pub?output=csv";
+const WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxTkORMjTnG904crrghKNmEA2laN4WcVUpDItmbNuwArjRWlkpaZZOoxcFkTyHfBC1f/exec";
 
 /* ---- 색상 (엑셀/생성기와 동일) ---- */
 const STORE_PALETTE=['#ffe9ec','#fff3d6','#e3f2fd','#e8f5e9','#f3e5f5','#e0f7fa','#fff8e1','#efebe9','#ede7f6','#f1f8e9','#fde2ff','#e2fff3'];
@@ -125,7 +126,6 @@ function parseCSV(text){
     }
   }
   row.push(cur); rows.push(row);
-  // 완전 빈 줄 제거
   return rows.filter(r=>r.some(x=>String(x).trim()!==''));
 }
 
@@ -146,34 +146,23 @@ function classify(v){
 function esc(s){return String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
 
 function render(rows){
-  // 제목: 첫 비어있지 않은 셀
   let title='위베이프 직원 스케줄';
   outer: for(const r of rows){ for(const c of r){ if(String(c).trim()){ title=String(c).trim(); break outer; } } }
-
-  // 헤더행: '성명' 이 들어있는 행
   let hi=rows.findIndex(r=>r.some(c=>String(c).trim()==='성명'));
   if(hi<0) throw new Error('표 형식을 찾지 못했습니다. 생성기에서 내보낸 형식(소속·성명·직책·구분)이어야 합니다.');
   const head=rows[hi].map(c=>String(c).trim());
   const week=(rows[hi+1]||[]).map(c=>String(c).trim());
-
   const nameCol=head.indexOf('성명');
   const titleCol=head.indexOf('직책');
   const homeCol=head.indexOf('구분');
   const offCol=head.indexOf('휴무');
   const vacCol=head.findIndex(c=>c.replace(/\s/g,'').startsWith('휴가'));
-  // 근무일 열: 숫자 헤더인 열
   const dayCols=[];
   head.forEach((c,idx)=>{ if(/^\d{1,2}$/.test(c)) dayCols.push(idx); });
-
-  // 매장 색상: 첫 등장 순서로 팔레트 배정
   const colorOf={}; let ci=0;
   const storeColor=name=>{ if(!(name in colorOf)){ colorOf[name]=STORE_PALETTE[ci%STORE_PALETTE.length]; ci++; } return colorOf[name]; };
-
-  // 본문
   const emps=rows.slice(hi+2).filter(r=>String(r[nameCol]||'').trim()!=='');
-  // 매장 색을 먼저 확정(범례 순서용)
   emps.forEach(r=>dayCols.forEach(dc=>{ const k=classify(r[dc]); if(k.cls==='store') storeColor(k.base); }));
-
   let h='<table id="schedTable"><thead><tr>';
   h+='<th class="namecol">성명</th><th class="homecol">소속</th>';
   dayCols.forEach(dc=>{
@@ -182,7 +171,6 @@ function render(rows){
     h+=`<th class="${cls}">${esc(d)}<br><small>${esc(w)}</small></th>`;
   });
   h+='<th>휴무</th><th>휴가<br>훈련</th></tr></thead><tbody>';
-
   emps.forEach(r=>{
     const nm=String(r[nameCol]||'').trim();
     const tt=titleCol>=0?String(r[titleCol]||'').trim():'';
@@ -204,11 +192,8 @@ function render(rows){
     h+=`<td class="sum">${esc(offShown)}</td><td class="sum">${esc(vacShown)}</td></tr>`;
   });
   h+='</tbody></table>';
-
   document.getElementById('title').textContent=title;
   document.getElementById('board').innerHTML=h;
-
-  // 범례
   const legs=Object.keys(colorOf).map(n=>`<span class="lg"><i style="background:${colorOf[n]}"></i>${esc(n)}</span>`).join('')
     +'<span class="lg"><i style="background:var(--off)"></i>휴무</span>'
     +'<span class="lg"><i style="background:var(--hol)"></i>전휴무</span>'
@@ -219,7 +204,6 @@ function render(rows){
   document.getElementById('legend').innerHTML=legs;
 }
 
-/* ---- 이름 클릭: 그 사람 행 강조 + 휴무 부각 (다시 누르면 해제) ---- */
 function selEmp(td){
   const tr=td.closest('tr'); if(!tr) return;
   const tbl=document.getElementById('schedTable'); if(!tbl) return;
@@ -233,25 +217,31 @@ function showError(msg){
   document.getElementById('board').innerHTML=`<div class="state err">${esc(msg)}</div>`;
 }
 
-async function load(){
-  if(!SHEET_CSV_URL || SHEET_CSV_URL.indexOf('http')!==0){
-    document.getElementById('board').innerHTML=
-      '<div class="state">아직 <b>구글시트 주소</b>가 연결되지 않았습니다.<br>파일 안 <b>SHEET_CSV_URL</b> 값을 게시된 CSV 주소로 바꿔주세요.</div>';
-    return;
-  }
+async function loadMonth(m){
   try{
-    const sep=SHEET_CSV_URL.indexOf('?')>=0?'&':'?';
-    const res=await fetch(SHEET_CSV_URL+sep+'t='+Date.now());
-    if(!res.ok) throw new Error('시트를 불러오지 못했습니다 ('+res.status+'). 게시 상태와 주소를 확인해주세요.');
-    const text=await res.text();
-    render(parseCSV(text));
-    const now=new Date();
-    const p=n=>String(n).padStart(2,'0');
-    document.getElementById('stamp').textContent=`열람 ${now.getFullYear()}.${p(now.getMonth()+1)}.${p(now.getDate())} ${p(now.getHours())}:${p(now.getMinutes())}`;
-    document.getElementById('foot').textContent='이름을 누르면 그 사람 휴무가 강조됩니다(다시 누르면 해제). 시트가 수정되면 새로고침 시 반영(최대 5분).';
-  }catch(e){
-    showError(e.message||'불러오기 오류');
-  }
+    const res=await fetch(WEBAPP_URL+'?month='+encodeURIComponent(m||'')+'&t='+Date.now());
+    if(!res.ok) throw new Error('데이터를 뱼렼오지 못했습니다 ('+res.status+').');
+    render(parseCSV(await res.text()));
+    const now=new Date(); const p=n=>String(n).padStart(2,'0');
+    document.getElementById('stamp').textContent=`열만 ${now.getFullYear()}.${p(now.getMonth()+1)}.${p(now.getDate())} ${p(now.getHours())}:${p(now.getMinutes())}`;
+    document.getElementById('foot').textContent='이름을 누르면 그 사람 휴무가 강조됩니다(다시 누르면 해제). 위에서 달을 바꿸면 지난달도 볼 수 있어요.';
+  }catch(e){ showError(e.message||'불러오기 오류'); }
+}
+async function load(){
+  try{
+    const lr=await fetch(WEBAPP_URL+'?mode=list&t='+Date.now());
+    let months=[]; try{ months=JSON.parse(await lr.text()); }catch(_){}
+    const sel=document.getElementById('monthSel');
+    if(months && months.length){
+      sel.innerHTML=months.map(m=>`<option value="${m}">${esc(m.replace('-','년 ')+'월')}</option>`).join('');
+      sel.style.display='';
+      sel.onchange=()=>loadMonth(sel.value);
+      await loadMonth(months[0]);
+    }else{
+      sel.style.display='none';
+      await loadMonth('');
+    }
+  }catch(e){ showError('연결 오류: '+(e.message||e)); }
 }
 load();
 </script>
