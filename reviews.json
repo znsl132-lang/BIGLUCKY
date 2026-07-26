@@ -1,9 +1,9 @@
 {
-  "updatedAt": "2026-07-26 10:05",
+  "updatedAt": "2026-07-26 12:03",
   "branches": {
     "구월 로데오점": {
       "naver": 2408,
-      "kakao": 16,
+      "kakao": 17,
       "daangn": 6,
       "tmap": null
     },
@@ -564,7 +564,7 @@
     "2026-07-26": {
       "구월 로데오점": {
         "naver": 2408,
-        "kakao": 16,
+        "kakao": 17,
         "daangn": 6,
         "tmap": null
       },
