@@ -2908,10 +2908,11 @@ function wvShowCompare(list, onPick){
   });
 }
 
-// 이 안의 공백 매장 · 중복 편성이 정확히 어느 날 어느 매장인지 뽑는다
+// 이 안의 공백 매장 · 중복 편성 · 미반영 요청휴무가 정확히 어디인지 뽑는다
 function wvIssues(o){
   var C = wvCtx(sched), nDays = C.nDays;
-  var gaps = [], dupes = [];
+  var mk = sched.year + '-' + String(sched.month).padStart(2, '0');
+  var gaps = [], dupes = [], miss = [];
   for(var d = 0; d < nDays; d++){
     if(C.hol[d]) continue;
     var at = {}; S.stores.forEach(function(s2){ at[s2.n] = []; });
@@ -2921,53 +2922,88 @@ function wvIssues(o){
     });
     S.stores.forEach(function(st){
       var n = at[st.n].length;
-      if(n < st.need) gaps.push({ d: d + 1, st: st.n, txt: (d + 1) + '일 ' + st.n + ' (' + n + '/' + st.need + '명)' });
-      else if(n > st.need) dupes.push({ d: d + 1, st: st.n, txt: (d + 1) + '일 ' + st.n + ' — ' + at[st.n].join(', ') });
+      if(n < st.need) gaps.push({ d: d + 1, st: st.n, names: [], txt: (d + 1) + '일 ' + st.n + ' (' + n + '/' + st.need + '명)' });
+      else if(n > st.need) dupes.push({ d: d + 1, st: st.n, names: at[st.n], txt: (d + 1) + '일 ' + st.n + ' — ' + at[st.n].join(', ') });
     });
   }
-  return { gaps: gaps, dupes: dupes };
+  ((S.reqs && S.reqs[mk]) || []).forEach(function(r){
+    if(r.type !== '휴무요청' || !r.day) return;
+    var arr = o.cells[r.emp];
+    if(arr && arr[r.day - 1] !== '') miss.push({ d: r.day, names: [r.emp], txt: r.day + '일 ' + r.emp });
+  });
+  return { gaps: gaps, dupes: dupes, miss: miss };
 }
 
-function wvIssuePanel(o){
-  var iz = wvIssues(o);
-  var chip = function(t, color){ return '<span style="display:inline-block;background:' + color + ';border-radius:6px;padding:3px 8px;margin:2px 4px 2px 0;font-size:12.5px">' + t + '</span>'; };
+function wvChips(items, color, empty){
+  if(!items.length) return '<span class="hint">' + empty + '</span>';
+  return items.map(function(x){
+    return '<span style="display:inline-block;background:' + color + ';border-radius:6px;padding:3px 8px;margin:2px 4px 2px 0;font-size:12.5px">' + x.txt + '</span>';
+  }).join('');
+}
+
+function wvIssuePanel(iz, mode){
   var h = '<div style="border:1px solid #e9eaf1;border-radius:10px;padding:12px 14px;margin-bottom:12px;background:#fbfbfe">';
-  h += '<div style="margin-bottom:6px"><b style="color:' + (iz.gaps.length ? '#c62828' : '#2e7d32') + '">공백 매장 ' + iz.gaps.length + '건</b> ';
-  h += iz.gaps.length ? iz.gaps.map(function(x){ return chip(x.txt, '#ffe3e3'); }).join('') : '<span class="hint">모든 매장이 최소 인원을 충족합니다.</span>';
-  h += '</div><div><b style="color:' + (iz.dupes.length ? '#e07800' : '#2e7d32') + '">중복 편성 ' + iz.dupes.length + '건</b> ';
-  h += iz.dupes.length ? iz.dupes.map(function(x){ return chip(x.txt, '#fff2d9'); }).join('') : '<span class="hint">정원 초과 배치가 없습니다.</span>';
-  h += '</div></div>';
+  var sec = function(on, label, items, color, empty){
+    return '<div style="margin-bottom:5px;' + (on ? '' : 'opacity:.45') + '"><b style="color:' +
+      (items.length ? color : '#2e7d32') + '">' + label + ' ' + items.length + '건</b> ' +
+      wvChips(items, color === '#c62828' ? '#ffe3e3' : (color === '#e07800' ? '#fff2d9' : '#e3ecff'), empty) + '</div>';
+  };
+  h += sec(mode === 'gap' || !mode, '공백 매장', iz.gaps, '#c62828', '모든 매장이 최소 인원을 충족합니다.');
+  h += sec(mode === 'dupe' || !mode, '중복 편성', iz.dupes, '#e07800', '정원 초과 배치가 없습니다.');
+  h += sec(mode === 'miss' || !mode, '미반영 요청휴무', iz.miss, '#1565c0', '요청 휴무가 전부 반영됐습니다.');
+  h += '</div>';
   return h;
 }
 
+// 표에서 해당 칸을 직접 표시한다 (표를 다시 그리지 않는다)
+function wvMark(body, iz, mode){
+  var tbl = body.querySelector('#wvPvTable'); if(!tbl) return;
+  var rowOf = {};
+  [].forEach.call(tbl.querySelectorAll('tbody tr'), function(tr){
+    var nm = tr.querySelector('td'); if(nm) rowOf[nm.textContent.trim().replace(/\s+/g, '')] = tr;
+  });
+  var heads = tbl.querySelectorAll('thead th');
+  var markCell = function(nm, day, css, tag){
+    var key = String(nm).replace(/\s+/g, '');
+    var tr = rowOf[key];
+    if(!tr){ Object.keys(rowOf).forEach(function(k){ if(k.indexOf(key) === 0) tr = rowOf[k]; }); }
+    if(!tr) return;
+    var td = tr.children[day + 1];
+    if(!td) return;
+    td.style.cssText += css;
+    if(tag) td.setAttribute('title', tag);
+  };
+  var markDay = function(day, color, label){
+    var th = heads[day + 1];
+    if(th){ th.style.cssText += 'background:' + color + ';color:#fff;'; th.setAttribute('title', label); }
+  };
+  if(mode === 'gap' || !mode)
+    iz.gaps.forEach(function(x){ markDay(x.d, '#c62828', x.txt); });
+  if(mode === 'dupe' || !mode)
+    iz.dupes.forEach(function(x){ x.names.forEach(function(n){ markCell(n, x.d, 'outline:2px dashed #e07800;outline-offset:-2px;', x.txt); }); });
+  if(mode === 'miss' || !mode)
+    iz.miss.forEach(function(x){ markCell(x.names[0], x.d, 'outline:2px solid #1565c0;outline-offset:-2px;', '요청 휴무 미반영'); });
+}
+
 // 미리보기: 해당 안의 스케줄 표를 별도 창으로 띄운다 (원본 스케줄은 건드리지 않는다)
-// 검토 버튼도 이 안의 데이터 기준으로 돌려서 결과를 창 안에 보여준다.
-function wvPvFill(o, fnName){
+function wvPvFill(o, mode){
   var boxEl = document.getElementById('schedBox');
-  var warnEl = document.getElementById('warnBox');
   var body = document.getElementById('wvPvBody');
   if(!boxEl || !body) return;
   var keep = {}; Object.keys(sched.cells).forEach(function(k){ keep[k] = sched.cells[k].slice(); });
-  var keepHtml = boxEl.innerHTML, keepWarn = warnEl ? warnEl.innerHTML : '';
-  var keepLW = (typeof lastWarns !== 'undefined' && lastWarns) ? lastWarns.slice() : null;
+  var keepHtml = boxEl.innerHTML;
   Object.keys(o.cells).forEach(function(k){ sched.cells[k] = o.cells[k].slice(); });
-  var html = '', wh = '';
+  var html = '';
   try{
-    if(fnName && typeof window[fnName] === 'function') window[fnName]();
-    else if(typeof renderSched === 'function') renderSched();
+    if(typeof renderSched === 'function') renderSched([]);
     html = boxEl.innerHTML;
-    wh = warnEl ? warnEl.innerHTML : '';
-  }catch(e){
-    try{ if(typeof renderSched === 'function') renderSched(); html = boxEl.innerHTML; }catch(e2){}
-    wh = '<div class="warn">검토 기능 실행 중 오류: ' + e.message + ' — 표만 표시합니다.</div>' + wh;
-  }
+  }catch(e){ html = '<p class="hint">표를 그리지 못했습니다: ' + e.message + '</p>'; }
   Object.keys(keep).forEach(function(k){ sched.cells[k] = keep[k]; });
   boxEl.innerHTML = keepHtml;
-  if(warnEl) warnEl.innerHTML = keepWarn;
-  if(keepLW) lastWarns = keepLW;
-  var clean = function(h){ return String(h).replace(/ on[a-z]+="[^"]*"/g, '').replace(/ id="schedTable"/g, ' id="wvPvTable"'); };
-  var panel = fnName ? '' : wvIssuePanel(o);
-  body.innerHTML = panel + (wh ? '<div style="margin-bottom:10px">' + clean(wh) + '</div>' : '') + clean(html);
+  html = String(html).replace(/ on[a-z]+="[^"]*"/g, '').replace(/ id="schedTable"/g, ' id="wvPvTable"');
+  var iz = o.__iz || (o.__iz = wvIssues(o));
+  body.innerHTML = wvIssuePanel(iz, mode) + html;
+  wvMark(body, iz, mode);
   body.scrollTop = 0;
 }
 
@@ -2985,10 +3021,10 @@ function wvPreview(o){
           ' · 공백 ' + d.gap + ' · 중복 ' + d.dupe + ' · 초과근무 ' + d.offShort +
           ' · 6일연속 ' + d.over6 + ' · 매장이동 ' + d.move + '</span>' +
         '<span style="flex:1"></span>' +
-        '<button class="btn small gray" data-rv="reviewReqOff">요청휴무 검토</button>' +
-        '<button class="btn small gray" data-rv="reviewGaps">공백매장 검토</button>' +
-        '<button class="btn small gray" data-rv="reviewDupes">중복근무 검토</button>' +
-        '<button class="btn small gray" data-rv="">표만 보기</button>' +
+        '<button class="btn small gray" data-rv="">전체 표시</button>' +
+        '<button class="btn small gray" data-rv="gap">공백매장만</button>' +
+        '<button class="btn small gray" data-rv="dupe">중복근무만</button>' +
+        '<button class="btn small gray" data-rv="miss">미반영 요청휴무만</button>' +
         '<button class="btn small" id="wvPvPick">이 안으로 확정</button>' +
         '<button id="wvPvX" title="닫기" style="border:0;background:#f0f0f4;color:#333;width:32px;height:32px;border-radius:8px;font-size:17px;cursor:pointer;line-height:1">✕</button>' +
       '</div>' +
