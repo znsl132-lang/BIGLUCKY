@@ -277,4 +277,131 @@ render = function(rows){
   board.innerHTML=h;
 };
 </script>
+<script>
+/* 모바일 가독성(가로 스크롤) + 이름 더블탭 달력 팝업 + 날짜 근무인원 강조 */
+(function(){
+window.__wvSelDay=null;
+window.__ENH=function(){
+  if(!document.getElementById('wvEnhCss')){
+    var st=document.createElement('style'); st.id='wvEnhCss';
+    st.textContent=[
+    '@media (max-width:720px){',
+    ' .scroll{ overflow-x:auto !important; -webkit-overflow-scrolling:touch; }',
+    ' #schedTable{ min-width:max-content !important; width:auto !important; table-layout:auto !important; font-size:12px !important; }',
+    ' #schedTable th,#schedTable td{ padding:6px 5px !important; }',
+    ' #schedTable thead th{ font-size:11.5px !important; padding:6px 4px !important; }',
+    ' #schedTable thead th small{ font-size:9.5px !important; }',
+    ' #schedTable td.day{ min-width:46px !important; }',
+    ' #schedTable .namecol,#schedTable thead .namecol{ position:sticky !important; left:0 !important; z-index:5 !important; width:auto !important; min-width:68px !important; padding-left:8px !important; background:#fafafb !important; box-shadow:2px 0 4px rgba(0,0,0,.06) !important; }',
+    ' #schedTable .homecol,#schedTable thead .homecol{ width:auto !important; min-width:48px !important; }',
+    ' #schedTable tbody .namecol b{ font-size:12px !important; }',
+    ' #schedTable tbody .namecol .ttl{ display:inline-block !important; font-size:9.5px !important; margin-left:3px; }',
+    ' #schedTable .opcl{ font-size:9px !important; }',
+    ' #schedTable td.hol,#schedTable td.vac,#schedTable td.train,#schedTable td.trip,#schedTable td.sick{ font-size:10.5px !important; }',
+    ' #schedTable td.sum{ font-size:11px !important; }',
+    '}',
+    '#schedTable thead th[data-d]{ cursor:pointer; }',
+    '#schedTable td.wvdsel{ box-shadow:inset 0 0 0 2px #5b6cff; font-weight:700; }',
+    '#schedTable td.wvdsel.off{ opacity:.28; box-shadow:none; }',
+    '#schedTable thead th.wvdsel{ background:#5b6cff !important; color:#fff !important; }',
+    '#schedTable thead th.wvdsel small{ color:#dfe2ff !important; }',
+    '#schedTable td.namecol{ cursor:pointer; }',
+    '#wvBar{ position:fixed; left:50%; bottom:14px; transform:translateX(-50%); background:#23253a; color:#fff; padding:9px 14px; border-radius:12px; font-size:13px; z-index:9999; box-shadow:0 10px 30px rgba(0,0,0,.3); max-width:94vw; display:none; }',
+    '#wvBar b{ color:#8fe3a0; } #wvBar .x{ margin-left:10px; cursor:pointer; opacity:.75; font-weight:700; }',
+    '#wvModal{ position:fixed; inset:0; background:rgba(10,12,25,.55); z-index:10001; display:none; align-items:center; justify-content:center; padding:14px; }',
+    '.wvc{ background:#fff; border-radius:18px; width:min(440px,95vw); max-height:88vh; overflow:auto; padding:15px; box-shadow:0 24px 70px rgba(0,0,0,.35); }',
+    '.wvc-h{ display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:4px; }',
+    '.wvc-h b{ font-size:17px; } .wvc-sub{ font-size:12px; color:#999; margin-top:2px; }',
+    '.wvc-x{ border:none; background:#f0f1f5; width:34px; height:34px; border-radius:50%; font-size:16px; cursor:pointer; color:#555; flex:none; }',
+    '.wvc-sum{ font-size:12.5px; color:#666; margin:8px 2px 12px; }',
+    '.wvc-dow{ display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin-bottom:4px; }',
+    '.wvc-dow div{ text-align:center; font-size:11px; color:#999; font-weight:700; }',
+    '.wvc-g{ display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }',
+    '.wvc-c{ min-height:52px; border-radius:9px; background:#f4f4f5; border:1px solid #eceef3; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:3px 1px; text-align:center; overflow:hidden; }',
+    '.wvc-c.e{ background:transparent; border:none; }',
+    '.wvc-d{ font-size:10px; color:#8a8f9c; font-weight:700; } .wvc-v{ font-size:11px; font-weight:700; line-height:1.15; margin-top:1px; color:#2b2f3a; }',
+    '.wvc-c.o .wvc-v{ color:#b7bcc7; font-weight:600; }',
+    '.wvc-c.sun .wvc-d{ color:#e5484d; } .wvc-c.sat .wvc-d{ color:#3b82f6; }',
+    '.wvc-dow .sun{ color:#e5484d; } .wvc-dow .sat{ color:#3b82f6; }'
+    ].join('\n');
+    document.head.appendChild(st);
+  }
+  if(!document.getElementById('wvBar')){ var b=document.createElement('div'); b.id='wvBar'; document.body.appendChild(b); }
+  if(!document.getElementById('wvModal')){ var m=document.createElement('div'); m.id='wvModal'; m.addEventListener('click',function(e){ if(e.target===m) window.__wvClose(); }); document.body.appendChild(m); }
+  var tbl=document.getElementById('schedTable'); if(!tbl) return;
+  var rows=[].slice.call(tbl.querySelectorAll('tr')); if(!rows.length) return;
+  var head=rows[0];
+  var hcells=[].slice.call(head.children);
+  var dayCols=[];
+  hcells.forEach(function(th,i){ var m=String(th.textContent).trim().match(/^(\d{1,2})/); if(m && th.querySelector('small')){ th.setAttribute('data-d',m[1]); th.setAttribute('data-ci',i); dayCols.push({i:i,d:parseInt(m[1],10),dow:(th.querySelector('small')||{}).textContent||''}); th.onclick=function(){ window.__wvDay(parseInt(m[1],10)); }; } });
+  window.__wvDayCols=dayCols;
+  for(var r=1;r<rows.length;r++){
+    var tds=[].slice.call(rows[r].children);
+    dayCols.forEach(function(dc){ if(tds[dc.i]) tds[dc.i].setAttribute('data-d',dc.d); });
+    var nt=rows[r].querySelector('td.namecol');
+    if(nt && !nt.__wv){ nt.__wv=true; (function(td,tr){ var last=0,timer=null;
+      td.addEventListener('click',function(){ var now=Date.now();
+        if(now-last<320){ clearTimeout(timer); last=0; window.__wvCal(tr); return; }
+        last=now; timer=setTimeout(function(){ try{ selEmp(td); }catch(e){} last=0; },320);
+      });
+    })(nt,rows[r]); }
+  }
+};
+window.__wvClose=function(){ var m=document.getElementById('wvModal'); if(m){ m.style.display='none'; m.innerHTML=''; } };
+window.__wvDay=function(d){
+  var tbl=document.getElementById('schedTable'); if(!tbl) return;
+  var old=tbl.querySelectorAll('.wvdsel'); for(var i=0;i<old.length;i++) old[i].classList.remove('wvdsel');
+  var bar=document.getElementById('wvBar');
+  if(window.__wvSelDay===d){ window.__wvSelDay=null; if(bar) bar.style.display='none'; return; }
+  window.__wvSelDay=d;
+  var sel=tbl.querySelectorAll('[data-d="'+d+'"]');
+  for(var j=0;j<sel.length;j++) sel[j].classList.add('wvdsel');
+  var cnt={}, work=0;
+  var tds=tbl.querySelectorAll('tbody tr td[data-d="'+d+'"], tr td[data-d="'+d+'"]');
+  for(var k=0;k<tds.length;k++){ var td=tds[k]; if(td.classList.contains('store')){ var t=String(td.textContent).replace(/(OP|CL)$/,'').trim(); if(!t||t==='전휴무') continue; cnt[t]=(cnt[t]||0)+1; work++; } }
+  var keys=Object.keys(cnt).sort();
+  var parts=keys.map(function(x){ return x+' '+cnt[x]; }).join(' · ');
+  var th=tbl.querySelector('thead th[data-d="'+d+'"]')||tbl.querySelector('th[data-d="'+d+'"]');
+  var dow=th&&th.querySelector('small')?th.querySelector('small').textContent:'';
+  if(bar){ bar.innerHTML='<b>'+d+'일'+(dow?'('+dow+')':'')+'</b> 근무 <b>'+work+'</b>명'+(parts?' &nbsp;<span style="opacity:.85">'+parts+'</span>':'')+'<span class="x" onclick="window.__wvDay('+d+')">✕</span>'; bar.style.display='block'; }
+};
+window.__wvCal=function(tr){
+  var tbl=document.getElementById('schedTable'); if(!tbl||!tr) return;
+  var nameEl=tr.querySelector('td.namecol b'); var name=nameEl?nameEl.textContent.trim():'';
+  var ttlEl=tr.querySelector('td.namecol .ttl'); var ttl=ttlEl?ttlEl.textContent.trim():'';
+  var homeEl=tr.querySelector('td.homecol'); var home=homeEl?homeEl.textContent.trim():'';
+  var sel=document.getElementById('monthSel'); var mv=sel?sel.value:'';
+  var ym=(mv||'').split('-'); var Y=parseInt(ym[0],10), M=parseInt(ym[1],10);
+  var cells=[].slice.call(tr.querySelectorAll('td[data-d]'));
+  var DOW=['일','월','화','수','목','금','토'];
+  var first=(Y&&M)?new Date(Y,M-1,1).getDay():0;
+  var g='', off=0, tr_=0, sick=0, vac=0;
+  for(var i=0;i<first;i++) g+='<div class="wvc-c e"></div>';
+  cells.forEach(function(td){
+    var d=td.getAttribute('data-d');
+    var txt=String(td.textContent).trim();
+    var cl=td.className||'';
+    var label=txt, extra='', bg=getComputedStyle(td).backgroundColor;
+    if(cl.indexOf('off')>=0||txt===''){ label='휴무'; extra=' o'; off++; bg=''; }
+    else if(cl.indexOf('sick')>=0){ sick++; }
+    else if(cl.indexOf('train')>=0){ tr_++; }
+    else if(cl.indexOf('vac')>=0){ vac++; }
+    var wd=(Y&&M)?new Date(Y,M-1,parseInt(d,10)).getDay():-1;
+    var wc=(wd===0?' sun':wd===6?' sat':'');
+    var opcl=td.querySelector('.opcl');
+    if(opcl){ label=label.replace(/(OP|CL)$/,''); label+='<br><small>'+opcl.textContent.trim()+'</small>'; }
+    g+='<div class="wvc-c'+extra+wc+'"'+(bg&&extra===''?' style="background:'+bg+'"':'')+'><span class="wvc-d">'+d+'</span><span class="wvc-v">'+label+'</span></div>';
+  });
+  var m=document.getElementById('wvModal');
+  m.innerHTML='<div class="wvc"><div class="wvc-h"><div><b>'+name+'</b>'+(ttl?' <span style="font-size:12px;color:#888">'+ttl+'</span>':'')+'<div class="wvc-sub">'+(mv||'')+(home?' · '+home:'')+'</div></div><button class="wvc-x" onclick="window.__wvClose()">✕</button></div>'
+   +'<div class="wvc-sum">휴무 <b>'+off+'</b>'+(tr_?' · 훈련 <b>'+tr_+'</b>':'')+(sick?' · 병가 <b>'+sick+'</b>':'')+(vac?' · 휴가 <b>'+vac+'</b>':'')+'</div>'
+   +'<div class="wvc-dow">'+DOW.map(function(x,i){return '<div class="'+(i===0?'sun':i===6?'sat':'')+'">'+x+'</div>';}).join('')+'</div>'
+   +'<div class="wvc-g">'+g+'</div></div>';
+  m.style.display='flex';
+};
+document.addEventListener('keydown',function(e){ if(e.key==='Escape') window.__wvClose(); });
+if(typeof render==='function' && !render.__wvw){ var _r=render; var w=function(){ var out=_r.apply(this,arguments); try{ window.__wvSelDay=null; var b=document.getElementById('wvBar'); if(b)b.style.display='none'; window.__ENH(); }catch(e){} return out; }; w.__wvw=true; render=w; }
+try{ window.__ENH(); }catch(e){}
+})();
+</script>
 </html>
