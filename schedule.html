@@ -2762,4 +2762,198 @@ function wvRefine(sc, opts){
   }
 })();
 </script>
+<script>
+/* ===== We Vape 스케줄 5안 비교 (?opt=1 일 때만) =====
+   생성 버튼 → 5개 안을 만들어 비교표를 띄우고, 고른 안으로 스케줄을 확정한다.
+   이 <script> 블록만 지우면 원상 복구된다.                                   */
+var WV_VAR_ITERS = 25000;   // 각 안 계산 반복 (최종 선택 후 다시 다듬는다)
+var WV_FINAL_ITERS = 60000;
+
+// 요청 휴무를 1인당 N건씩 덜어낸다. "가장 덜 아쉬운 날" = 그날 요청이 몰린 날 · 평일 우선
+function wvTrimReqs(reqs, n, y, m){
+  if(n <= 0) return reqs.slice();
+  var dayCnt = {};
+  reqs.forEach(function(r){ if(r.type === '휴무요청') dayCnt[r.day] = (dayCnt[r.day] || 0) + 1; });
+  var byEmp = {};
+  reqs.forEach(function(r){ if(r.type === '휴무요청') (byEmp[r.emp] = byEmp[r.emp] || []).push(r); });
+  var drop = [];
+  Object.keys(byEmp).forEach(function(nm){
+    var list = byEmp[nm].slice().sort(function(a, b){
+      var wa = new Date(y, m - 1, a.day).getDay(), wb = new Date(y, m - 1, b.day).getDay();
+      var wka = (wa === 0 || wa === 6) ? 1 : 0, wkb = (wb === 0 || wb === 6) ? 1 : 0;
+      if(wka !== wkb) return wka - wkb;                 // 평일부터 뺀다
+      return (dayCnt[b.day] || 0) - (dayCnt[a.day] || 0); // 요청이 몰린 날부터
+    });
+    drop = drop.concat(list.slice(0, n));
+  });
+  return reqs.filter(function(r){ return drop.indexOf(r) < 0; });
+}
+
+function wvBuildVariants(baseGen, args){
+  var mk = document.getElementById('monthPick').value;
+  var p = mk.split('-'), y = +p[0], mo = +p[1];
+  var orig = ((S.reqs && S.reqs[mk]) || []).slice();
+  var savedW = {}; Object.keys(WV_W).forEach(function(k){ savedW[k] = WV_W[k]; });
+  var savedIt = WV_ITERS;
+  var out = [];
+
+  function make(label, trim, w, iters){
+    S.reqs[mk] = wvTrimReqs(orig, trim, y, mo);
+    Object.keys(savedW).forEach(function(k){ WV_W[k] = savedW[k]; });
+    if(w) Object.keys(w).forEach(function(k){ WV_W[k] = w[k]; });
+    WV_ITERS = iters || WV_VAR_ITERS;
+    try{
+      baseGen.apply(null, args);
+      var snap = {}; Object.keys(sched.cells).forEach(function(k){ snap[k] = sched.cells[k].slice(); });
+      return { label: label, trim: trim, cells: snap };
+    }catch(e){ console.warn(label + ' 생성 실패', e); return null; }
+  }
+  function gapOf(cells){
+    var Cx = wvCtx(sched);
+    return scoreSchedule(cells, Cx).det.gap;
+  }
+
+  // 1~3안: 요청 휴무 축소 단계
+  [['1안  요청 휴무 전부 반영', 0], ['2안  요청 휴무 1건씩 축소', 1], ['3안  요청 휴무 2건씩 축소', 2]]
+    .forEach(function(x){ var r = make(x[0], x[1]); if(r) out.push(r); });
+
+  // 4안: 공백 0이 되는 최소 축소량 (1~3안 재사용, 없으면 3~5건까지 더 시도)
+  S.reqs[mk] = orig;
+  Object.keys(savedW).forEach(function(k){ WV_W[k] = savedW[k]; });
+  var hit = null;
+  for(var i = 0; i < out.length; i++){ if(gapOf(out[i].cells) === 0){ hit = { trim: out[i].trim, cells: out[i].cells }; break; } }
+  if(!hit){
+    for(var t = 3; t <= 5 && !hit; t++){
+      var r2 = make('tmp', t, { gap: 30000, dupe: 6000 });
+      if(!r2) break;
+      S.reqs[mk] = orig;
+      Object.keys(savedW).forEach(function(k){ WV_W[k] = savedW[k]; });
+      if(gapOf(r2.cells) === 0) hit = { trim: t, cells: r2.cells };
+      else if(t === 5) hit = { trim: t, cells: r2.cells, fail: true };
+    }
+  }
+  if(hit) out.push({
+    label: '4안  공백 0 최소 축소 (' + hit.trim + '건씩)' + (hit.fail ? ' — 달성 실패' : ''),
+    trim: hit.trim, cells: hit.cells
+  });
+
+  // 5안: 종합 최적 (요청 전부 반영 + 긴 탐색)
+  var r5 = make('5안  종합 최적', 0, null, WV_FINAL_ITERS);
+  if(r5) out.push(r5);
+
+  S.reqs[mk] = orig;
+  Object.keys(savedW).forEach(function(k){ WV_W[k] = savedW[k]; });
+  WV_ITERS = savedIt;
+
+  var C = wvCtx(sched);
+  var reqOff = orig.filter(function(r){ return r.type === '휴무요청'; });
+  out.forEach(function(o){
+    o.score = scoreSchedule(o.cells, C);
+    o.reqOK = reqOff.filter(function(r){ var a2 = o.cells[r.emp]; return a2 && a2[r.day - 1] === ''; }).length;
+    o.reqN = reqOff.length;
+  });
+  return out;
+}
+
+function wvShowCompare(list, onPick){
+  var old = document.getElementById('wvCmp'); if(old) old.remove();
+  var box = document.createElement('div');
+  box.id = 'wvCmp';
+  box.style.cssText = 'position:fixed;inset:0;background:rgba(10,11,18,.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;';
+  var bestI = 0;
+  list.forEach(function(o, i){ if(o.score.total < list[bestI].score.total) bestI = i; });
+  var rows = list.map(function(o, i){
+    var d = o.score.det;
+    var warn = (d.gap > 0 ? 1 : 0) + (d.offShort > 0 ? 1 : 0) + (d.over6 > 0 ? 1 : 0);
+    return '<tr data-i="' + i + '" style="cursor:pointer">' +
+      '<td style="text-align:left;font-weight:600">' + o.label + '</td>' +
+      '<td><b>' + o.reqOK + '</b>/' + o.reqN + '</td>' +
+      '<td' + (d.gap ? ' style="color:#c62828;font-weight:700"' : '') + '>' + d.gap + '</td>' +
+      '<td' + (d.dupe ? ' style="color:#e07800"' : '') + '>' + d.dupe + '</td>' +
+      '<td' + (d.offShort ? ' style="color:#c62828;font-weight:700"' : '') + '>' + d.offShort + '</td>' +
+      '<td>' + d.offOver + '</td>' +
+      '<td' + (d.over6 ? ' style="color:#c62828"' : '') + '>' + d.over6 + '</td>' +
+      '<td>' + d.move + '</td>' +
+      '<td style="white-space:nowrap">' + (warn === 0 ? '✅' : '⚠') + (i === bestI ? ' <b style="color:#c9a227">★추천</b>' : '') + '</td>' +
+      '<td style="white-space:nowrap"><button class="btn small gray" data-prev="' + i + '">미리보기</button> ' +
+      '<button class="btn small" data-pick="' + i + '">선택</button></td></tr>';
+  }).join('');
+  box.innerHTML =
+    '<div style="background:#fff;border-radius:14px;max-width:980px;width:100%;max-height:88vh;overflow:auto;padding:22px 24px;box-shadow:0 20px 60px rgba(0,0,0,.35)">' +
+    '<h3 style="margin:0 0 4px;font-size:17px">스케줄 안 비교 — 하나를 고르세요</h3>' +
+    '<p class="hint" style="margin:0 0 14px">빨간 숫자는 그대로 두면 안 되는 항목입니다. 공백 = 매장에 사람이 없는 날, 초과근무 = 계약 휴무일보다 적게 쉬는 일수.</p>' +
+    '<table style="width:100%"><thead><tr>' +
+    '<th style="text-align:left">안</th><th>요청휴무</th><th>공백</th><th>중복</th><th>초과근무</th><th>초과휴무</th><th>6일연속</th><th>매장이동</th><th></th><th></th>' +
+    '</tr></thead><tbody>' + rows + '</tbody></table>' +
+    '<div class="rowbtns" style="justify-content:flex-end;margin-top:14px"><button class="btn gray small" id="wvCmpX">취소 (1안 그대로)</button></div>' +
+    '</div>';
+  document.body.appendChild(box);
+  box.addEventListener('click', function(ev){
+    var pv = ev.target.closest('[data-prev]');
+    if(pv){
+      var j = +pv.getAttribute('data-prev');
+      var keep = {}; Object.keys(sched.cells).forEach(function(k){ keep[k] = sched.cells[k].slice(); });
+      Object.keys(list[j].cells).forEach(function(k){ sched.cells[k] = list[j].cells[k].slice(); });
+      if(typeof renderSched === 'function') renderSched();
+      box.style.background = 'transparent'; box.style.pointerEvents = 'none';
+      var bar = document.createElement('div');
+      bar.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:24px;z-index:100000;background:#14151f;color:#fff;padding:12px 18px;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.35);display:flex;gap:10px;align-items:center;pointer-events:auto;font-size:14px';
+      bar.innerHTML = '<b>' + list[j].label + '</b> 미리보기 <button class="btn small" id="wvPvBack">비교표로</button>';
+      document.body.appendChild(bar);
+      bar.querySelector('#wvPvBack').addEventListener('click', function(){
+        Object.keys(keep).forEach(function(k){ sched.cells[k] = keep[k]; });
+        if(typeof renderSched === 'function') renderSched();
+        bar.remove(); box.style.background = 'rgba(10,11,18,.55)'; box.style.pointerEvents = 'auto';
+      });
+      return;
+    }
+    var b = ev.target.closest('[data-pick]') || ev.target.closest('tr[data-i]');
+    if(b){ var i = +(b.getAttribute('data-pick') || b.getAttribute('data-i')); box.remove(); onPick(list[i]); return; }
+    if(ev.target.id === 'wvCmpX' || ev.target === box){ box.remove(); onPick(list[0]); }
+  });
+}
+
+function wvBusy(msg){
+  var el = document.getElementById('wvBusy');
+  if(!msg){ if(el) el.remove(); return; }
+  if(!el){
+    el = document.createElement('div'); el.id = 'wvBusy';
+    el.style.cssText = 'position:fixed;inset:0;background:rgba(10,11,18,.5);z-index:99998;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;font-weight:600;';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+}
+
+(function(){
+  if(location.search.indexOf('opt=1') < 0) return;
+  if(typeof generate !== 'function' || generate.__wvvar) return;
+  var _g = generate, busy = false;
+  var wrapped = function(){
+    if(busy) return _g.apply(this, arguments);
+    var self = this, args = arguments;
+    busy = true;
+    wvBusy('5개 안을 만드는 중입니다…  (약 4초)');
+    // 화면이 먼저 그려지도록 한 틱 미루고 계산한다
+    setTimeout(function(){
+      try{
+        var list = wvBuildVariants(function(){ return _g.apply(self, args); }, args);
+        wvBusy(null); busy = false;
+        if(!list.length){ _g.apply(self, args); return; }
+        wvShowCompare(list, function(pick){
+          Object.keys(pick.cells).forEach(function(k){ sched.cells[k] = pick.cells[k].slice(); });
+          if(typeof renderSched === 'function') renderSched();
+          window._wvScore = pick.score;
+          window._wvPicked = pick.label;
+        });
+      }catch(e){
+        wvBusy(null); busy = false;
+        console.warn('5안 비교 건너뜀:', e);
+        _g.apply(self, args);
+      }
+    }, 30);
+  };
+  wrapped.__wvvar = true;
+  generate = wrapped;
+})();
+</script>
 </html>
