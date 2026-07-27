@@ -2908,6 +2908,38 @@ function wvShowCompare(list, onPick){
   });
 }
 
+// 이 안의 공백 매장 · 중복 편성이 정확히 어느 날 어느 매장인지 뽑는다
+function wvIssues(o){
+  var C = wvCtx(sched), nDays = C.nDays;
+  var gaps = [], dupes = [];
+  for(var d = 0; d < nDays; d++){
+    if(C.hol[d]) continue;
+    var at = {}; S.stores.forEach(function(s2){ at[s2.n] = []; });
+    C.acts.forEach(function(e){
+      var v = o.cells[e.name] && o.cells[e.name][d];
+      if(C.isW(v)){ var b = C.baseOf(v); if(at[b]) at[b].push(e.name); }
+    });
+    S.stores.forEach(function(st){
+      var n = at[st.n].length;
+      if(n < st.need) gaps.push({ d: d + 1, st: st.n, txt: (d + 1) + '일 ' + st.n + ' (' + n + '/' + st.need + '명)' });
+      else if(n > st.need) dupes.push({ d: d + 1, st: st.n, txt: (d + 1) + '일 ' + st.n + ' — ' + at[st.n].join(', ') });
+    });
+  }
+  return { gaps: gaps, dupes: dupes };
+}
+
+function wvIssuePanel(o){
+  var iz = wvIssues(o);
+  var chip = function(t, color){ return '<span style="display:inline-block;background:' + color + ';border-radius:6px;padding:3px 8px;margin:2px 4px 2px 0;font-size:12.5px">' + t + '</span>'; };
+  var h = '<div style="border:1px solid #e9eaf1;border-radius:10px;padding:12px 14px;margin-bottom:12px;background:#fbfbfe">';
+  h += '<div style="margin-bottom:6px"><b style="color:' + (iz.gaps.length ? '#c62828' : '#2e7d32') + '">공백 매장 ' + iz.gaps.length + '건</b> ';
+  h += iz.gaps.length ? iz.gaps.map(function(x){ return chip(x.txt, '#ffe3e3'); }).join('') : '<span class="hint">모든 매장이 최소 인원을 충족합니다.</span>';
+  h += '</div><div><b style="color:' + (iz.dupes.length ? '#e07800' : '#2e7d32') + '">중복 편성 ' + iz.dupes.length + '건</b> ';
+  h += iz.dupes.length ? iz.dupes.map(function(x){ return chip(x.txt, '#fff2d9'); }).join('') : '<span class="hint">정원 초과 배치가 없습니다.</span>';
+  h += '</div></div>';
+  return h;
+}
+
 // 미리보기: 해당 안의 스케줄 표를 별도 창으로 띄운다 (원본 스케줄은 건드리지 않는다)
 // 검토 버튼도 이 안의 데이터 기준으로 돌려서 결과를 창 안에 보여준다.
 function wvPvFill(o, fnName){
@@ -2934,7 +2966,8 @@ function wvPvFill(o, fnName){
   if(warnEl) warnEl.innerHTML = keepWarn;
   if(keepLW) lastWarns = keepLW;
   var clean = function(h){ return String(h).replace(/ on[a-z]+="[^"]*"/g, '').replace(/ id="schedTable"/g, ' id="wvPvTable"'); };
-  body.innerHTML = (wh ? '<div style="margin-bottom:10px">' + clean(wh) + '</div>' : '') + clean(html);
+  var panel = fnName ? '' : wvIssuePanel(o);
+  body.innerHTML = panel + (wh ? '<div style="margin-bottom:10px">' + clean(wh) + '</div>' : '') + clean(html);
   body.scrollTop = 0;
 }
 
