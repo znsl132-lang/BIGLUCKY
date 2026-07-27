@@ -1084,7 +1084,9 @@ function genOnce(y,m,nDays,reqs,mk,seed,preset){
         while(atSt.length>st.need){
           atSt.sort((a,b)=>_offN(a.name)-_offN(b.name)||(a.name<b.name?-1:1));
           const cand=atSt[0];
-          const sh=S.stores.find(s2=>s2.n!==st.n&&_cnt(s2.n,d)<s2.need);
+          const _strict=location.search.indexOf('opt=1')>=0; // ?opt=1 일 때만 엄격 적용
+          const sh=S.stores.find(s2=>s2.n!==st.n&&_cnt(s2.n,d)<s2.need
+            &&(!_strict||(allowed(cand,s2.n)&&(!selfOnly.has(s2.n)||cand.home===s2.n||(cand.pref||[]).includes(s2.n))&&(s2.n===cand.home||awayOK(cand)))));
           if(sh){ cells[cand.name][d]=sh.n; }
           else { cells[cand.name][d]=OFF; if(fixedOff[cand.name]) fixedOff[cand.name].add(d); }
           atSt=atSt.filter(e=>e.name!==cand.name);
