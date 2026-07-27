@@ -2489,4 +2489,275 @@ function wvOptimize(sc){
 }
 (function(){ if(typeof generate==='function' && !generate.__wv){ var _g=generate; var wrapped=function(){ var r=_g.apply(this,arguments); try{ if(typeof sched!=='undefined'&&sched&&sched.cells){ wvOptimize(sched); if(typeof renderSched==='function') renderSched(); } }catch(e){} return r; }; wrapped.__wv=true; generate=wrapped; } })();
 </script>
+<script>
+/* ===== We Vape 스케줄 전역 최적화 v1 (원본 무수정 · ?opt=1 일 때만 작동) =====
+   기존 코드를 전혀 건드리지 않는다. 이 <script> 블록만 지우면 원상 복구된다.
+   1) scoreSchedule : 완성된 한 달 스케줄에 점수를 매긴다 (낮을수록 좋다)
+   2) wvRefine      : 그 점수를 낮추는 방향으로 배치를 바꿔본다 (시뮬레이티드 어닐링)
+   가중치는 아래 WV_W 숫자만 고치면 된다.                                        */
+var WV_W = {
+  gap:        6000, // 공백 매장(필요 인원 미달) 1명분
+  offShort:   4000, // 계약 휴무일보다 적게 쉼 = 초과근무 (1일당) — 사실상 금지
+  offOver:     200, // 계약 휴무일보다 많이 쉼 = 인력 낭비 (1일당)
+  over6:       600, // 6일 초과 연속근무 (초과일수 제곱)
+  dupe:        350, // 중복 편성(필요 인원 초과) 1명분
+  mateAllOff:  200, // 같은 매장 소속 전원 동시 휴무
+  restRun3:    150, // 3일 이상 연속 휴무
+  run5:         30, // 5일 연속근무 블록 (같은 사람 반복 시 제곱 = 편중 억제)
+  move:         25, // 매장 이동 1회
+  moveTop:      10  // 이동 최다자 쏠림
+};
+var WV_ITERS = 60000;
+
+function wvCtx(sc){
+  var mk = sc.year + '-' + String(sc.month).padStart(2, '0');
+  var SPECIAL = ['휴가', '병가', '훈련', '출장', '전휴무'];
+  var isW = function(v){ return v != null && v !== '' && SPECIAL.indexOf(v) < 0; };
+  var baseOf = function(v){ var i = String(v).indexOf('('); return (i >= 0 ? String(v).slice(0, i) : String(v)).trim(); };
+  var acts = S.emps.filter(function(e){ return e.role !== '교육'; });
+  var hol = {}; ((S.hols && S.hols[mk]) || []).forEach(function(d){ hol[d - 1] = 1; });
+  var prot = {}; ((S.reqs && S.reqs[mk]) || []).forEach(function(r){
+    if(r.type === '휴무요청' && r.day){ (prot[r.emp] = prot[r.emp] || {})[r.day - 1] = 1; }
+  });
+  var bonus = {}; ((S.extraLog && S.extraLog[mk]) || []).forEach(function(x){ if(x.bulk) bonus[x.name] = (bonus[x.name] || 0) + 1; });
+  var needOf = {}; S.stores.forEach(function(s){ needOf[s.n] = s.need; });
+  var selfOnly = {}; S.stores.forEach(function(s){
+    selfOnly[s.n] = (s.need === 1 && acts.filter(function(e){ return e.home === s.n; }).length >= 2);
+  });
+  return {
+    nDays: sc.nDays, isW: isW, baseOf: baseOf, acts: acts, hol: hol, prot: prot,
+    needOf: needOf, selfOnly: selfOnly,
+    target: function(e){ return (typeof offTarget === 'function' ? offTarget(e) : 10) + (bonus[e.name] || 0); },
+    label: function(e, st){ if(needOf[st] >= 2){ if(e.role === '오픈') return st + '(OP)'; if(e.role === '마감') return st + '(CL)'; } return st; }
+  };
+}
+
+function scoreSchedule(cells, C){
+  var d, i, st, e, v, b, nDays = C.nDays;
+  var det = { gap:0, dupe:0, over6:0, run5:0, move:0, moveTop:0, restRun3:0, mateAllOff:0, offShort:0, offOver:0 };
+  for(d = 0; d < nDays; d++){
+    if(C.hol[d]) continue;
+    var at = {}; S.stores.forEach(function(s){ at[s.n] = 0; });
+    for(i = 0; i < C.acts.length; i++){
+      v = cells[C.acts[i].name][d];
+      if(C.isW(v)){ b = C.baseOf(v); if(at[b] !== undefined) at[b]++; }
+    }
+    for(i = 0; i < S.stores.length; i++){
+      st = S.stores[i];
+      if(at[st.n] < st.need) det.gap += (st.need - at[st.n]);
+      else if(at[st.n] > st.need) det.dupe += (at[st.n] - st.need);
+    }
+  }
+  var moves = [];
+  for(i = 0; i < C.acts.length; i++){
+    e = C.acts[i];
+    var a = cells[e.name]; if(!a) continue;
+    var run = 0, blocks5 = 0, rest = 0, last = null, mv = 0, offN = 0;
+    for(d = 0; d <= nDays; d++){
+      var w = (d < nDays) && C.isW(a[d]);
+      if(w){
+        run++; rest = 0;
+        b = C.baseOf(a[d]);
+        if(last !== null && b !== last) mv++;
+        last = b;
+      } else {
+        if(run >= 6) det.over6 += (run - 5) * (run - 5);
+        else if(run === 5) blocks5++;
+        run = 0;
+        if(d < nDays){ rest++; if(rest === 3) det.restRun3++; }
+      }
+      if(d < nDays && a[d] === '') offN++;
+    }
+    det.run5 += blocks5 * blocks5;
+    var dv = offN - C.target(e);
+    if(dv < 0) det.offShort += -dv; else det.offOver += dv;
+    det.move += mv; moves.push(mv);
+  }
+  if(moves.length){
+    var avg = moves.reduce(function(x, y){ return x + y; }, 0) / moves.length;
+    det.moveTop = Math.max(0, Math.max.apply(null, moves) - avg);
+  }
+  var byHome = {};
+  C.acts.forEach(function(x){ if(x.home !== '순환'){ (byHome[x.home] = byHome[x.home] || []).push(x); } });
+  Object.keys(byHome).forEach(function(h){
+    var g = byHome[h]; if(g.length < 2) return;
+    for(var dd = 0; dd < nDays; dd++){
+      if(C.hol[dd]) continue;
+      if(g.every(function(x){ return !C.isW(cells[x.name][dd]); })) det.mateAllOff++;
+    }
+  });
+  var total = 0;
+  Object.keys(det).forEach(function(k){ total += det[k] * (WV_W[k] || 0); });
+  return { total: total, det: det };
+}
+
+function wvRefine(sc, opts){
+  opts = opts || {};
+  var C = wvCtx(sc), cells = sc.cells, nDays = C.nDays;
+  var lockedDay = opts.lockedDay || function(){ return false; };
+  var _rs = (sc.year * 100 + sc.month) | 0;
+  var rng = function(){
+    _rs = _rs + 0x6D2B79F5 | 0;
+    var t = Math.imul(_rs ^ _rs >>> 15, 1 | _rs);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+  var ri = function(n){ return n <= 0 ? 0 : Math.floor(rng() * n) % n; };
+  var clone = function(c){ var o = {}; Object.keys(c).forEach(function(k){ o[k] = c[k].slice(); }); return o; };
+
+  var canEnter = function(e, stn){
+    if((e.ban || []).indexOf(stn) >= 0) return false;
+    if(C.selfOnly[stn]) return e.home === stn;
+    if(e.home !== '순환' && stn !== e.home && (e.pref || []).indexOf(stn) < 0) return false;
+    if(e.role === '파트' && e.home !== '순환' && stn !== e.home){
+      var hm = 0, aw = 0;
+      for(var q = 0; q < nDays; q++){
+        var vq = cells[e.name][q]; if(!C.isW(vq)) continue;
+        if(C.baseOf(vq) === e.home) hm++; else aw++;
+      }
+      if(aw + 1 >= hm) return false;
+    }
+    return true;
+  };
+  var canLeave = function(e, d){
+    var from = C.baseOf(cells[e.name][d]);
+    if(!C.selfOnly[from] || e.home !== from) return true;
+    return C.acts.some(function(o){
+      return o !== e && o.home === from && C.isW(cells[o.name][d]) && C.baseOf(cells[o.name][d]) === from;
+    });
+  };
+  var roleFixed = function(e){ return e.role === '오픈' || e.role === '마감'; };
+  var offCnt = function(e){ var n = 0, a = cells[e.name]; for(var q = 0; q < nDays; q++) if(a[q] === '') n++; return n; };
+  var countAt = function(d){
+    var at = {}; S.stores.forEach(function(s){ at[s.n] = 0; });
+    C.acts.forEach(function(e){ var v = cells[e.name][d]; if(C.isW(v)){ var b = C.baseOf(v); if(at[b] !== undefined) at[b]++; } });
+    return at;
+  };
+
+  var cur = scoreSchedule(cells, C), best = cur.total, bestCells = clone(cells);
+  var T0 = 80, T1 = 0.4, iters = opts.iters || WV_ITERS;
+
+  for(var it = 0; it < iters; it++){
+    var T = T0 * Math.pow(T1 / T0, it / iters);
+    var d = ri(nDays);
+    if(C.hol[d]) continue;
+    var workers = [], offs = [];
+    for(var i = 0; i < C.acts.length; i++){
+      var e = C.acts[i];
+      if(lockedDay(e.name, d)) continue;
+      var v = cells[e.name][d];
+      if(C.isW(v)){ if(!roleFixed(e)) workers.push(e); }
+      else if(v === '' && !(C.prot[e.name] && C.prot[e.name][d])) offs.push(e);
+    }
+    if(!workers.length) continue;
+    var at = countAt(d);
+    var short = S.stores.filter(function(s){ return at[s.n] < s.need; });
+    var undo = null, r = rng();
+
+    if(short.length && r < 0.35){
+      var T2 = short[ri(short.length)].n;
+      var poolB = offs.filter(function(o){ return canEnter(o, T2); });
+      if(!poolB.length) continue;
+      var B0 = poolB[ri(poolB.length)], days = [];
+      for(var dd = 0; dd < nDays; dd++){
+        if(dd === d || C.hol[dd] || lockedDay(B0.name, dd)) continue;
+        var vv = cells[B0.name][dd]; if(!C.isW(vv)) continue;
+        if(!canLeave(B0, dd)) continue;
+        var uu = C.baseOf(vv), atd = countAt(dd);
+        if(atd[uu] > (C.needOf[uu] || 1)) days.push(dd, dd, dd); else days.push(dd);
+      }
+      if(!days.length) continue;
+      var D2 = days[ri(days.length)];
+      undo = [[B0.name, d, cells[B0.name][d]], [B0.name, D2, cells[B0.name][D2]]];
+      cells[B0.name][d] = C.label(B0, T2);
+      cells[B0.name][D2] = '';
+    } else if(short.length && r < 0.65){
+      var tgt = short[ri(short.length)].n, pool = [];
+      for(var k = 0; k < workers.length; k++){
+        var wkr = workers[k], fr = C.baseOf(cells[wkr.name][d]);
+        if(fr === tgt || !canEnter(wkr, tgt) || !canLeave(wkr, d)) continue;
+        if(at[fr] > (C.needOf[fr] || 1)) pool.push(wkr, wkr, wkr); else pool.push(wkr);
+      }
+      if(!pool.length) continue;
+      var P = pool[ri(pool.length)];
+      undo = [[P.name, d, cells[P.name][d]]];
+      cells[P.name][d] = C.label(P, tgt);
+    } else if(offs.length && r < 0.60){
+      var A = workers[ri(workers.length)], B = offs[ri(offs.length)];
+      var stn = C.baseOf(cells[A.name][d]);
+      if(!canEnter(B, stn) || !canLeave(A, d)) continue;
+      undo = [[A.name, d, cells[A.name][d]], [B.name, d, cells[B.name][d]]];
+      cells[B.name][d] = C.label(B, stn);
+      cells[A.name][d] = '';
+    } else if(r < 0.72){
+      var overW = workers.filter(function(e){ return offCnt(e) < C.target(e) && canLeave(e, d); });
+      if(!overW.length) continue;
+      var OW = overW[ri(overW.length)];
+      undo = [[OW.name, d, cells[OW.name][d]]];
+      cells[OW.name][d] = '';
+    } else if(r < 0.80 && offs.length){
+      var idleW = offs.filter(function(e){ return offCnt(e) > C.target(e); });
+      if(!idleW.length) continue;
+      var IW = idleW[ri(idleW.length)];
+      var okSt = S.stores.filter(function(st){ return at[st.n] < st.need && canEnter(IW, st.n); });
+      if(!okSt.length) continue;
+      var ST = okSt[ri(okSt.length)].n;
+      undo = [[IW.name, d, cells[IW.name][d]]];
+      cells[IW.name][d] = C.label(IW, ST);
+    } else {
+      var Cc = workers[ri(workers.length)], from2 = C.baseOf(cells[Cc.name][d]);
+      var to = S.stores[ri(S.stores.length)].n;
+      if(to === from2 || !canEnter(Cc, to) || !canLeave(Cc, d)) continue;
+      undo = [[Cc.name, d, cells[Cc.name][d]]];
+      cells[Cc.name][d] = C.label(Cc, to);
+    }
+    if(!undo) continue;
+
+    var nxt = scoreSchedule(cells, C), delta = nxt.total - cur.total;
+    if(delta <= 0 || rng() < Math.exp(-delta / T)){
+      cur = nxt;
+      if(cur.total < best){ best = cur.total; bestCells = clone(cells); }
+    } else {
+      for(var u = 0; u < undo.length; u++) cells[undo[u][0]][undo[u][1]] = undo[u][2];
+    }
+  }
+  Object.keys(bestCells).forEach(function(k){ cells[k] = bestCells[k]; });
+
+  S.emps.filter(function(e){ return e.role === '교육'; }).forEach(function(tr){
+    var mentor = S.emps.filter(function(o){ return o.role !== '교육' && o.title === '팀장' && o.home === tr.home; })[0]
+              || S.emps.filter(function(o){ return o.role !== '교육' && o.title === '팀장'; })[0];
+    if(!mentor || !cells[mentor.name] || !cells[tr.name]) return;
+    var ma = cells[mentor.name], a = cells[tr.name];
+    for(var d2 = 0; d2 < nDays; d2++){
+      if(['휴가', '병가', '훈련', '출장'].indexOf(a[d2]) >= 0) continue;
+      a[d2] = C.isW(ma[d2]) ? C.baseOf(ma[d2]) : (C.hol[d2] ? '전휴무' : '');
+    }
+  });
+
+  window._wvScore = scoreSchedule(cells, C);
+  return sc;
+}
+
+(function(){
+  if(location.search.indexOf('opt=1') < 0) return;
+  if(typeof generate === 'function' && !generate.__wvopt){
+    var _g = generate;
+    var wrapped = function(){
+      var preset = arguments[1];
+      var r = _g.apply(this, arguments);
+      try{
+        if(typeof sched !== 'undefined' && sched && sched.cells){
+          wvRefine(sched, {
+            lockedDay: preset ? function(nm, d){ return d < preset.fromIdx || (preset.locked && preset.locked.has(nm)); } : null
+          });
+          if(typeof renderSched === 'function') renderSched();
+        }
+      }catch(e){ console.warn('wvRefine 건너뜀:', e); }
+      return r;
+    };
+    wrapped.__wvopt = true;
+    generate = wrapped;
+  }
+})();
+</script>
 </html>
