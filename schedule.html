@@ -2909,24 +2909,36 @@ function wvShowCompare(list, onPick){
 }
 
 // 미리보기: 해당 안의 스케줄 표를 별도 창으로 띄운다 (원본 스케줄은 건드리지 않는다)
-function wvPreview(o){
+// 검토 버튼도 이 안의 데이터 기준으로 돌려서 결과를 창 안에 보여준다.
+function wvPvFill(o, fnName){
   var boxEl = document.getElementById('schedBox');
   var warnEl = document.getElementById('warnBox');
-  if(!boxEl) return;
+  var body = document.getElementById('wvPvBody');
+  if(!boxEl || !body) return;
   var keep = {}; Object.keys(sched.cells).forEach(function(k){ keep[k] = sched.cells[k].slice(); });
   var keepHtml = boxEl.innerHTML, keepWarn = warnEl ? warnEl.innerHTML : '';
+  var keepLW = (typeof lastWarns !== 'undefined' && lastWarns) ? lastWarns.slice() : null;
   Object.keys(o.cells).forEach(function(k){ sched.cells[k] = o.cells[k].slice(); });
-  var html = '';
+  var html = '', wh = '';
   try{
-    if(typeof renderSched === 'function') renderSched();
+    if(fnName && typeof window[fnName] === 'function') window[fnName]();
+    else if(typeof renderSched === 'function') renderSched();
     html = boxEl.innerHTML;
-  }catch(e){ html = '<p class="hint">표를 그리지 못했습니다.</p>'; }
+    wh = warnEl ? warnEl.innerHTML : '';
+  }catch(e){
+    try{ if(typeof renderSched === 'function') renderSched(); html = boxEl.innerHTML; }catch(e2){}
+    wh = '<div class="warn">검토 기능 실행 중 오류: ' + e.message + ' — 표만 표시합니다.</div>' + wh;
+  }
   Object.keys(keep).forEach(function(k){ sched.cells[k] = keep[k]; });
   boxEl.innerHTML = keepHtml;
   if(warnEl) warnEl.innerHTML = keepWarn;
-  html = html.replace(/ on[a-z]+="[^"]*"/g, '');        // 미리보기에서는 셀 수정 비활성
-  html = html.replace(/ id="schedTable"/g, ' id="wvPvTable"'); // id 중복 방지
+  if(keepLW) lastWarns = keepLW;
+  var clean = function(h){ return String(h).replace(/ on[a-z]+="[^"]*"/g, '').replace(/ id="schedTable"/g, ' id="wvPvTable"'); };
+  body.innerHTML = (wh ? '<div style="margin-bottom:10px">' + clean(wh) + '</div>' : '') + clean(html);
+  body.scrollTop = 0;
+}
 
+function wvPreview(o){
   var d = o.score.det;
   var old = document.getElementById('wvPv'); if(old) old.remove();
   var pv = document.createElement('div');
@@ -2934,22 +2946,29 @@ function wvPreview(o){
   pv.style.cssText = 'position:fixed;inset:0;background:rgba(10,11,18,.6);z-index:100001;display:flex;align-items:center;justify-content:center;padding:18px;';
   pv.innerHTML =
     '<div style="background:#fff;border-radius:14px;width:100%;max-width:1400px;max-height:92vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.4)">' +
-      '<div style="display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid #e9eaf1">' +
+      '<div style="display:flex;align-items:center;gap:10px;padding:13px 18px;border-bottom:1px solid #e9eaf1;flex-wrap:wrap">' +
         '<b style="font-size:15px">' + o.label + '</b>' +
         '<span class="hint" style="font-size:12.5px">요청휴무 ' + o.reqOK + '/' + o.reqN +
           ' · 공백 ' + d.gap + ' · 중복 ' + d.dupe + ' · 초과근무 ' + d.offShort +
           ' · 6일연속 ' + d.over6 + ' · 매장이동 ' + d.move + '</span>' +
         '<span style="flex:1"></span>' +
+        '<button class="btn small gray" data-rv="reviewReqOff">요청휴무 검토</button>' +
+        '<button class="btn small gray" data-rv="reviewGaps">공백매장 검토</button>' +
+        '<button class="btn small gray" data-rv="reviewDupes">중복근무 검토</button>' +
+        '<button class="btn small gray" data-rv="">표만 보기</button>' +
         '<button class="btn small" id="wvPvPick">이 안으로 확정</button>' +
         '<button id="wvPvX" title="닫기" style="border:0;background:#f0f0f4;color:#333;width:32px;height:32px;border-radius:8px;font-size:17px;cursor:pointer;line-height:1">✕</button>' +
       '</div>' +
-      '<div style="flex:1;overflow:auto;padding:14px 16px">' + html + '</div>' +
+      '<div id="wvPvBody" style="flex:1;overflow:auto;padding:14px 16px"></div>' +
     '</div>';
   document.body.appendChild(pv);
+  wvPvFill(o, null);
   var close = function(){ pv.remove(); document.removeEventListener('keydown', esc); };
   var esc = function(ev){ if(ev.key === 'Escape') close(); };
   document.addEventListener('keydown', esc);
   pv.addEventListener('click', function(ev){
+    var rv = ev.target.closest('[data-rv]');
+    if(rv){ wvPvFill(o, rv.getAttribute('data-rv') || null); return; }
     if(ev.target.id === 'wvPvX' || ev.target === pv){ close(); return; }
     if(ev.target.id === 'wvPvPick'){
       close();
