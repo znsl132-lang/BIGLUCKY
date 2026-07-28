@@ -85,6 +85,36 @@
   .b-card .sub{display:flex;gap:10px;margin-top:8px;font-size:11.5px;color:var(--sub)}
   .b-card svg{margin-top:10px;width:100%;height:34px}
 
+  /* ===== 금일 설문 참여현황 패널 (지점 카드 클릭 시 아래로 펼침) ===== */
+  .b-panel{grid-column:1/-1;overflow:hidden;max-height:0;opacity:0;
+    background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);
+    border:2px solid var(--yellow);
+    transition:max-height .45s cubic-bezier(.2,.7,.3,1), opacity .3s ease}
+  .b-panel.open{max-height:1600px;opacity:1}
+  .b-panel .p-in{padding:16px 18px 18px}
+  .b-panel .p-head{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:12px}
+  .b-panel .p-title{font-size:14px;font-weight:800}
+  .b-panel .p-date{font-size:11.5px;color:var(--sub);font-weight:600}
+  .b-panel .p-total{font-size:12px;font-weight:800;background:var(--black);color:var(--yellow);
+    border-radius:20px;padding:3px 11px}
+  .b-panel .p-copy{margin-left:auto;border:1px solid var(--line);background:#fafafa;border-radius:8px;
+    padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;color:var(--sub)}
+  .b-panel .p-copy:hover{border-color:var(--yellow);background:#fffdf3;color:var(--black)}
+  .b-panel .p-copy.done{background:var(--yellow);color:#111;border-color:var(--yellow)}
+  .nat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
+  .nat{border:1px solid var(--line);border-radius:10px;padding:11px 13px;background:#fcfcfc}
+  .nat.empty{opacity:.45}
+  .nat .nat-h{font-size:12.5px;font-weight:800;display:flex;align-items:center;gap:6px;margin-bottom:6px}
+  .nat .nat-h b{margin-left:auto;font-size:11.5px;color:var(--sub);font-weight:700}
+  .nat .ln{font-size:12px;color:#374151;padding:3px 0 3px 13px;position:relative;line-height:1.5}
+  .nat .ln::before{content:"\21B3";position:absolute;left:0;top:3px;color:#c8ccd2;font-size:11px}
+  .nat .ln .g{font-weight:700;color:#111}
+  .nat .ln .d{color:#9ca3af}
+  .nat .none{font-size:12px;color:#9ca3af;padding:1px 0}
+  .p-empty{font-size:12.5px;color:var(--sub);padding:4px 0}
+  .p-warn{font-size:12.5px;color:#b45309;background:#fffbeb;border:1px solid #fde68a;
+    border-radius:9px;padding:10px 12px;line-height:1.55}
+
   /* 지점별 리뷰 수 배지 (네이버/카카오맵/티맵/당근) */
   .rv-row{display:flex;gap:5px;margin-top:9px;flex-wrap:wrap}
   .rv{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:#374151;
@@ -494,7 +524,110 @@ function renderBranches(){
       ${sparklineHtml(b.daily)}`;
     card.onclick = () => selectBranch(selected===b.name ? null : b.name);
     grid.appendChild(card);
+    if (selected === b.name){                      // 선택 지점 바로 아래에 펼침 패널
+      const panel = document.createElement("div");
+      panel.className = "b-panel";
+      panel.id = "todayPanel";
+      panel.innerHTML = panelHtml(b);
+      grid.appendChild(panel);
+      requestAnimationFrame(() => panel.classList.add("open"));
+    }
   });
+}
+
+/* ==========================================================
+   금일 설문 참여현황 패널
+   Apps Script가 지점별로 today:[{lang,gender,route,detail}] 를
+   내려주면 지점 카드 아래에 펼쳐진다. (이름·전화번호는 받지 않는다)
+   ========================================================== */
+const esc = v => String(v == null ? "" : v)
+  .replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+const NAT_KEYS = ["내수","일본","중국","영어권"];
+const NAT_LABEL = {"내수":"[내수]","일본":"[일본유커]","중국":"[중국 유커]","영어권":"[기타외국인]"};
+function natOf(lang){
+  const k = String(lang || "");
+  const s = k.toLowerCase();
+  if (k.includes("한국") || s.includes("korea")) return "내수";
+  if (k.includes("일본") || k.includes("日本") || s.includes("japan")) return "일본";
+  if (k.includes("중국") || k.includes("中文") || k.includes("中国") || s.includes("chin")) return "중국";
+  return "영어권";
+}
+
+/* 폼 선택지 -> 마감일지 항목 매핑 (기타는 방문경로상세 키워드로 추정) */
+const ROUTE_RULES = [
+  {to:"지도톡톡", re:/톡톡/},
+  {to:"매장이전", re:/이전|이사|옮기|옮겨|moved|relocat/i},
+  {to:"지인소개", re:/지인|친구|소개|추천|아는|동생|형|누나|언니|朋友|介绍|友人|紹介|friend|recommend|acquaint|word of mouth/i},
+  {to:"검색방문", re:/검색|네이버|카카오|구글|인터넷|지도|맵|블로그|어플|앱|地图|搜索|검색해|google|naver|kakao|map|search|blog|online/i},
+  {to:"지나가다", re:/지나|걷|길가|길 |길을|보였|보여|보고|간판|근처|앞|우연|路过|散步|通り|walk|pass|sign|street|nearby|saw/i}
+];
+function routeOf(row){
+  const r = String(row.route || "").trim();
+  const d = String(row.detail || "").trim();
+  if (r.includes("간판")) return "지나가다";
+  if (r.includes("인터넷") || r.includes("검색")) return "검색방문";
+  if (/sns/i.test(r)) return d ? d : "SNS";
+  if (r.includes("지인") || r.includes("추천") || r.includes("소개")) return "지인소개";
+  for (const rule of ROUTE_RULES) if (d && rule.re.test(d)) return rule.to;
+  return r || "기타";
+}
+function groupToday(b){
+  const g = {}; NAT_KEYS.forEach(k => g[k] = []);
+  (b.today || []).forEach(r => g[natOf(r.lang)].push(r));
+  return g;
+}
+function lineHtml(row){
+  const rt = routeOf(row);
+  const d = String(row.detail || "").trim().replace(/\s+/g, " ").slice(0, 22);
+  const showD = d && d !== rt;
+  return '<div class="ln"><span class="g">' + esc(row.gender || "-") + '</span> / '
+       + esc(rt) + (showD ? ' <span class="d">/ ' + esc(d) + '</span>' : '') + '</div>';
+}
+function panelHtml(b){
+  const today = fmt(daysAgo(0));
+  const head = '<div class="p-head">'
+    + '<span class="p-title">금일 설문 참여현황</span>'
+    + '<span class="p-date">' + today + '</span>';
+  if (!b.today){
+    return '<div class="p-in">' + head + '</div>'
+      + '<div class="p-warn">Apps Script가 아직 개별 응답(<b>today</b>)을 내려주지 않습니다.<br>'
+      + 'appsscript-Code.gs를 배포하면 이 자리에 표시됩니다.</div></div>';
+  }
+  const rows = b.today, g = groupToday(b);
+  const cards = NAT_KEYS.map(k => {
+    const arr = g[k];
+    if (!arr.length) return '<div class="nat empty"><div class="nat-h">' + k + '<b>-</b></div>'
+      + '<div class="none">없음</div></div>';
+    return '<div class="nat"><div class="nat-h">' + k + '<b>' + arr.length + '건</b></div>'
+      + arr.map(lineHtml).join("") + '</div>';
+  }).join("");
+  const body = rows.length
+    ? '<div class="nat-grid">' + cards + '</div>'
+    : '<div class="p-empty">오늘 접수된 설문이 없습니다.</div>';
+  return '<div class="p-in">' + head
+    + '<span class="p-total">총 ' + rows.length + '건</span>'
+    + '<button class="p-copy" onclick="copyDaily(this)">마감일지용 복사</button>'
+    + '</div>' + body + '</div>';
+}
+function copyDaily(btn){
+  const b = DATA.branches.find(x => x.name === selected);
+  if (!b || !b.today) return;
+  const g = groupToday(b);
+  let out = "■ " + b.name + " · " + fmt(daysAgo(0)) + " 금일 설문 " + b.today.length + "건\n";
+  NAT_KEYS.forEach(k => {
+    const arr = g[k];
+    out += "\n■ " + NAT_LABEL[k] + " 신규유입 : " + (arr.length ? arr.length + "명" : "-명") + "\n";
+    const cnt = {};
+    arr.forEach(r => { const rt = routeOf(r); cnt[rt] = (cnt[rt] || 0) + 1; });
+    const keys = Object.keys(cnt);
+    if (!keys.length) out += "ㆍ- : -명\n";
+    else keys.sort((x,y)=>cnt[y]-cnt[x]).forEach(rt => out += "ㆍ" + rt + " : " + cnt[rt] + "명\n");
+  });
+  navigator.clipboard.writeText(out).then(() => {
+    btn.classList.add("done"); btn.textContent = "복사됨 ✓";
+    setTimeout(() => { btn.classList.remove("done"); btn.textContent = "마감일지용 복사"; }, 1600);
+  }).catch(() => { btn.textContent = "복사 실패"; });
 }
 
 /* ---------- 차트 ---------- */
@@ -562,7 +695,10 @@ function selectBranch(name){
   if (name && !secState.detail) toggleSec("detail"); // 접혀 있으면 자동으로 펴기
   renderBranches();
   renderDetail();
-  if (name) document.querySelector(".charts").scrollIntoView({behavior:"smooth", block:"start"});
+  if (name){
+    const p = document.getElementById("todayPanel");
+    if (p) setTimeout(() => p.scrollIntoView({behavior:"smooth", block:"center"}), 60);
+  }
 }
 
 document.getElementById("periodToggle").addEventListener("click", e => {
@@ -640,7 +776,14 @@ function demoData(){
         flavor:{ "과일계열":rnd(20,60), "멘솔계열":rnd(10,30), "연초계열":rnd(5,15), "디저트계열":rnd(3,12) },
         consent:{ "동의":rnd(30,70), "미동의":rnd(10,30) },
         lang:{ "한국어":rnd(40,80), "English":rnd(0,8), "中文":rnd(0,10) }
-      }};
+      },
+      today: [
+        {lang:"한국어", gender:"남성", route:"인터넷 검색", detail:"네이버"},
+        {lang:"한국어", gender:"여성", route:"매장 간판",   detail:""},
+        {lang:"日本語", gender:"남성", route:"인터넷 검색", detail:"구글"},
+        {lang:"中文",   gender:"여성", route:"기타",        detail:"지인 소개"}
+      ].slice(0, rnd(0,4))
+      };
   });
   return { updatedAt: "샘플 데이터", branches };
 }
