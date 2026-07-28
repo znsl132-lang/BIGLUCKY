@@ -311,7 +311,9 @@ window.__ENH=function(){
     '#schedTable thead th.wvdsel{ background:#5b6cff !important; color:#fff !important; }',
     '#schedTable thead th.wvdsel small{ color:#dfe2ff !important; }',
     '#schedTable td.namecol{ cursor:pointer; }',
-    '#wvBar{ position:fixed; left:50%; bottom:14px; transform:translateX(-50%); background:#23253a; color:#fff; padding:9px 14px; border-radius:12px; font-size:13px; z-index:9999; box-shadow:0 10px 30px rgba(0,0,0,.3); max-width:94vw; display:none; }',
+    '#wvBar{ position:fixed; left:50%; bottom:14px; transform:translateX(-50%); background:#23253a; color:#fff; padding:9px 14px; border-radius:12px; font-size:13px; z-index:9999; box-shadow:0 10px 30px rgba(0,0,0,.3); max-width:94vw; max-height:44vh; overflow:auto; text-align:left; line-height:1.75; display:none; }',
+    '#wvBar .wvst{ display:inline-block; margin:1px 12px 1px 0; white-space:nowrap; }',
+    '#wvBar .wvst i{ font-style:normal; color:#8fe3a0; font-weight:700; margin-right:5px; }',
     '#wvBar b{ color:#8fe3a0; } #wvBar .x{ margin-left:10px; cursor:pointer; opacity:.75; font-weight:700; }',
     '#wvModal{ position:fixed; inset:0; background:rgba(10,12,25,.55); z-index:10001; display:none; align-items:center; justify-content:center; padding:14px; }',
     '.wvc{ background:#fff; border-radius:18px; width:min(440px,95vw); max-height:88vh; overflow:auto; padding:15px; box-shadow:0 24px 70px rgba(0,0,0,.35); }',
@@ -361,14 +363,24 @@ window.__wvDay=function(d){
   window.__wvSelDay=d;
   var sel=tbl.querySelectorAll('[data-d="'+d+'"]');
   for(var j=0;j<sel.length;j++) sel[j].classList.add('wvdsel');
-  var cnt={}, work=0;
+  var byStore={}, work=0;
   var tds=tbl.querySelectorAll('tbody tr td[data-d="'+d+'"], tr td[data-d="'+d+'"]');
-  for(var k=0;k<tds.length;k++){ var td=tds[k]; if(td.classList.contains('store')){ var t=String(td.textContent).replace(/(OP|CL)$/,'').trim(); if(!t||t==='전휴무') continue; cnt[t]=(cnt[t]||0)+1; work++; } }
-  var keys=Object.keys(cnt).sort();
-  var parts=keys.map(function(x){ return x+' '+cnt[x]; }).join(' · ');
+  for(var k=0;k<tds.length;k++){ var td=tds[k];
+    if(!td.classList.contains('store')) continue;
+    var t=String(td.textContent).replace(/(OP|CL)$/,'').trim();
+    if(!t||t==='전휴무') continue;
+    var row=td.closest?td.closest('tr'):td.parentNode;
+    var nb=row?row.querySelector('td.namecol b'):null, nt=row?row.querySelector('td.namecol .ttl'):null;
+    var oc=td.querySelector('.opcl');
+    var who=(nb?nb.textContent.trim():'')+(nt&&nt.textContent.trim()?' '+nt.textContent.trim():'')+(oc?'('+oc.textContent.trim()+')':'');
+    (byStore[t]=byStore[t]||[]).push(who);
+    work++;
+  }
+  var keys=Object.keys(byStore).sort();
+  var parts=keys.map(function(x){ return '<span class="wvst"><i>'+x+'</i>'+byStore[x].join(', ')+'</span>'; }).join('');
   var th=tbl.querySelector('thead th[data-d="'+d+'"]')||tbl.querySelector('th[data-d="'+d+'"]');
   var dow=th&&th.querySelector('small')?th.querySelector('small').textContent:'';
-  if(bar){ bar.innerHTML='<b>'+d+'일'+(dow?'('+dow+')':'')+'</b> 근무 <b>'+work+'</b>명'+(parts?' &nbsp;<span style="opacity:.85">'+parts+'</span>':'')+'<span class="x" onclick="window.__wvDay('+d+')">✕</span>'; bar.style.display='block'; }
+  if(bar){ bar.innerHTML='<div><b>'+d+'일'+(dow?'('+dow+')':'')+'</b> 근무 <b>'+work+'</b>명<span class="x" onclick="window.__wvDay('+d+')">✕</span></div>'+(parts?'<div style="opacity:.92;margin-top:3px">'+parts+'</div>':''); bar.style.display='block'; }
 };
 window.__wvCal=function(tr){
   var tbl=document.getElementById('schedTable'); if(!tbl||!tr) return;
