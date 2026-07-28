@@ -82,6 +82,7 @@
     #schedTable tbody tr.sel td.off::after{font-size:7px}
   }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -419,6 +420,106 @@ window.__wvCal=function(tr){
 document.addEventListener('keydown',function(e){ if(e.key==='Escape') window.__wvClose(); });
 if(typeof render==='function' && !render.__wvw){ var _r=render; var w=function(){ var out=_r.apply(this,arguments); try{ window.__wvSelDay=null; var b=document.getElementById('wvBar'); if(b)b.style.display='none'; window.__ENH(); }catch(e){} return out; }; w.__wvw=true; render=w; }
 try{ window.__ENH(); }catch(e){}
+})();
+</script>
+<script>
+/* ===== 엑셀 사본 저장 (파일명: YYYY년 M월 직원 스케줄.xlsx) ===== */
+(function(){
+  var PAL = ['ffe9ec','fff3d6','e3f2fd','e8f5e9','f3e5f5','e0f7fa','fff8e1','efebe9','ede7f6','f1f8e9','fde2ff','e2fff3'];
+  var SPECIAL = { '전휴무':'FCE4EC', '휴가':'FFC7CE', '훈련':'FFE9C9', '병가':'E7DCFF', '출장':'DDEBF7' };
+
+  // 원본 데이터 보관 (render를 한 겹 더 감싼다)
+  if(typeof render === 'function' && !render.__wvdl){
+    var _r = render;
+    var w = function(rows){ try{ window.__wvRows = rows; }catch(e){} var out = _r.apply(this, arguments); try{ wvAddBtn(); }catch(e){} return out; };
+    w.__wvdl = true; render = w;
+  }
+
+  function wvAddBtn(){
+    if(document.getElementById('wvDl')) return;
+    var stamp = document.getElementById('stamp');
+    if(!stamp || !stamp.parentNode) return;
+    var b = document.createElement('button');
+    b.id = 'wvDl'; b.type = 'button'; b.textContent = '엑셀 저장';
+    b.style.cssText = 'margin-right:6px;padding:3px 9px;font-size:12px;font-weight:700;border:1px solid var(--line);border-radius:7px;background:#fff;color:#333;cursor:pointer';
+    b.addEventListener('click', wvDownload);
+    stamp.parentNode.insertBefore(b, stamp);
+  }
+
+  function wvDownload(){
+    var rows = window.__wvRows;
+    if(!rows || !rows.length){ alert('아직 스케줄을 불러오지 못했습니다. 잠시 후 다시 눌러주세요.'); return; }
+    if(typeof XLSX === 'undefined'){ alert('엑셀 모듈을 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.'); return; }
+    var aoa = rows.map(function(r){ return r.map(function(c){ return String(c == null ? '' : c); }); });
+    var hi = -1;
+    for(var i = 0; i < aoa.length; i++){ if(aoa[i].some(function(x){ return x.trim() === '성명'; })){ hi = i; break; } }
+    if(hi < 0) hi = 1;
+    var header = aoa[hi];
+    var nameCol = header.map(function(x){ return x.trim(); }).indexOf('성명');
+    if(nameCol < 0) nameCol = 1;
+    var dayIdx = [];
+    for(var c = 0; c < header.length; c++) if(/^\d{1,2}$/.test(header[c].trim())) dayIdx.push(c);
+    var firstDay = dayIdx.length ? dayIdx[0] : nameCol + 3;
+    var lastDay  = dayIdx.length ? dayIdx[dayIdx.length - 1] : header.length - 1;
+    var maxc = Math.max.apply(null, aoa.map(function(r){ return r.length; }));
+
+    var cmap = {}, pci = 0;
+    function scolor(n){ if(!(n in cmap)){ cmap[n] = PAL[pci % PAL.length].toUpperCase(); pci++; } return cmap[n]; }
+    aoa.slice(hi + 2).forEach(function(r){
+      dayIdx.forEach(function(c){
+        var v = (r[c] || '').trim().replace(/\((OP|CL)\)$/, '').trim();
+        if(v && !SPECIAL[v]) scolor(v);
+      });
+    });
+
+    var ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols'] = Array.apply(null, { length: maxc }).map(function(_, i){
+      return { wch: i < firstDay ? 9 : (i > lastDay ? 8 : 5.5) };
+    });
+    var bd = { style: 'thin', color: { rgb: 'D9D9D9' } };
+    var border = { top: bd, bottom: bd, left: bd, right: bd };
+    for(var r2 = 0; r2 < aoa.length; r2++){
+      for(var c2 = 0; c2 < maxc; c2++){
+        var ref = XLSX.utils.encode_cell({ r: r2, c: c2 });
+        if(!ws[ref]) ws[ref] = { t: 's', v: '' };
+        var st = { border: border, alignment: { horizontal: 'center', vertical: 'center', wrapText: true }, font: { sz: 10 } };
+        var v2 = String(ws[ref].v == null ? '' : ws[ref].v).trim();
+        if(r2 < hi){ st.font = { sz: 14, bold: true }; st.alignment = { horizontal: 'left', vertical: 'center' }; }
+        else if(r2 === hi || r2 === hi + 1){
+          st.fill = { fgColor: { rgb: '2B2D42' } };
+          st.font = { sz: 10, bold: true, color: { rgb: 'FFFFFF' } };
+          if(r2 === hi + 1 && v2 === '토') st.font.color = { rgb: '8FBAFF' };
+          if(r2 === hi + 1 && v2 === '일') st.font.color = { rgb: 'FF9D9D' };
+        }
+        else if(c2 < firstDay){ st.fill = { fgColor: { rgb: 'FAFAFB' } }; if(c2 === nameCol) st.font = { sz: 10, bold: true }; }
+        else if(c2 > lastDay){ st.fill = { fgColor: { rgb: 'FAFAFB' } }; st.font = { sz: 10, bold: true }; }
+        else {
+          var base = v2.replace(/\((OP|CL)\)$/, '').trim();
+          if(v2 === '') st.fill = { fgColor: { rgb: 'F1F1F1' } };
+          else if(SPECIAL[base]) st.fill = { fgColor: { rgb: SPECIAL[base] } };
+          else if(base) st.fill = { fgColor: { rgb: scolor(base) } };
+        }
+        ws[ref].s = st;
+      }
+    }
+    if(aoa[0] && aoa[0][0]) ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: maxc - 1 } }];
+    ws['!rows'] = aoa.map(function(_, r3){ return { hpt: r3 === 0 ? 26 : (r3 <= hi + 1 ? 17 : 20) }; });
+
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '스케줄');
+
+    var t = (aoa[0] && aoa[0][0] ? aoa[0][0].trim() : ''), name;
+    if(/직원\s*스케줄/.test(t)) name = t;
+    else {
+      var sel = document.getElementById('monthSel');
+      var p = String(sel && sel.value ? sel.value : '').split('-');
+      name = (p.length === 2) ? (p[0] + '년 ' + parseInt(p[1], 10) + '월 직원 스케줄') : '직원 스케줄';
+    }
+    XLSX.writeFile(wb, name + '.xlsx');
+  }
+
+  window.wvDownload = wvDownload;
+  try{ wvAddBtn(); }catch(e){}
 })();
 </script>
 </html>
