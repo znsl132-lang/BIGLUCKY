@@ -61,6 +61,18 @@ STORE_TERMS = [
 # '위베이프'로 검색하면 동명의 온라인 쇼핑몰 글이 섞인다. 우리 매장 언급이 아니므로 버린다.
 STORE_NOISE = ["wevape.co.kr", "우주베이프", "쿠팡", "네이버쇼핑", "스마트스토어", "무료배송", "택배발송"]
 
+# 네이버 검색은 '위베이프 구월'을 "베이프" + "구월" 로 느슨하게 매칭한다.
+# 그래서 베이프스킨·Bape 의류·메타베이프 카페 글이 대량으로 섞인다.
+# 제목이나 요약에 아래 표기가 실제로 있는 글만 남긴다.
+STORE_REQUIRE = ["위베이프", "wevape", "we vape"]
+
+# 담배사업법상 '담배'는 액상·연초다. 기기(디바이스) 중고거래는 온라인 판매 금지 대상이 아니다.
+# 두 조건을 모두 만족해야 통과한다: (액상·니코틴 언급) AND (판매·거래 의도)
+WATCH_REQUIRE = [
+    ["액상", "니코틴", "리퀴드", "무니코틴", "합성니코틴", "원액"],
+    ["판매", "팝니다", "팔아", "택배", "거래", "구매대행", "양도", "넘겨", "처분"],
+]
+
 # ─────────────────────────────────────────────────────────────
 # ② 그룹 정의 — 위에 있는 그룹이 대시보드에서 먼저 보인다
 # ─────────────────────────────────────────────────────────────
@@ -74,6 +86,7 @@ GROUPS = [
         "drop_ads": False,          # 매장 언급은 광고성이라도 봐야 한다
         "drop_politics": False,
         "drop_words": STORE_NOISE,  # 동명 쇼핑몰 글 제거
+        "require_any": STORE_REQUIRE,   # 브랜드 표기가 본문에 실제로 있어야 통과
         "alert": True,              # 새 글이 잡히면 카톡 알림
     },
     {
@@ -92,6 +105,7 @@ GROUPS = [
         ],
         "drop_ads": False,
         "drop_politics": False,
+        "require_any": WATCH_REQUIRE,   # 기기만 거래하는 글은 제외
         "alert": True,
     },
     {
@@ -348,6 +362,15 @@ def main():
                     dw = g.get("drop_words") or []
                     if dw and any(w in (blob + " " + link) for w in dw):
                         continue
+                    # 네이버 검색의 느슨한 매칭을 후처리로 조인다.
+                    # 카페명·블로그명은 검사하지 않는다 (카페 이름에 '액상'이 들어있는 경우가 많다)
+                    # 리스트의 리스트면 각 묶음마다 하나 이상 맞아야 한다 (AND 조건)
+                    ra = g.get("require_any") or []
+                    if ra:
+                        sets = ra if isinstance(ra[0], list) else [ra]
+                        low = blob.lower()
+                        if not all(any(w in low for w in s) for s in sets):
+                            continue
                     if any(w in title for w in NOISE_WORDS):
                         continue
 
