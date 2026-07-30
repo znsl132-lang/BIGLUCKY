@@ -38,7 +38,8 @@ TREND_HOSTS = [
 
 WINDOW_HOURS = int(os.environ.get("WINDOW_HOURS", "30"))   # 뉴스·블로그 기간 필터
 DISPLAY = 30                                              # 키워드당 조회 건수
-MAX_PER_GROUP = 60
+MAX_PER_GROUP = 30                                        # 그룹당 노출 상한 (60→30, 다 안 읽는다)
+MAX_PER_SOURCE = 3                                        # 같은 언론사·카페 최대 건수
 HISTORY_DAYS = 90                                         # 추이 보관 기간
 SEEN_DAYS = 30                                            # 중복 판정용 링크 보관 기간
 
@@ -58,13 +59,39 @@ STORE_TERMS = [
     "위베이프 연수",
     "위베이프 인천공항",
 ]
+
+# 우리 9지점을 가리키는 지역 토큰. 타 가맹점 글을 걸러내는 기준이다.
+OUR_AREAS = ["구월", "로데오", "길병원", "상동", "신중동", "검단", "계산", "논현", "연수", "공항"]
+
+# 타 지역 가맹점 표기. 위베이프 브랜드 글이지만 우리 매장이 아니다.
+# 화면에서 타 지역 글이 보이면 여기에 지역명을 추가하면 된다.
+OTHER_STORES = ["강남역", "신논현", "역삼", "압구정", "대구", "호산동",
+                "부평", "굴포천", "부산", "대전", "광주", "천안", "수원"]
+
+# 담배·전자담배 소재 관련어. 업종·브랜드 뉴스는 이게 실제로 언급돼야 통과한다.
+TOBACCO_WORDS = [
+    "전자담배", "담배", "니코틴", "액상", "흡연", "금연", "담뱃세", "궐련", "연초",
+    "베이프", "vape", "담배사업법", "유해성",
+]
+
+# 매장 운영에 실제로 걸리는 경제·사회 소재
+LOCAL_BIZ_WORDS = [
+    "소상공인", "자영업", "상권", "임대료", "카드 수수료", "카드수수료", "최저임금",
+    "폐업", "창업", "매출", "소비", "내수", "골목상권", "전통시장",
+    "배달", "인건비", "대출", "지원금", "부가세", "종합소득세", "생활물가",
+]
 # '위베이프'로 검색하면 동명의 온라인 쇼핑몰 글이 섞인다. 우리 매장 언급이 아니므로 버린다.
 STORE_NOISE = ["wevape.co.kr", "우주베이프", "쿠팡", "네이버쇼핑", "스마트스토어", "무료배송", "택배발송"]
 
 # 네이버 검색은 '위베이프 구월'을 "베이프" + "구월" 로 느슨하게 매칭한다.
 # 그래서 베이프스킨·Bape 의류·메타베이프 카페 글이 대량으로 섞인다.
 # 제목이나 요약에 아래 표기가 실제로 있는 글만 남긴다.
-STORE_REQUIRE = ["위베이프", "wevape", "we vape"]
+# 두 조건을 모두 만족해야 통과: (브랜드 표기) AND (우리 지점 지역명)
+# 이 두 번째 조건이 강남역점·대구·부평 같은 타 가맹점 글을 걸러낸다.
+STORE_REQUIRE = [
+    ["위베이프", "wevape", "we vape"],
+    OUR_AREAS,
+]
 
 # 담배사업법상 '담배'는 액상·연초다. 기기(디바이스) 중고거래는 온라인 판매 금지 대상이 아니다.
 # 두 조건을 모두 만족해야 통과한다: (액상·니코틴 언급) AND (판매·거래 의도)
@@ -82,10 +109,12 @@ GROUPS = [
         "label": "우리 매장",
         "desc": "매장·지점 언급 감시",
         "sources": ["cafearticle", "blog"],
-        "keywords": BRAND_TERMS + STORE_TERMS,
+        # 우리 9지점만 본다. 브랜드 전체 언급을 보려면 BRAND_TERMS + STORE_TERMS 로 바꾸고
+        # STORE_REQUIRE 의 두 번째 조건(OUR_AREAS)을 지우면 된다.
+        "keywords": STORE_TERMS,
         "drop_ads": False,          # 매장 언급은 광고성이라도 봐야 한다
         "drop_politics": False,
-        "drop_words": STORE_NOISE,  # 동명 쇼핑몰 글 제거
+        "drop_words": STORE_NOISE + OTHER_STORES,   # 동명 쇼핑몰 + 타 지역 가맹점 제거
         "require_any": STORE_REQUIRE,   # 브랜드 표기가 본문에 실제로 있어야 통과
         "alert": True,              # 새 글이 잡히면 카톡 알림
     },
@@ -125,6 +154,7 @@ GROUPS = [
         ],
         "drop_ads": False,
         "drop_politics": False,     # 규제 뉴스는 국회·법안 언급이 필연이다
+        "require_any": TOBACCO_WORDS,   # 소재가 담배가 아닌 기사 제거
         "alert": False,
     },
     {
@@ -143,6 +173,8 @@ GROUPS = [
         ],
         "drop_ads": True,           # 체험단·협찬 포스팅 제거
         "drop_politics": False,
+        "require_any": ["전자담배", "액상", "코일", "누유", "입호흡", "폐호흡",
+                        "베이프", "팟", "기기", "니코틴", "카트리지"],
         "alert": False,
     },
     {
@@ -154,17 +186,21 @@ GROUPS = [
                      "KT&G", "필립모리스", "BAT로스만스"],
         "drop_ads": True,
         "drop_politics": False,
+        # KT&G 인삼공사·부동산 기사, 필립모리스 주가 기사 등을 걸러낸다
+        "require_any": TOBACCO_WORDS,
         "alert": False,
     },
     {
         "id": "econ",
-        "label": "경제·사회",
-        "desc": "정치 제외 · 참고용",
+        "label": "경제·상권",
+        "desc": "자영업·소상공인 관점 · 정치 제외",
         "sources": ["news"],
-        "keywords": ["환율", "금리", "물가", "소비심리", "자영업", "소상공인",
-                     "최저임금", "카드 수수료"],
+        "keywords": ["소상공인", "자영업", "상권", "카드 수수료", "최저임금",
+                     "임대료", "내수 소비", "생활물가"],
         "drop_ads": False,
         "drop_politics": True,
+        # 거시 시황 기사가 아니라 매장 운영에 걸리는 기사만 남긴다
+        "require_any": LOCAL_BIZ_WORDS,
         "alert": False,
     },
 ]
@@ -195,7 +231,15 @@ AD_WORDS = [
     "협찬", "체험단", "원고료", "제공받아", "제공 받아", "소정의", "무상으로 제공",
     "파트너스", "제휴", "광고 포함", "유료광고", "서포터즈", "리뷰단",
 ]
-NOISE_WORDS = ["부고", "인사발령", "포토", "오늘의 운세", "주간 운세", "코스피 마감"]
+# 소재와 무관한 기사 유형. 뉴스가 중구난방해지는 주범이다.
+NOISE_WORDS = [
+    "부고", "인사발령", "인사]", "포토", "화보", "오늘의 운세", "주간 운세", "신간",
+    "코스피", "코스닥", "증시", "마감시황", "개장", "장마감", "특징주", "상한가", "하한가",
+    "주가", "목표주가", "매수의견", "공시", "유상증자", "배당", "실적발표", "컨센서스",
+    "오늘의 날씨", "주간 날씨", "미세먼지 농도", "로또", "부동산 시황", "분양", "청약",
+    "인사·부고", "동정", "만평", "사설", "오늘의 사진",
+]
+
 
 SOURCE_PATH = {
     "news": "/search/v1/news",
@@ -311,6 +355,7 @@ def main():
     for g in GROUPS:
         print(f"\n[{g['label']}]")
         items, dup_links, dup_titles = [], set(), set()
+        per_source = {}          # 같은 언론사·카페가 화면을 점령하는 것을 막는다
 
         for src in g["sources"]:
             path = SOURCE_PATH[src]
@@ -390,13 +435,20 @@ def main():
                     if not dated and not is_new:
                         continue
 
+                    where = (it.get("cafename") or it.get("bloggername")
+                             or re.sub(r"^https?://(www\.|news\.|m\.)?([^/]+).*", r"\2", link))
+                    # 같은 매체가 몰아서 올린 기사는 상한까지만 (매장 언급은 예외)
+                    if not g["alert"]:
+                        per_source[where] = per_source.get(where, 0) + 1
+                        if per_source[where] > MAX_PER_SOURCE:
+                            continue
+
                     row = {
                         "title": title,
                         "desc": desc[:180],
                         "link": it.get("link") or link,
                         "src": SOURCE_LABEL[src],
-                        "where": it.get("cafename") or it.get("bloggername")
-                                 or re.sub(r"^https?://(www\.|news\.|m\.)?([^/]+).*", r"\2", link),
+                        "where": where,
                         "pub": pub or ("신규" if is_new else ""),
                         "kw": kw,
                         "new": is_new,
