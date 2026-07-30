@@ -110,6 +110,31 @@ ISSUE_WORDS = [
     "가향", "향료", "첨가물", "허위", "과장 광고",
 ]
 
+# 정책·시장 소재. 업종 뉴스는 이슈 아니면 이쪽이라도 걸려야 통과한다.
+POLICY_WORDS = [
+    "법안", "개정", "입법", "시행령", "시행규칙", "국회", "발의", "의결",
+    "과세", "세율", "제세부담금", "세금", "인상", "면세",
+    "소매인", "지정", "허가", "신고제", "인증", "표시 의무", "경고그림",
+    "시장", "점유율", "출시", "판매량", "매출", "수입", "유통", "업계",
+    "식약처", "복지부", "기재부", "관세청", "공정위", "소비자원",
+]
+
+# 지방 보건소·지자체 금연사업 기사. 전국 규제 이슈와 달리 매장 운영과 무관하다.
+# (괴산군 건강지표, 화순전남대병원 금연문화 기사가 뜬 것을 계기로 — 2026-07-30)
+LOCAL_HEALTH_NOISE = [
+    "보건소", "보건지소", "보건의료원", "건강지표", "지역사회건강조사",
+    "지역사회 건강조사", "금연클리닉", "금연 클리닉", "금연사업", "금연 사업",
+    "금연 캠페인", "금연캠페인", "금연서포터즈", "금연지원", "흡연예방 교육",
+    "건강증진사업", "건강생활실천", "건강도시", "보건행정", "금연문화",
+]
+
+# 연예·방송 기사. 유명인이 전자담배를 언급했다는 이유로 딸려온다.
+ENTERTAIN_NOISE = [
+    "임신", "출산", "부모 된다", "결혼", "열애", "이혼", "재혼",
+    "예능", "방송인", "개그맨", "개그우먼", "아이돌", "가수", "배우",
+    "드라마", "영화", "소속사", "팬미팅", "컴백", "출연", "MC",
+]
+
 # 어떤 그룹에서도 보고 싶지 않은 소재. 검색어와 무관하게 딸려오는 강력범죄·사건 기사다.
 # (업종 뉴스에 아동 성범죄 기사가 뜬 것을 계기로 추가 — 2026-07-30)
 HARD_BLOCK = [
@@ -198,7 +223,10 @@ GROUPS = [
         ],
         "drop_ads": False,
         "drop_politics": False,     # 규제 뉴스는 국회·법안 언급이 필연이다
-        "require_any": VAPE_WORDS,  # 전자담배 소재가 아닌 기사 제거
+        # 두 조건을 모두 만족해야 통과: (전자담배 소재) AND (이슈 또는 정책·시장)
+        # 전자담배가 스쳐 지나가듯 한 번 언급된 기사를 걸러낸다
+        "require_any": [VAPE_WORDS, ISSUE_WORDS + POLICY_WORDS],
+        "drop_words": LOCAL_HEALTH_NOISE + ENTERTAIN_NOISE,
         "alert": False,
     },
     {
@@ -263,6 +291,7 @@ GROUPS = [
         "drop_politics": False,
         # KT&G 인삼공사·부동산 기사, 필립모리스 주가 기사 등을 걸러낸다
         "require_any": VAPE_WORDS,
+        "drop_words": LOCAL_HEALTH_NOISE + ENTERTAIN_NOISE,
         "alert": False,
     },
 ]
@@ -416,7 +445,7 @@ def main():
 
     for g in GROUPS:
         print(f"\n[{g['label']}]")
-        items, dup_links, dup_titles = [], set(), set()
+        items, dup_links, dup_titles, dup_descs = [], set(), set(), set()
         per_source = {}          # 같은 언론사·카페가 화면을 점령하는 것을 막는다
 
         for src in g["sources"]:
@@ -485,12 +514,18 @@ def main():
                         continue
 
                     # ── 중복 ──
+                    # 보도자료를 여러 매체가 그대로 받아쓰면 제목만 조금씩 다르다.
+                    # 요약문 앞부분까지 대조해야 같은 기사로 잡힌다.
                     nt = norm_title(title)
-                    if link in dup_links or (nt and nt in dup_titles):
+                    nd = re.sub(r"[^\w가-힣]", "", desc)[:45]
+                    if link in dup_links or (nt and nt in dup_titles) \
+                       or (len(nd) >= 25 and nd in dup_descs):
                         continue
                     dup_links.add(link)
                     if nt:
                         dup_titles.add(nt)
+                    if len(nd) >= 25:
+                        dup_descs.add(nd)
 
                     lh = h10(link)
                     is_new = lh not in seen
