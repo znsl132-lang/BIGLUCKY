@@ -1,0 +1,461 @@
+# -*- coding: utf-8 -*-
+"""
+We Vape 이슈 수집기 — 네이버 뉴스·블로그·카페글·웹문서 + 검색어 트렌드
+
+환경변수 (GitHub Secrets):
+  NAVER_CLIENT_ID     : NCP NAVER API HUB Client ID
+  NAVER_CLIENT_SECRET : NCP NAVER API HUB Client Secret
+
+결과: feeds.json  (대시보드와 알림 스크립트가 함께 읽는다)
+
+▼ 고칠 곳은 딱 두 군데다
+  1. BRAND_TERMS / STORE_TERMS — 실제 간판·네이버플레이스 표기에 맞게
+  2. GROUPS 의 keywords
+"""
+
+import hashlib
+import html as htmllib
+import json
+import os
+import re
+import sys
+import time
+from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
+
+KST = timezone(timedelta(hours=9))
+OUT_PATH = os.environ.get("OUT_PATH", "feeds.json")
+
+SEARCH_HOST = "https://naverapihub.apigw.ntruss.com"
+# 검색어 트렌드는 호스트가 이관 중이라 두 곳을 순서대로 시도한다
+TREND_HOSTS = [
+    "https://naverapihub.apigw.ntruss.com",
+    "https://naveropenapi.apigw.ntruss.com",
+]
+
+WINDOW_HOURS = int(os.environ.get("WINDOW_HOURS", "30"))   # 뉴스·블로그 기간 필터
+DISPLAY = 30                                              # 키워드당 조회 건수
+MAX_PER_GROUP = 60
+HISTORY_DAYS = 90                                         # 추이 보관 기간
+SEEN_DAYS = 30                                            # 중복 판정용 링크 보관 기간
+
+# ─────────────────────────────────────────────────────────────
+# ① 우리 매장 — 여기가 가장 중요하다. 실제 표기로 맞출 것
+# ─────────────────────────────────────────────────────────────
+BRAND_TERMS = ["위베이프", "WEVAPE", "위베이프 전자담배"]
+STORE_TERMS = [
+    "위베이프 구월",
+    "위베이프 로데오",
+    "위베이프 길병원",
+    "위베이프 상동",
+    "위베이프 신중동",
+    "위베이프 검단",
+    "위베이프 계산",
+    "위베이프 논현",
+    "위베이프 연수",
+    "위베이프 인천공항",
+]
+# '위베이프'로 검색하면 동명의 온라인 쇼핑몰 글이 섞인다. 우리 매장 언급이 아니므로 버린다.
+STORE_NOISE = ["wevape.co.kr", "우주베이프", "쿠팡", "네이버쇼핑", "스마트스토어", "무료배송", "택배발송"]
+
+# ─────────────────────────────────────────────────────────────
+# ② 그룹 정의 — 위에 있는 그룹이 대시보드에서 먼저 보인다
+# ─────────────────────────────────────────────────────────────
+GROUPS = [
+    {
+        "id": "store",
+        "label": "우리 매장",
+        "desc": "매장·지점 언급 감시",
+        "sources": ["cafearticle", "blog"],
+        "keywords": BRAND_TERMS + STORE_TERMS,
+        "drop_ads": False,          # 매장 언급은 광고성이라도 봐야 한다
+        "drop_politics": False,
+        "drop_words": STORE_NOISE,  # 동명 쇼핑몰 글 제거
+        "alert": True,              # 새 글이 잡히면 카톡 알림
+    },
+    {
+        "id": "watch",
+        "label": "판매 감시",
+        "desc": "온라인·택배 판매 (26.4.24 이후 금지)",
+        "sources": ["cafearticle", "webkr"],
+        "keywords": [
+            "액상 택배",
+            "액상 판매합니다",
+            "니코틴 원액 판매",
+            "무니코틴 액상 판매",
+            "전자담배 액상 구매대행",
+            "액상 대량 판매",
+            "폐업 액상 정리",
+        ],
+        "drop_ads": False,
+        "drop_politics": False,
+        "alert": True,
+    },
+    {
+        "id": "vape",
+        "label": "업종 뉴스",
+        "desc": "규제 · 시장",
+        "sources": ["news"],
+        "keywords": [
+            "전자담배",
+            "액상형 전자담배",
+            "궐련형 전자담배",
+            "합성니코틴",
+            "담배사업법",
+            "담뱃세",
+            "금연정책",
+            "청소년 담배",
+        ],
+        "drop_ads": False,
+        "drop_politics": False,     # 규제 뉴스는 국회·법안 언급이 필연이다
+        "alert": False,
+    },
+    {
+        "id": "community",
+        "label": "커뮤니티",
+        "desc": "후기 · 고장 사례",
+        "sources": ["cafearticle", "blog"],
+        "keywords": [
+            "전자담배 후기",
+            "액상 추천",
+            "전자담배 고장",
+            "코일 누유",
+            "기기 불량",
+            "입호흡 액상",
+            "폐호흡 액상",
+        ],
+        "drop_ads": True,           # 체험단·협찬 포스팅 제거
+        "drop_politics": False,
+        "alert": False,
+    },
+    {
+        "id": "brand",
+        "label": "경쟁사·브랜드",
+        "desc": "브랜드 동향",
+        "sources": ["news", "cafearticle"],
+        "keywords": ["쥴 전자담배", "릴 전자담배", "아이코스", "글로 전자담배",
+                     "KT&G", "필립모리스", "BAT로스만스"],
+        "drop_ads": True,
+        "drop_politics": False,
+        "alert": False,
+    },
+    {
+        "id": "econ",
+        "label": "경제·사회",
+        "desc": "정치 제외 · 참고용",
+        "sources": ["news"],
+        "keywords": ["환율", "금리", "물가", "소비심리", "자영업", "소상공인",
+                     "최저임금", "카드 수수료"],
+        "drop_ads": False,
+        "drop_politics": True,
+        "alert": False,
+    },
+]
+
+# ─────────────────────────────────────────────────────────────
+# ③ 검색어 트렌드 — 최대 5그룹, 그룹당 5키워드
+# ─────────────────────────────────────────────────────────────
+TREND_GROUPS = [
+    {"groupName": "전자담배",   "keywords": ["전자담배", "액상 전자담배", "전자담배 액상"]},
+    {"groupName": "브랜드",     "keywords": ["쥴", "릴", "아이코스", "글로"]},
+    {"groupName": "액상",       "keywords": ["입호흡 액상", "폐호흡 액상", "무니코틴 액상"]},
+    {"groupName": "지역",       "keywords": ["인천 전자담배", "부천 전자담배"]},
+    {"groupName": "금연",       "keywords": ["금연", "금연보조제"]},
+]
+TREND_DAYS = 90
+
+# ─────────────────────────────────────────────────────────────
+# 필터 단어
+# ─────────────────────────────────────────────────────────────
+POLITICS_WORDS = [
+    "대통령", "대선", "총선", "지방선거", "선거", "공천", "탄핵", "개각",
+    "국민의힘", "더불어민주당", "민주당", "조국혁신당", "개혁신당",
+    "여당", "야당", "여야", "정당", "당대표", "원내대표", "최고위",
+    "국회의원", "의원총회", "청문회", "국정감사", "대정부질문",
+    "청와대", "대통령실", "정치권", "출마", "당론", "정계",
+]
+AD_WORDS = [
+    "협찬", "체험단", "원고료", "제공받아", "제공 받아", "소정의", "무상으로 제공",
+    "파트너스", "제휴", "광고 포함", "유료광고", "서포터즈", "리뷰단",
+]
+NOISE_WORDS = ["부고", "인사발령", "포토", "오늘의 운세", "주간 운세", "코스피 마감"]
+
+SOURCE_PATH = {
+    "news": "/search/v1/news",
+    "blog": "/search/v1/blog",
+    "cafearticle": "/search/v1/cafearticle",
+    "webkr": "/search/v1/webkr",
+}
+SOURCE_LABEL = {"news": "뉴스", "blog": "블로그", "cafearticle": "카페", "webkr": "웹"}
+
+
+# ─────────────────────────────────────────────────────────────
+# 유틸
+# ─────────────────────────────────────────────────────────────
+
+def env(name):
+    v = os.environ.get(name, "").strip()
+    if not v:
+        sys.exit(f"[중단] 환경변수 {name} 가 비어 있습니다. GitHub Secrets 를 확인하세요.")
+    return v
+
+
+def clean(text):
+    return htmllib.unescape(re.sub(r"<[^>]+>", "", text or "")).strip()
+
+
+def h10(s):
+    return hashlib.sha1(s.encode("utf-8")).hexdigest()[:10]
+
+
+def norm_title(t):
+    return re.sub(r"[^\w가-힣]", "", t)[:28]
+
+
+def call(path, params, cid, csec, retries=3):
+    url = f"{SEARCH_HOST}{path}?{urlencode(params)}"
+    req = Request(url, headers={"X-NCP-APIGW-API-KEY-ID": cid,
+                                "X-NCP-APIGW-API-KEY": csec})
+    for i in range(retries):
+        try:
+            with urlopen(req, timeout=15) as r:
+                return json.loads(r.read().decode("utf-8"))
+        except HTTPError as e:
+            msg = e.read().decode("utf-8", "ignore")[:180]
+            if e.code == 429:
+                time.sleep(2 * (i + 1)); continue
+            if e.code == 401:
+                sys.exit(f"[중단] 인증 실패(401). Client ID/Secret 또는 API 권한 확인. {msg}")
+            if e.code == 403:
+                print(f"  ! 403 — Application 에서 해당 API 를 선택했는지 확인하세요. {msg}")
+                return None
+            print(f"  ! HTTP {e.code}: {msg}")
+            return None
+        except (URLError, TimeoutError) as e:
+            print(f"  ! 네트워크 오류: {e}")
+            time.sleep(1.5 * (i + 1))
+    return None
+
+
+def fetch_trend(cid, csec):
+    """검색어 트렌드. 호스트가 이관 중이라 두 곳을 시도한다."""
+    end = datetime.now(KST).date()
+    body = json.dumps({
+        "startDate": (end - timedelta(days=TREND_DAYS)).isoformat(),
+        "endDate": end.isoformat(),
+        "timeUnit": "week",
+        "keywordGroups": TREND_GROUPS,
+    }, ensure_ascii=False).encode("utf-8")
+
+    for host in TREND_HOSTS:
+        req = Request(f"{host}/datalab/v1/search", data=body, method="POST",
+                      headers={"X-NCP-APIGW-API-KEY-ID": cid,
+                               "X-NCP-APIGW-API-KEY": csec,
+                               "Content-Type": "application/json"})
+        try:
+            with urlopen(req, timeout=20) as r:
+                data = json.loads(r.read().decode("utf-8"))
+                print(f"  트렌드 OK ({host})")
+                return data
+        except HTTPError as e:
+            print(f"  ! 트렌드 {host} → HTTP {e.code}: {e.read().decode('utf-8','ignore')[:120]}")
+        except Exception as e:
+            # 트렌드 실패로 수집 결과 전체를 잃으면 안 된다. 로그만 남기고 넘어간다.
+            print(f"  ! 트렌드 {host} → {e}")
+    print("  ! 트렌드 수집 실패. Application 에서 '검색어 트렌드'를 선택했는지 확인하세요.")
+    return None
+
+
+# ─────────────────────────────────────────────────────────────
+# 수집
+# ─────────────────────────────────────────────────────────────
+
+def main():
+    cid, csec = env("NAVER_CLIENT_ID"), env("NAVER_CLIENT_SECRET")
+    now = datetime.now(KST)
+    cutoff = now - timedelta(hours=WINDOW_HOURS)
+    today = now.strftime("%Y-%m-%d")
+
+    # 이전 상태 이어받기
+    prev = {}
+    if os.path.exists(OUT_PATH):
+        try:
+            prev = json.load(open(OUT_PATH, encoding="utf-8"))
+        except Exception as e:
+            print(f"기존 {OUT_PATH} 읽기 실패, 초기화: {e}")
+    history = [h for h in prev.get("history", []) if h.get("date") != today]
+    seen = prev.get("seen", {})                 # {링크해시: 최초발견일}
+    seen_cut = (now - timedelta(days=SEEN_DAYS)).strftime("%Y-%m-%d")
+    seen = {k: v for k, v in seen.items() if v >= seen_cut}
+
+    calls = 0
+    out_groups, counts, new_alerts = [], {}, []
+
+    for g in GROUPS:
+        print(f"\n[{g['label']}]")
+        items, dup_links, dup_titles = [], set(), set()
+
+        for src in g["sources"]:
+            path = SOURCE_PATH[src]
+            for kw in g["keywords"]:
+                params = {"query": kw, "display": DISPLAY, "start": 1, "format": "json"}
+                if src != "webkr":                # 웹문서는 sort 파라미터가 없다
+                    params["sort"] = "date"
+                data = call(path, params, cid, csec)
+                calls += 1
+                time.sleep(0.12)
+                if not data:
+                    continue
+
+                kept = 0
+                for it in data.get("items", []):
+                    title = clean(it.get("title"))
+                    desc = clean(it.get("description"))
+                    link = it.get("originallink") or it.get("link") or ""
+                    if not link:
+                        continue
+                    blob = title + " " + desc
+
+                    # ── 날짜 ──
+                    # 카페글·웹문서는 날짜 필드가 없다. 기간 필터를 못 쓰므로
+                    # '이전 실행에 없던 링크'를 신규로 본다.
+                    pub, dated = "", False
+                    if it.get("pubDate"):                       # 뉴스
+                        try:
+                            d = parsedate_to_datetime(it["pubDate"]).astimezone(KST)
+                            if d < cutoff:
+                                continue
+                            pub, dated = d.strftime("%Y-%m-%d %H:%M"), True
+                        except Exception:
+                            continue
+                    elif it.get("postdate"):                    # 블로그 (YYYYMMDD)
+                        try:
+                            d = datetime.strptime(it["postdate"], "%Y%m%d").replace(tzinfo=KST)
+                            if d.date() < (now - timedelta(days=2)).date():
+                                continue
+                            pub, dated = d.strftime("%Y-%m-%d"), True
+                        except Exception:
+                            continue
+
+                    # ── 필터 ──
+                    if g["drop_politics"] and any(w in blob for w in POLITICS_WORDS):
+                        continue
+                    if g["drop_ads"] and any(w in blob for w in AD_WORDS):
+                        continue
+                    dw = g.get("drop_words") or []
+                    if dw and any(w in (blob + " " + link) for w in dw):
+                        continue
+                    if any(w in title for w in NOISE_WORDS):
+                        continue
+
+                    # ── 중복 ──
+                    nt = norm_title(title)
+                    if link in dup_links or (nt and nt in dup_titles):
+                        continue
+                    dup_links.add(link)
+                    if nt:
+                        dup_titles.add(nt)
+
+                    lh = h10(link)
+                    is_new = lh not in seen
+                    if is_new:
+                        seen[lh] = today
+                    # 날짜가 없는 소스는 신규가 아니면 버린다 (과거 글이 계속 쌓이는 것 방지)
+                    if not dated and not is_new:
+                        continue
+
+                    row = {
+                        "title": title,
+                        "desc": desc[:180],
+                        "link": it.get("link") or link,
+                        "src": SOURCE_LABEL[src],
+                        "where": it.get("cafename") or it.get("bloggername")
+                                 or re.sub(r"^https?://(www\.|news\.|m\.)?([^/]+).*", r"\2", link),
+                        "pub": pub or ("신규" if is_new else ""),
+                        "kw": kw,
+                        "new": is_new,
+                    }
+                    items.append(row)
+                    if g["alert"] and is_new:
+                        new_alerts.append({"group": g["label"], **row})
+                    kept += 1
+
+                counts[kw] = counts.get(kw, 0) + kept
+                if kept:
+                    print(f"  [{SOURCE_LABEL[src]}] {kw}: {kept}건")
+
+        items.sort(key=lambda x: (x["new"], x["pub"]), reverse=True)
+        out_groups.append({k: g[k] for k in ("id", "label", "desc")} |
+                          {"keywords": g["keywords"], "items": items[:MAX_PER_GROUP]})
+
+    # ── 검색어 트렌드 ──
+    print("\n[검색어 트렌드]")
+    trend = fetch_trend(cid, csec)
+    calls += 1
+
+    # ── 급상승 키워드 (최근 7일 평균 대비) ──
+    base_days = history[-7:]
+    rising = []
+    for kw, c in counts.items():
+        past = [h["counts"].get(kw, 0) for h in base_days if kw in h.get("counts", {})]
+        b = sum(past) / len(past) if past else 0
+        if c >= 3 and (b == 0 or c / b >= 1.8):
+            rising.append({"kw": kw, "count": c, "base": round(b, 1),
+                           "ratio": round(c / b, 1) if b else None})
+    rising.sort(key=lambda x: (x["ratio"] or 99, x["count"]), reverse=True)
+
+    # ── 오늘 요약 3줄 (외부 AI 없이, 기사 밀집도 기준) ──
+    summary = build_summary(out_groups, rising)
+
+    history = (history + [{"date": today, "counts": counts}])[-HISTORY_DAYS:]
+
+    payload = {
+        "updatedAt": now.strftime("%Y-%m-%d %H:%M:%S KST"),
+        "windowHours": WINDOW_HOURS,
+        "apiCalls": calls,
+        "summary": summary,
+        "rising": rising[:8],
+        "alerts": new_alerts[:30],
+        "groups": out_groups,
+        "trend": trend,
+        "history": history,
+        "seen": seen,
+    }
+    json.dump(payload, open(OUT_PATH, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+
+    total = sum(len(g["items"]) for g in out_groups)
+    print(f"\n완료: {total}건 · 알림 {len(new_alerts)}건 · API {calls}회 → {OUT_PATH}")
+
+
+def build_summary(groups, rising):
+    """그날 요약 3줄. 매장 언급 > 판매 감시 > 급상승 > 최다 기사 순으로 뽑는다."""
+    lines = []
+    by_id = {g["id"]: g for g in groups}
+
+    st = by_id.get("store", {}).get("items", [])
+    new_st = [i for i in st if i["new"]]
+    if new_st:
+        lines.append(f"우리 매장 언급 {len(new_st)}건 — {new_st[0]['title'][:40]}")
+
+    wt = [i for i in by_id.get("watch", {}).get("items", []) if i["new"]]
+    if wt:
+        lines.append(f"온라인 판매 의심 글 {len(wt)}건 — {wt[0]['where']}")
+
+    if rising:
+        top = ", ".join(f"{r['kw']}({r['count']})" for r in rising[:3])
+        lines.append(f"검색 급상승: {top}")
+
+    if len(lines) < 3:
+        vp = by_id.get("vape", {}).get("items", [])
+        if vp:
+            lines.append(f"업종 뉴스 {len(vp)}건 — {vp[0]['title'][:40]}")
+    if not lines:
+        lines.append("특별히 눈에 띄는 건이 없습니다.")
+    return lines[:3]
+
+
+if __name__ == "__main__":
+    main()
