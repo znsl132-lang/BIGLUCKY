@@ -72,6 +72,8 @@
     padding:14px 16px;margin-bottom:9px;text-decoration:none;color:inherit;box-shadow:var(--shadow)}
   .item:hover{border-color:var(--yellow)}
   .item.new{border-left:3px solid var(--yellow)}
+  .item.neg{border-left:4px solid var(--hot);background:#fffafa}
+  .item .f .neg{background:var(--hot);color:#fff;border-radius:5px;padding:2px 7px;font-weight:800}
   .item .t{font-size:15px;font-weight:700;line-height:1.45;margin-bottom:6px}
   .item .d{font-size:12.5px;color:var(--sub);line-height:1.6;margin-bottom:8px}
   .item .f{font-size:11px;color:var(--sub);display:flex;gap:7px;align-items:center;flex-wrap:wrap}
@@ -195,8 +197,9 @@ function render(){
   // 탭 (신규 있는 그룹에 빨간 점)
   $("tabs").innerHTML = (DATA.groups||[]).map((g,i)=>{
     const n = g.items.filter(x=>x.new).length;
+    const ng = g.items.filter(x=>x.neg).length;
     return `<button class="${i===curG?"on":""}" data-i="${i}">${esc(g.label)}
-      <span class="n">${g.items.length}</span>${n?'<span class="dot"></span>':''}</button>`;
+      <span class="n">${g.items.length}</span>${ng?`<span class="dot" style="width:8px;height:8px"></span>`:n?'<span class="dot" style="background:var(--sub)"></span>':''}</button>`;
   }).join("");
   $("tabs").querySelectorAll("button").forEach(b=>b.onclick=()=>{curG=+b.dataset.i;curKw=null;render();});
 
@@ -206,19 +209,24 @@ function render(){
 
   const cnt={}; g.items.forEach(i=>cnt[i.kw]=(cnt[i.kw]||0)+1);
   const kws = Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]);
-  $("kwbar").innerHTML = kws.length
-    ? [`<button class="${curKw===null?"on":""}" data-k="">전체 ${g.items.length}</button>`]
-      .concat(kws.map(k=>`<button class="${curKw===k?"on":""}" data-k="${esc(k)}">${esc(k)} ${cnt[k]}</button>`)).join("")
-    : "";
+  const negN = g.items.filter(i=>i.neg).length;
+  const bar = [`<button class="${curKw===null?"on":""}" data-k="">전체 ${g.items.length}</button>`];
+  if(negN) bar.push(`<button class="${curKw==="__neg__"?"on":""}" data-k="__neg__"
+    style="border-color:var(--hot);color:${curKw==="__neg__"?"#fff":"var(--hot)"};${curKw==="__neg__"?"background:var(--hot);":""}">⚠ 불만족 ${negN}</button>`);
+  kws.forEach(k=>bar.push(`<button class="${curKw===k?"on":""}" data-k="${esc(k)}">${esc(k)} ${cnt[k]}</button>`));
+  $("kwbar").innerHTML = (kws.length || negN) ? bar.join("") : "";
   $("kwbar").querySelectorAll("button").forEach(b=>b.onclick=()=>{curKw=b.dataset.k||null;render();});
 
-  const items = curKw ? g.items.filter(i=>i.kw===curKw) : g.items;
+  const items = !curKw ? g.items
+    : curKw==="__neg__" ? g.items.filter(i=>i.neg)
+    : g.items.filter(i=>i.kw===curKw);
   $("list").innerHTML = items.length ? items.map(i=>`
-    <a class="item ${i.new?"new":""}" href="${esc(i.link)}" target="_blank" rel="noopener noreferrer">
+    <a class="item ${i.neg?"neg":i.new?"new":""}" href="${esc(i.link)}" target="_blank" rel="noopener noreferrer">
       <div class="t">${esc(i.title)}</div>
       ${i.desc?`<div class="d">${esc(i.desc)}</div>`:""}
       <div class="f">
         <span class="src">${esc(i.src)}</span>
+        ${i.neg?`<span class="neg">⚠ ${esc((i.negWords||[]).join(", "))}</span>`:""}
         ${i.new?'<span class="badge">NEW</span>':''}
         <span class="tag">${esc(i.kw)}</span>
         <span>${esc(i.where||"")}</span>

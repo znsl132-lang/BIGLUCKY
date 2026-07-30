@@ -59,9 +59,17 @@ def build_message(d):
 
     lines = [f"📌 We Vape 이슈 ({d.get('updatedAt','')[:16]})"]
 
-    if store:
-        lines.append(f"\n🏪 매장 언급 {len(store)}건")
-        for i in store[:4]:
+    neg = [i for i in store if i.get("neg")]
+    if neg:
+        lines.append(f"\n🔴 불만족 신호 {len(neg)}건")
+        for i in neg[:4]:
+            w = ",".join(i.get("negWords", [])[:3])
+            lines.append(f"· [{i['where']}] {i['title'][:38]} ({w})")
+
+    plain = [i for i in store if not i.get("neg")]
+    if plain:
+        lines.append(f"\n🏪 매장 언급 {len(plain)}건")
+        for i in plain[:3]:
             lines.append(f"· [{i['src']}/{i['where']}] {i['title'][:45]}")
 
     if watch:
