@@ -134,6 +134,7 @@ GROUPS = [
         "drop_politics": False,
         "drop_words": STORE_NOISE + OTHER_STORES,   # 동명 쇼핑몰 + 타 지역 가맹점 제거
         "require_any": STORE_REQUIRE,   # 브랜드 표기가 본문에 실제로 있어야 통과
+        "detect_neg": True,         # 불만족 판정은 이 그룹에서만 한다
         "alert": True,              # 새 글이 잡히면 카톡 알림
     },
     {
@@ -461,8 +462,10 @@ def main():
                         if per_source[where] > MAX_PER_SOURCE:
                             continue
 
-                    # 불만족 신호 (어떤 단어에 걸렸는지도 남긴다)
-                    hits = [w for w in NEGATIVE_WORDS if w in blob]
+                    # 불만족 신호. '우리 매장' 그룹에서만 판정한다.
+                    # 커뮤니티·업종 뉴스의 일반적인 기기 불만은 우리 매장 컴플레인이 아니다.
+                    hits = ([w for w in NEGATIVE_WORDS if w in blob]
+                            if g.get("detect_neg") else [])
 
                     row = {
                         "title": title,
