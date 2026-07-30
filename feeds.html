@@ -48,8 +48,18 @@
   .rise h3{font-size:12px;color:var(--sub);font-weight:700;margin-bottom:10px;letter-spacing:.3px}
   .chips{display:flex;flex-wrap:wrap;gap:7px}
   .chip{background:#fff8e3;border:1px solid #ffe9a8;border-radius:20px;
-    padding:5px 12px;font-size:12.5px;font-weight:600;white-space:nowrap}
+    padding:6px 13px;font-size:12.5px;font-weight:600;white-space:nowrap;
+    cursor:pointer;font-family:inherit;transition:.12s}
+  .chip:hover{background:var(--yellow);border-color:var(--yellow)}
+  .chip:active{transform:scale(.96)}
   .chip b{color:var(--hot)}
+  .chip .go{color:var(--sub);font-weight:500;margin-left:4px}
+
+  /* 키워드를 눌렀을 때 뜨는 설명 */
+  .why{background:#fff8e3;border:1px solid #ffe9a8;border-radius:10px;
+    padding:11px 14px;margin-bottom:12px;font-size:13px;line-height:1.6}
+  .why b{color:var(--hot)}
+  .why .x{float:right;cursor:pointer;color:var(--sub);font-weight:700;padding:0 4px}
 
   /* 탭 */
   nav{display:flex;gap:7px;margin-bottom:14px;overflow-x:auto;padding-bottom:3px}
@@ -116,6 +126,7 @@
   </section>
 
   <nav id="tabs"></nav>
+  <div class="why" id="why" hidden></div>
   <div class="desc" id="gdesc"></div>
   <div class="kwbar" id="kwbar"></div>
   <div id="list"></div>
@@ -192,7 +203,21 @@ function render(){
   const rs = DATA.rising||[];
   $("riseBox").hidden = !rs.length;
   $("riseChips").innerHTML = rs.map(r=>
-    `<span class="chip">${esc(r.kw)} <b>${r.count}건</b>${r.ratio?` · 평소 ${r.ratio}배`:" · 신규"}</span>`).join("");
+    `<button class="chip" data-kw="${esc(r.kw)}">${esc(r.kw)} <b>${r.count}건</b>${
+      r.ratio?` · 평소 ${r.ratio}배`:" · 신규"}<span class="go">›</span></button>`).join("");
+  // 키워드를 누르면 그 글들이 실제로 어느 탭에 있는지 찾아가 보여준다
+  $("riseChips").querySelectorAll("[data-kw]").forEach(b=>b.onclick=()=>{
+    const kw = b.dataset.kw;
+    let best = -1, bestN = 0;
+    (DATA.groups||[]).forEach((g,i)=>{
+      const n = g.items.filter(x=>x.kw===kw).length;
+      if(n > bestN){ bestN = n; best = i; }
+    });
+    if(best < 0){ showWhy(kw, null, 0); return; }
+    curG = best; curKw = kw; render();
+    showWhy(kw, DATA.groups[best].label, bestN);
+    $("why").scrollIntoView({behavior:"smooth", block:"center"});
+  });
 
   // 탭 (신규 있는 그룹에 빨간 점)
   $("tabs").innerHTML = (DATA.groups||[]).map((g,i)=>{
@@ -201,7 +226,8 @@ function render(){
     return `<button class="${i===curG?"on":""}" data-i="${i}">${esc(g.label)}
       <span class="n">${g.items.length}</span>${ng?`<span class="dot" style="width:8px;height:8px"></span>`:n?'<span class="dot" style="background:var(--sub)"></span>':''}</button>`;
   }).join("");
-  $("tabs").querySelectorAll("button").forEach(b=>b.onclick=()=>{curG=+b.dataset.i;curKw=null;render();});
+  $("tabs").querySelectorAll("button").forEach(b=>b.onclick=()=>{
+    curG=+b.dataset.i; curKw=null; $("why").hidden=true; render();});
 
   const g = (DATA.groups||[])[curG];
   if(!g){ $("list").innerHTML=`<div class="empty">데이터가 없습니다.</div>`; return; }
@@ -235,6 +261,22 @@ function render(){
     </a>`).join("") : `<div class="empty">잡힌 글이 없습니다.</div>`;
 
   drawTrend();
+}
+
+// 급상승 키워드를 눌렀을 때 '어디서 왜' 를 한 줄로 설명한다
+function showWhy(kw, groupLabel, n){
+  const r = (DATA.rising||[]).find(x=>x.kw===kw);
+  const box = $("why");
+  if(!r){ box.hidden = true; return; }
+  const cmp = r.ratio
+    ? `평소 하루 <b>${r.base}건</b>이던 것이 오늘 <b>${r.count}건</b> — <b>${r.ratio}배</b>`
+    : `이전 기록이 없던 키워드입니다. 오늘 <b>${r.count}건</b> 잡혔습니다`;
+  const loc = groupLabel
+    ? `아래는 <b>${esc(groupLabel)}</b> 탭에서 이 키워드로 잡힌 <b>${n}건</b>입니다.`
+    : `다만 상한(30건)에 걸려 목록에는 안 남아 있습니다.`;
+  box.hidden = false;
+  box.innerHTML = `<span class="x" onclick="document.getElementById('why').hidden=true">✕</span>`
+    + `🔍 <b>${esc(kw)}</b> — ${cmp}. ${loc}`;
 }
 
 function drawTrend(){
