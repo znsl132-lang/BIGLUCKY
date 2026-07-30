@@ -487,6 +487,15 @@ SOURCE_PATH = {
 }
 SOURCE_LABEL = {"news": "뉴스", "blog": "블로그", "cafearticle": "카페", "webkr": "웹"}
 
+# 게시일을 못 찾아도 통과시키는 소스.
+#   카페글·블로그는 sort=date 를 지원해 '최신순'으로 온다. 그래서 날짜가 없어도
+#   상위 결과는 실제로 최신 글이다.
+#   반면 웹문서(webkr)는 sort 파라미터가 아예 없어 정렬이 무작위다.
+#   slrclub 2016년 글, 문화일보 2016년 기사가 들어온 건 전부 웹문서였다 (2026-07-30).
+DATE_EXEMPT_SOURCES = {"cafearticle", "blog"}
+NAVER_UGC_DOMAINS = ["cafe.naver.com", "blog.naver.com", "post.naver.com",
+                     "m.cafe.naver.com", "m.blog.naver.com"]
+
 
 # ─────────────────────────────────────────────────────────────
 # 유틸
@@ -759,11 +768,16 @@ def main():
                     #     (slrclub 2016년 글, 문화일보 2016년 기사가 들어온 것을 계기로 — 2026-07-30)
                     if not dated:
                         got = resolve_pubdate(link, pubdates)
-                        if not got:
-                            continue              # 게시일 불명 → 제외
-                        if got < g_cutoff.strftime("%Y-%m-%d"):
-                            continue              # 기간 밖 → 제외
-                        pub, dated = got, True
+                        if got:
+                            if got < g_cutoff.strftime("%Y-%m-%d"):
+                                continue          # 기간 밖 → 제외
+                            pub, dated = got, True
+                        elif (src in DATE_EXEMPT_SOURCES
+                              and any(d in low_link for d in NAVER_UGC_DOMAINS)):
+                            # 네이버 카페·블로그는 sort=date 라 최신순이다. 날짜 없이도 통과시킨다.
+                            pub = "날짜 미상"
+                        else:
+                            continue              # 그 밖(웹문서 등)은 게시일 불명이면 제외
 
                     # ── 중복 ──
                     # 보도자료를 여러 매체가 그대로 받아쓰면 제목만 조금씩 다르다.
