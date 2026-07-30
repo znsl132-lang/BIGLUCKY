@@ -501,6 +501,77 @@ def norm_title(t):
     return re.sub(r"[^\w가-힣]", "", t)[:28]
 
 
+# ─────────────────────────────────────────────────────────────
+# 게시일 알아내기
+#   네이버 웹문서·카페글 검색은 날짜를 안 준다. 그대로 두면 2016년 기사가
+#   '신규'로 들어온다 (2026-07-30 확인). 그래서 두 단계로 직접 알아낸다.
+#     1) URL 안의 날짜 패턴 (요청 0회, 즉시)
+#     2) 기사 페이지의 메타태그 (article:published_time 등)
+#   한 번 알아낸 날짜는 pubdates 에 캐시해 두 번 조회하지 않는다.
+# ─────────────────────────────────────────────────────────────
+URL_DATE_RES = [
+    re.compile(r"/(20\d{2})[/\-\.](\d{1,2})[/\-\.](\d{1,2})[/\-]"),
+    re.compile(r"[/_](20\d{2})(\d{2})(\d{2})"),
+    re.compile(r"[?&](?:date|regDate|aid)=(20\d{2})(\d{2})(\d{2})"),
+]
+META_DATE_RES = [
+    re.compile(rb'property=["\']article:published_time["\'][^>]*content=["\']([^"\']+)'),
+    re.compile(rb'content=["\']([^"\']+)["\'][^>]*property=["\']article:published_time["\']'),
+    re.compile(rb'name=["\'](?:dd:published_time|pubdate|article:published_time)["\'][^>]*content=["\']([^"\']+)'),
+    re.compile(rb'"datePublished"\s*:\s*"([^"]+)"'),
+    re.compile(rb'property=["\']og:regDate["\'][^>]*content=["\'](\d{14})'),
+]
+
+
+def _norm_date(txt):
+    """여러 형식의 날짜 문자열을 YYYY-MM-DD 로 맞춘다."""
+    t = re.sub(r"[^0-9]", "", txt or "")
+    if len(t) >= 8:
+        y, m, d = t[:4], t[4:6], t[6:8]
+        if "2000" <= y <= "2099" and "01" <= m <= "12" and "01" <= d <= "31":
+            return f"{y}-{m}-{d}"
+    return ""
+
+
+def pubdate_from_url(link):
+    for rx in URL_DATE_RES:
+        m = rx.search(link or "")
+        if m:
+            d = _norm_date("".join(m.groups()))
+            if d:
+                return d
+    return ""
+
+
+def pubdate_from_page(link, timeout=7):
+    """기사 페이지 앞부분만 읽어 메타태그에서 게시일을 뽑는다."""
+    try:
+        req = Request(link, headers={
+            "User-Agent": "Mozilla/5.0 (compatible; WeVapeMonitor/1.0)",
+            "Accept-Language": "ko-KR,ko;q=0.9",
+        })
+        with urlopen(req, timeout=timeout) as r:
+            head = r.read(120_000)          # <head> 만 있으면 충분하다
+    except Exception:
+        return ""
+    for rx in META_DATE_RES:
+        m = rx.search(head)
+        if m:
+            d = _norm_date(m.group(1).decode("utf-8", "ignore"))
+            if d:
+                return d
+    return ""
+
+
+def resolve_pubdate(link, cache):
+    """URL → 페이지 순으로 게시일을 찾는다. 결과(실패 포함)를 캐시한다."""
+    if link in cache:
+        return cache[link]
+    d = pubdate_from_url(link) or pubdate_from_page(link)
+    cache[link] = d
+    return d
+
+
 def call(path, params, cid, csec, retries=3):
     url = f"{SEARCH_HOST}{path}?{urlencode(params)}"
     req = Request(url, headers={"X-NCP-APIGW-API-KEY-ID": cid,
@@ -574,6 +645,7 @@ def main():
             print(f"기존 {OUT_PATH} 읽기 실패, 초기화: {e}")
     history = [h for h in prev.get("history", []) if h.get("date") != today]
     seen = prev.get("seen", {})                 # {링크해시: 최초발견일}
+    pubdates = prev.get("pubdates", {})         # {링크: 게시일} — 두 번 조회하지 않는다
     seen_cut = (now - timedelta(days=SEEN_DAYS)).strftime("%Y-%m-%d")
     seen = {k: v for k, v in seen.items() if v >= seen_cut}
 
@@ -668,6 +740,14 @@ def main():
                     if any(w in blob for w in HARD_BLOCK):
                         continue
 
+                    # ── 날짜가 안 온 소스(카페글·웹문서)는 직접 알아낸다 ──
+                    if not dated:
+                        got = resolve_pubdate(link, pubdates)
+                        if got:
+                            if got < g_cutoff.strftime("%Y-%m-%d"):
+                                continue          # 기간 밖이면 버린다
+                            pub, dated = got, True
+
                     # ── 중복 ──
                     # 보도자료를 여러 매체가 그대로 받아쓰면 제목만 조금씩 다르다.
                     # 요약문 앞부분까지 대조해야 같은 기사로 잡힌다.
@@ -711,7 +791,8 @@ def main():
                         "link": it.get("link") or link,
                         "src": SOURCE_LABEL[src],
                         "where": where,
-                        "pub": pub or ("신규" if is_new else ""),
+                        # 게시일을 끝내 못 찾은 글. '신규'라고 쓰면 최신이라는 오해를 부른다.
+                        "pub": pub or ("날짜 미상" if is_new else ""),
                         "kw": kw,
                         "new": is_new,
                         "tier": source_tier(src, link, blob),
@@ -754,7 +835,7 @@ def main():
 
     # ── 오늘 요약 3줄 + 꼭 볼 것 3건 ──
     summary = build_summary(out_groups, rising)
-    top3 = build_top3(out_groups)
+    top3 = build_top3(out_groups, now)
 
     history = (history + [{"date": today, "counts": counts}])[-HISTORY_DAYS:]
 
@@ -770,6 +851,7 @@ def main():
         "trend": trend,
         "history": history,
         "seen": seen,
+        "pubdates": dict(list(pubdates.items())[-4000:]),
     }
     json.dump(payload, open(OUT_PATH, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 
@@ -777,9 +859,22 @@ def main():
     print(f"\n완료: {total}건 · 알림 {len(new_alerts)}건 · API {calls}회 → {OUT_PATH}")
 
 
-def build_top3(groups):
-    """아침에 30초만 볼 사람을 위한 '꼭 볼 것'. 순서가 곧 우선순위다."""
-    by = {g["id"]: g.get("items", []) for g in groups}
+def build_top3(groups, now):
+    """아침에 30초만 볼 사람을 위한 '꼭 볼 것'.
+    ★ 최근 48시간 안의 글만 올린다. 고객이 오늘 물어볼 사안이어야 의미가 있다."""
+    limit_day = (now - timedelta(hours=48)).strftime("%Y-%m-%d")
+
+    def fresh(items):
+        out = []
+        for i in items:
+            p = (i.get("pub") or "").strip()
+            if not p or p == "날짜 미상":      # 카페·웹문서는 날짜가 없다. 신규면 최신으로 본다
+                out.append(i)
+            elif p[:10] >= limit_day:
+                out.append(i)
+        return out
+
+    by = {g["id"]: fresh(g.get("items", [])) for g in groups}
     picked, seen_links = [], set()
 
     def take(items, why, limit=3):
@@ -801,6 +896,12 @@ def build_top3(groups):
     take([i for i in by.get("store", []) if i.get("new")], "우리 매장 언급", 1)
     take(by.get("reg", []), "규제·단속", 3)
     take(by.get("nonic", []), "무니코틴 이슈", 1)
+
+    # 48시간 안에 3건이 안 되면 그 이상 된 것도 채우되 라벨로 구분한다
+    if len(picked) < 3:
+        allg = {g["id"]: g.get("items", []) for g in groups}
+        take([i for i in allg.get("reg", []) if i["link"] not in seen_links], "지난 규제 소식", 3)
+        take([i for i in allg.get("nonic", []) if i["link"] not in seen_links], "지난 무니코틴 이슈", 2)
     return picked
 
 

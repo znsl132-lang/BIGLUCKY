@@ -198,6 +198,18 @@ const SAMPLE = {
 let DATA=null, curG=0, curKw=null, chart=null;
 const $ = id => document.getElementById(id);
 const esc = s => String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+// "2026-07-24" → "6일 전" 처럼 바꿔 보여준다. 오래된 글을 바로 알아채게.
+function relDate(p){
+  if(!p) return "";
+  if(p==="날짜 미상" || p==="신규") return "날짜 미상";
+  const d = new Date(p.slice(0,10).replace(/-/g,"/"));
+  if(isNaN(d)) return p;
+  const days = Math.floor((new Date(new Date().toDateString()) - d) / 86400000);
+  if(days <= 0) return "오늘";
+  if(days === 1) return "어제";
+  if(days <= 7) return days + "일 전";
+  return p.slice(0,10);
+}
 const tierLabel = t => t==="gov" ? "🏛 공식" : t==="press" ? "📰 주요언론" : t==="news" ? "뉴스" : "커뮤니티";
 
 async function load(){
@@ -235,7 +247,7 @@ function renderAll(){
   $("top3List").innerHTML = t3.map(i=>`
     <a href="${esc(i.link)}" target="_blank" rel="noopener noreferrer">
       <div><span class="t3w">${esc(i.why||"")}</span><span class="t3t">${esc(i.title)}</span></div>
-      <div class="t3m">${tierLabel(i.tier)} ${esc(i.where||"")} · ${esc(i.pub||"")}</div>
+      <div class="t3m">${tierLabel(i.tier)} ${esc(i.where||"")} · <b>${esc(relDate(i.pub))}</b></div>
     </a>`).join("");
 
   const rs = DATA.rising||[];
@@ -295,7 +307,7 @@ function renderAll(){
         ${i.new?'<span class="badge">NEW</span>':''}
         <span class="tag">${esc(i.kw)}</span>
         <span>${esc(i.where||"")}</span>
-        <span>${esc(i.pub||"")}</span>
+        <span>${esc(relDate(i.pub))}</span>
       </div>
     </a>`).join("") : `<div class="empty">잡힌 글이 없습니다.</div>`;
 
