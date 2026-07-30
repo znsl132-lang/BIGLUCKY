@@ -158,6 +158,24 @@ LOCAL_HEALTH_NOISE = [
     "건강증진사업", "건강생활실천", "건강도시", "보건행정", "금연문화",
 ]
 
+# ★ 보건소·구청이 '전자담배 판매업소를 단속·점검'한 건은 직원이 알아야 한다.
+#   LOCAL_HEALTH_NOISE 에 걸려도 아래 두 조건을 모두 만족하면 살린다.
+#   (건강지표·금연클리닉 같은 통계·캠페인 기사는 이 조건에 안 걸려 계속 차단된다)
+ENFORCEMENT_RESCUE = [
+    ["단속", "점검", "적발", "처분", "과태료", "고발", "수거", "행정지도",
+     "위반", "영업정지", "지정 취소", "고시"],
+    ["판매업소", "판매점", "소매점", "판매 업소", "무인", "업소", "매장",
+     "판매행위", "청소년 판매", "소매인", "유통"],
+]
+
+# 민폐·목격담·커뮤니티 화제성 기사. 규제와 무관한데 '적발' 같은 단어로 통과한다.
+# (탑승구 앞 전자담배 '민폐 외국인 승객' 논란 기사를 계기로 — 2026-07-30)
+NUISANCE_NOISE = [
+    "민폐", "빌런", "진상", "갑질", "공분", "목격담", "황당", "충격",
+    "누리꾼", "네티즌", "온라인 커뮤니티", "갈무리", "논란에 휩싸", "뭇매",
+    "시끌", "발칵", "경악", "역대급",
+]
+
 # 연예·방송 기사. 유명인이 전자담배를 언급했다는 이유로 딸려온다.
 ENTERTAIN_NOISE = [
     "임신", "출산", "부모 된다", "결혼", "열애", "이혼", "재혼",
@@ -254,6 +272,13 @@ GROUPS = [
             "전자담배 표시 의무",
             "전자담배 행정처분",
             "청소년 전자담배 판매",
+            "전자담배 판매업소 단속",
+            "담배소매인 지정",
+            "교육환경보호구역 전자담배",
+            "니코틴 용액 수입통관",
+            "전자담배 통관",
+            "전자담배 온라인 판매 금지",
+            "전자담배 표시광고",
         ],
         "drop_ads": False,
         "drop_politics": False,     # 규제 뉴스는 국회·법안 언급이 필연이다
@@ -261,6 +286,8 @@ GROUPS = [
         "require_any": [VAPE_WORDS, POLICY_WORDS + REG_WORDS],
         "require_title": VAPE_WORDS,    # 제목에 전자담배가 있어야 그 기사의 주제다
         "drop_words": LOCAL_HEALTH_NOISE + ENTERTAIN_NOISE + YOUTH_CRACKDOWN_NOISE,
+        "rescue_any": ENFORCEMENT_RESCUE,   # 판매업소 단속 기사는 살린다
+        "hard_words": NUISANCE_NOISE,       # 민폐·화제성 기사는 구제 없이 차단
         # 규제 뉴스는 매일 나오지 않는다. 30시간이면 화면이 빈다. 7일치를 본다.
         "window_days": 7,
         "alert": True,              # 규제 신규 건은 카톡으로도 알린다
@@ -285,6 +312,7 @@ GROUPS = [
         "require_any": [VAPE_WORDS, ISSUE_WORDS + POLICY_WORDS],
         "require_title": VAPE_WORDS,
         "drop_words": LOCAL_HEALTH_NOISE + ENTERTAIN_NOISE + YOUTH_CRACKDOWN_NOISE,
+        "hard_words": NUISANCE_NOISE,
         "window_days": 3,
         "alert": False,
     },
@@ -570,9 +598,17 @@ def main():
                         continue
                     if g["drop_ads"] and any(w in blob for w in AD_WORDS):
                         continue
+                    # 구제 불가 차단어 (뉴스 그룹의 민폐·화제성 기사)
+                    hw = g.get("hard_words") or []
+                    if hw and any(w in blob for w in hw):
+                        continue
                     dw = g.get("drop_words") or []
                     if dw and any(w in (blob + " " + link) for w in dw):
-                        continue
+                        # 판매업소 단속 기사면 살린다
+                        rs = g.get("rescue_any")
+                        low_r = blob.lower()
+                        if not (rs and all(any(w in low_r for w in st) for st in rs)):
+                            continue
                     # 네이버 검색의 느슨한 매칭을 후처리로 조인다.
                     # 카페명·블로그명은 검사하지 않는다 (카페 이름에 '액상'이 들어있는 경우가 많다)
                     # 리스트의 리스트면 각 묶음마다 하나 이상 맞아야 한다 (AND 조건)
