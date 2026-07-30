@@ -198,6 +198,7 @@ const SAMPLE = {
 let DATA=null, curG=0, curKw=null, chart=null;
 const $ = id => document.getElementById(id);
 const esc = s => String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const tierLabel = t => t==="gov" ? "🏛 공식" : t==="press" ? "📰 주요언론" : t==="news" ? "뉴스" : "커뮤니티";
 
 async function load(){
   $("stamp").textContent = "불러오는 중…";
@@ -214,7 +215,16 @@ async function load(){
   render();
 }
 
+// 한 부분에서 오류가 나도 화면 전체가 멈추지 않게 감싼다
 function render(){
+  try{ renderAll(); }
+  catch(e){
+    console.error(e);
+    $("stamp").innerHTML = `⚠ 화면 오류: ${esc(e.message)}`;
+  }
+}
+
+function renderAll(){
   const total = (DATA.groups||[]).reduce((s,g)=>s+g.items.length,0);
   $("stamp").innerHTML = `갱신 ${esc(DATA.updatedAt||"-")}<br>최근 ${DATA.windowHours||30}시간 · ${total}건`;
 
