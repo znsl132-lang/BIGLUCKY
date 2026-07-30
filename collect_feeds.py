@@ -261,6 +261,8 @@ GROUPS = [
         "require_any": [VAPE_WORDS, POLICY_WORDS + REG_WORDS],
         "require_title": VAPE_WORDS,    # 제목에 전자담배가 있어야 그 기사의 주제다
         "drop_words": LOCAL_HEALTH_NOISE + ENTERTAIN_NOISE + YOUTH_CRACKDOWN_NOISE,
+        # 규제 뉴스는 매일 나오지 않는다. 30시간이면 화면이 빈다. 7일치를 본다.
+        "window_days": 7,
         "alert": True,              # 규제 신규 건은 카톡으로도 알린다
     },
     {
@@ -283,6 +285,7 @@ GROUPS = [
         "require_any": [VAPE_WORDS, ISSUE_WORDS + POLICY_WORDS],
         "require_title": VAPE_WORDS,
         "drop_words": LOCAL_HEALTH_NOISE + ENTERTAIN_NOISE + YOUTH_CRACKDOWN_NOISE,
+        "window_days": 3,
         "alert": False,
     },
     {
@@ -308,6 +311,7 @@ GROUPS = [
         # 두 조건을 모두 만족해야 통과: (무니코틴 언급) AND (이슈성 소재)
         "require_any": [NONIC_WORDS, ISSUE_WORDS],
         "drop_words": PROMO_WORDS,
+        "window_days": 7,
         "alert": False,
     },
     {
@@ -512,6 +516,10 @@ def main():
 
     for g in GROUPS:
         print(f"\n[{g['label']}]")
+        # 그룹별 조회 기간. 지정이 없으면 기본 WINDOW_HOURS 를 쓴다.
+        wd = g.get("window_days")
+        g_cutoff = (now - timedelta(days=wd)) if wd else cutoff
+        g_blog_days = wd if wd else 2
         items, dup_links, dup_titles, dup_descs = [], set(), set(), set()
         per_source = {}          # 같은 언론사·카페가 화면을 점령하는 것을 막는다
 
@@ -543,7 +551,7 @@ def main():
                     if it.get("pubDate"):                       # 뉴스
                         try:
                             d = parsedate_to_datetime(it["pubDate"]).astimezone(KST)
-                            if d < cutoff:
+                            if d < g_cutoff:
                                 continue
                             pub, dated = d.strftime("%Y-%m-%d %H:%M"), True
                         except Exception:
@@ -551,7 +559,7 @@ def main():
                     elif it.get("postdate"):                    # 블로그 (YYYYMMDD)
                         try:
                             d = datetime.strptime(it["postdate"], "%Y%m%d").replace(tzinfo=KST)
-                            if d.date() < (now - timedelta(days=2)).date():
+                            if d.date() < (now - timedelta(days=g_blog_days)).date():
                                 continue
                             pub, dated = d.strftime("%Y-%m-%d"), True
                         except Exception:
