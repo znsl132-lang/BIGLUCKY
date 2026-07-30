@@ -138,9 +138,11 @@ const BRANCH = "main";
 const FILE   = "feeds.json";
 // ────────────────────────────────────────────────────────
 
+// 순서 주의: jsdelivr 의 @main 은 최대 12시간 캐시된다. 하루 3회 갱신되는 파일이라
+// raw 를 먼저 쓰고 jsdelivr 를 예비로 둔다. (jsdelivr 를 먼저 두면 옛 데이터가 계속 보인다)
 const URLS = [
-  `https://cdn.jsdelivr.net/gh/${REPO}@${BRANCH}/${FILE}`,
   `https://raw.githubusercontent.com/${REPO}/${BRANCH}/${FILE}`,
+  `https://cdn.jsdelivr.net/gh/${REPO}@${BRANCH}/${FILE}`,
   FILE
 ];
 
