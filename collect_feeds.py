@@ -214,6 +214,34 @@ WATCH_REQUIRE = [
 ]
 
 # ─────────────────────────────────────────────────────────────
+# ③ 출처 신뢰도 — 직원이 "이거 확실한 정보인가"를 한눈에 알아야 한다
+# ─────────────────────────────────────────────────────────────
+GOV_DOMAINS = ["korea.kr", ".go.kr", "mfds.go.kr", "customs.go.kr", "moef.go.kr",
+               "mohw.go.kr", "ftc.go.kr", "nts.go.kr", "assembly.go.kr", "law.go.kr"]
+GOV_WORDS = ["식약처", "식품의약품안전처", "관세청", "기획재정부", "기재부",
+             "보건복지부", "복지부", "공정거래위원회", "공정위", "국세청",
+             "행정심판위원회", "법제처", "국회", "구청", "시청", "군청", "도청",
+             "지방자치단체", "지자체", "정부", "당국"]
+MAJOR_PRESS = ["yna.co.kr", "news1.kr", "newsis.com", "chosun.com", "joongang.co.kr",
+               "donga.com", "hani.co.kr", "khan.co.kr", "hankookilbo.com", "hankyung.com",
+               "mk.co.kr", "sedaily.com", "edaily.co.kr", "mt.co.kr", "fnnews.com",
+               "kbs.co.kr", "imbc.com", "sbs.co.kr", "ytn.co.kr", "jtbc.co.kr",
+               "dt.co.kr", "etnews.com", "biz.chosun.com", "seoul.co.kr", "kmib.co.kr"]
+
+
+def source_tier(src, link, blob):
+    """gov(공식) > press(주요 언론) > news(일반 언론) > user(블로그·카페)"""
+    if src != "news" and src != "webkr":
+        return "user"
+    low = (link or "").lower()
+    if any(d in low for d in GOV_DOMAINS) or any(w in blob for w in GOV_WORDS):
+        return "gov"
+    if any(d in low for d in MAJOR_PRESS):
+        return "press"
+    return "news"
+
+
+# ─────────────────────────────────────────────────────────────
 # ② 그룹 정의 — 위에 있는 그룹이 대시보드에서 먼저 보인다
 # ─────────────────────────────────────────────────────────────
 GROUPS = [
@@ -279,6 +307,13 @@ GROUPS = [
             "전자담배 통관",
             "전자담배 온라인 판매 금지",
             "전자담배 표시광고",
+            "담배소매인 거리제한",
+            "소매인 지정 취소",
+            "전자담배 세금 인상",
+            "액상 제세부담금",
+            "전자담배 광고 제한",
+            "전자담배 성분 표시",
+            "무인 전자담배 자판기",
         ],
         "drop_ads": False,
         "drop_politics": False,     # 규제 뉴스는 국회·법안 언급이 필연이다
@@ -306,6 +341,10 @@ GROUPS = [
             "담뱃세",
             "전자담배 유해성",
             "전자담배 부작용",
+            "전자담배 배터리 폭발",
+            "전자담배 화재",
+            "액상 리콜",
+            "니코틴 함량 초과",
         ],
         "drop_ads": False,
         "drop_politics": False,
@@ -675,6 +714,7 @@ def main():
                         "pub": pub or ("신규" if is_new else ""),
                         "kw": kw,
                         "new": is_new,
+                        "tier": source_tier(src, link, blob),
                         "neg": bool(hits),
                         "negWords": hits[:4],
                     }
@@ -688,7 +728,9 @@ def main():
                     print(f"  [{SOURCE_LABEL[src]}] {kw}: {kept}건")
 
         # 불만족 글을 맨 위로, 그다음 신규, 그다음 최신순
-        items.sort(key=lambda x: (x["neg"], x["new"], x["pub"]), reverse=True)
+        TIER_RANK = {"gov": 3, "press": 2, "news": 1, "user": 0}
+        items.sort(key=lambda x: (x["neg"], TIER_RANK.get(x.get("tier"), 0),
+                                  x["new"], x["pub"]), reverse=True)
         for i in items[:MAX_PER_GROUP]:
             taken.add(i["link"])
         out_groups.append({k: g[k] for k in ("id", "label", "desc")} |
@@ -710,8 +752,9 @@ def main():
                            "ratio": round(c / b, 1) if b else None})
     rising.sort(key=lambda x: (x["ratio"] or 99, x["count"]), reverse=True)
 
-    # ── 오늘 요약 3줄 (외부 AI 없이, 기사 밀집도 기준) ──
+    # ── 오늘 요약 3줄 + 꼭 볼 것 3건 ──
     summary = build_summary(out_groups, rising)
+    top3 = build_top3(out_groups)
 
     history = (history + [{"date": today, "counts": counts}])[-HISTORY_DAYS:]
 
@@ -720,6 +763,7 @@ def main():
         "windowHours": WINDOW_HOURS,
         "apiCalls": calls,
         "summary": summary,
+        "top3": top3,
         "rising": rising[:8],
         "alerts": new_alerts[:30],
         "groups": out_groups,
@@ -731,6 +775,33 @@ def main():
 
     total = sum(len(g["items"]) for g in out_groups)
     print(f"\n완료: {total}건 · 알림 {len(new_alerts)}건 · API {calls}회 → {OUT_PATH}")
+
+
+def build_top3(groups):
+    """아침에 30초만 볼 사람을 위한 '꼭 볼 것'. 순서가 곧 우선순위다."""
+    by = {g["id"]: g.get("items", []) for g in groups}
+    picked, seen_links = [], set()
+
+    def take(items, why, limit=3):
+        for it in items:
+            if len(picked) >= 3:
+                return
+            if it["link"] in seen_links:
+                continue
+            seen_links.add(it["link"])
+            picked.append({**it, "why": why})
+            limit -= 1
+            if limit <= 0:
+                return
+
+    take([i for i in by.get("store", []) if i.get("neg")], "우리 매장 불만족", 2)
+    take([i for i in by.get("reg", []) if i.get("tier") == "gov"], "공식 규제 발표", 2)
+    take([i for i in by.get("reg", []) if i.get("new")], "새 규제·단속", 2)
+    take([i for i in by.get("watch", []) if i.get("new")], "온라인 판매 의심", 1)
+    take([i for i in by.get("store", []) if i.get("new")], "우리 매장 언급", 1)
+    take(by.get("reg", []), "규제·단속", 3)
+    take(by.get("nonic", []), "무니코틴 이슈", 1)
+    return picked
 
 
 def build_summary(groups, rising):
