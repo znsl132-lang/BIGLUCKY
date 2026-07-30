@@ -183,6 +183,16 @@ ENTERTAIN_NOISE = [
     "드라마", "영화", "소속사", "팬미팅", "컴백", "출연", "MC",
 ]
 
+# 잡담·유머 게시판. 전자담배 얘기가 나와도 매장 운영에 쓸 정보가 아니고
+# 10년 전 글이 그대로 검색된다 (slrclub 자유게시판 2016년 글이 잡힌 것을 계기로 — 2026-07-30)
+BAD_DOMAINS = [
+    "slrclub.com", "dcinside.com", "ppomppu.co.kr", "todayhumor.co.kr",
+    "ruliweb.com", "inven.co.kr", "fmkorea.com", "theqoo.net", "instiz.net",
+    "pann.nate.com", "bobaedream.co.kr", "mlbpark.donga.com", "82cook.com",
+    "gasengi.com", "clien.net", "etoland.co.kr", "humoruniv.com",
+    "cook.co.kr", "damoang.net", "arca.live", "ilbe.com",
+]
+
 # 어떤 그룹에서도 보고 싶지 않은 소재. 검색어와 무관하게 딸려오는 강력범죄·사건 기사다.
 # (업종 뉴스에 아동 성범죄 기사가 뜬 것을 계기로 추가 — 2026-07-30)
 HARD_BLOCK = [
@@ -709,6 +719,10 @@ def main():
                         continue
                     if g["drop_ads"] and any(w in blob for w in AD_WORDS):
                         continue
+                    # 잡담 커뮤니티는 도메인째로 버린다
+                    low_link = (link or "").lower()
+                    if any(d in low_link for d in BAD_DOMAINS):
+                        continue
                     # 구제 불가 차단어 (뉴스 그룹의 민폐·화제성 기사)
                     hw = g.get("hard_words") or []
                     if hw and any(w in blob for w in hw):
@@ -741,12 +755,15 @@ def main():
                         continue
 
                     # ── 날짜가 안 온 소스(카페글·웹문서)는 직접 알아낸다 ──
+                    #   ★ 못 찾으면 버린다. '날짜 미상'으로 남겨두면 10년 전 글이 섞인다.
+                    #     (slrclub 2016년 글, 문화일보 2016년 기사가 들어온 것을 계기로 — 2026-07-30)
                     if not dated:
                         got = resolve_pubdate(link, pubdates)
-                        if got:
-                            if got < g_cutoff.strftime("%Y-%m-%d"):
-                                continue          # 기간 밖이면 버린다
-                            pub, dated = got, True
+                        if not got:
+                            continue              # 게시일 불명 → 제외
+                        if got < g_cutoff.strftime("%Y-%m-%d"):
+                            continue              # 기간 밖 → 제외
+                        pub, dated = got, True
 
                     # ── 중복 ──
                     # 보도자료를 여러 매체가 그대로 받아쓰면 제목만 조금씩 다르다.
@@ -791,8 +808,8 @@ def main():
                         "link": it.get("link") or link,
                         "src": SOURCE_LABEL[src],
                         "where": where,
-                        # 게시일을 끝내 못 찾은 글. '신규'라고 쓰면 최신이라는 오해를 부른다.
-                        "pub": pub or ("날짜 미상" if is_new else ""),
+                        # 여기까지 온 글은 모두 게시일이 확인됐다
+                        "pub": pub,
                         "kw": kw,
                         "new": is_new,
                         "tier": source_tier(src, link, blob),
