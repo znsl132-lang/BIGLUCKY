@@ -1,0 +1,53 @@
+name: collect-feeds
+
+on:
+  schedule:
+    # UTC 기준. 한국시간 08:30 / 12:30 / 18:30
+    - cron: "30 23 * * *"
+    - cron: "30 3 * * *"
+    - cron: "30 9 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: collect-feeds
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 수집
+        env:
+          NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
+          NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
+        run: python collect_feeds.py
+
+      - name: 카톡 알림 (설정 없으면 자동 건너뜀)
+        continue-on-error: true
+        env:
+          KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
+          KAKAO_REFRESH_TOKEN: ${{ secrets.KAKAO_REFRESH_TOKEN }}
+          DASHBOARD_URL: ${{ vars.DASHBOARD_URL }}
+        run: python notify.py
+
+      - name: feeds.json 커밋
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add feeds.json
+          if git diff --staged --quiet; then
+            echo "변경 없음"
+          else
+            git commit -m "chore: 이슈 갱신 $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M')"
+            git pull --rebase --autostash || true
+            git push
+          fi
