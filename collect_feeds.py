@@ -193,6 +193,41 @@ BAD_DOMAINS = [
     "cook.co.kr", "damoang.net", "arca.live", "ilbe.com",
 ]
 
+# ─────────────────────────────────────────────────────────────
+# 키워드 나열 스팸
+#   본문 끝에 "호치민/유흥/마사지/…/전자담배/클럽/후기" 처럼 단어를 잔뜩 붙여
+#   검색에 걸리게 만드는 글. 제목은 '놀라운 신개념 사유' 처럼 아무 상관 없다.
+#   (베트남여행 카페 글이 커뮤니티 탭에 대량으로 들어온 것을 계기로 — 2026-07-30)
+# ─────────────────────────────────────────────────────────────
+SPAM_WORDS = [
+    "호치민", "하노이", "다낭", "붕따우", "가라오케", "마사지", "유흥", "밤문화",
+    "이발소", "황제투어", "풀빌라", "풍가이", "콜걸", "출장샵", "안마", "룸싸롱",
+    "카지노", "바카라", "슬롯", "룰렛", "토토", "먹튀", "겜블", "배팅", "사설",
+    "대출", "작대", "코인리딩", "성인용품", "비아그라", "환전", "렌트카", "골프투어",
+]
+SPAM_CAFE_WORDS = [
+    "베트남여행", "호치민", "하노이", "유흥", "밤문화", "가라오케", "마사지",
+    "토토", "카지노", "먹튀", "대출", "안마", "출장",
+]
+
+
+def is_keyword_spam(title, desc, where):
+    """검색 노출용 키워드 나열 글인지 판정한다."""
+    blob = f"{title} {desc}"
+    if blob.count("/") >= 12:           # 슬래시로 이어붙인 키워드 뭉치
+        return True
+    if blob.count("#") >= 12:           # 해시태그 남발
+        return True
+    if sum(1 for w in SPAM_WORDS if w in blob) >= 3:
+        return True
+    if any(w in (where or "") for w in SPAM_CAFE_WORDS):
+        return True
+    # 의미 없는 자음 나열 (ㅂㄱㅁ, ㄲㄱ 등)이 세 번 이상
+    if len(re.findall(r"[ㄱ-ㅎ]{2,}", blob)) >= 3:
+        return True
+    return False
+
+
 # 어떤 그룹에서도 보고 싶지 않은 소재. 검색어와 무관하게 딸려오는 강력범죄·사건 기사다.
 # (업종 뉴스에 아동 성범죄 기사가 뜬 것을 계기로 추가 — 2026-07-30)
 HARD_BLOCK = [
@@ -727,6 +762,10 @@ def main():
                     if g["drop_politics"] and any(w in blob for w in POLITICS_WORDS):
                         continue
                     if g["drop_ads"] and any(w in blob for w in AD_WORDS):
+                        continue
+                    # 검색 노출용 키워드 나열 스팸은 어느 그룹에서도 버린다
+                    if is_keyword_spam(title, desc,
+                                       it.get("cafename") or it.get("bloggername") or ""):
                         continue
                     # 잡담 커뮤니티는 도메인째로 버린다
                     low_link = (link or "").lower()
