@@ -522,4 +522,366 @@ try{ window.__ENH(); }catch(e){}
   try{ wvAddBtn(); }catch(e){}
 })();
 </script>
+<script>
+/* ===== 뷰어 관리자 모드 : 톱니바퀴 → 비밀번호 → 편집 → 저장 ===== */
+(function(){
+  var PWHASH = 'ce6ebbf567a8fba63b5abf8b832a32512191d9e758886c6d3e3107ccd2e0feff';
+  var PAL = ['#ffe9ec','#fff3d6','#e3f2fd','#e8f5e9','#f3e5f5','#e0f7fa','#fff8e1','#efebe9','#ede7f6','#f1f8e9','#fde2ff','#e2fff3'];
+  var SPECIAL = ['전휴무','휴가','훈련','병가','출장'];
+  var ED = null;   // { rows, orig, hi, dayIdx, nameCol, stores, undo:[] }
+
+  function css(){
+    if(document.getElementById('wvAdmCss')) return;
+    var s = document.createElement('style'); s.id = 'wvAdmCss';
+    s.textContent = [
+      '#wvGear{border:1px solid var(--line);background:#fff;color:#6b6c78;width:30px;height:26px;border-radius:7px;cursor:pointer;font-size:14px;line-height:1;margin-right:6px;transition:.15s}',
+      '#wvGear:hover{color:#222;box-shadow:0 2px 8px rgba(0,0,0,.08)}',
+      '.wvOv{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(12,13,22,.62);z-index:100000;display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto}',
+      '.wvCard{background:#fff;border-radius:16px;width:min(420px,96vw);padding:22px;box-shadow:0 24px 70px rgba(0,0,0,.4)}',
+      '.wvCard h3{margin:0 0 4px;font-size:16px;font-weight:800;letter-spacing:-.2px}',
+      '.wvCard p{margin:0 0 16px;font-size:12.5px;color:#8a8b93;line-height:1.6}',
+      '.wvIn{width:100%;padding:11px 13px;border:1px solid #dcdde5;border-radius:10px;font-size:15px;text-align:center;letter-spacing:.06em}',
+      '.wvIn:focus{outline:none;border-color:#2b2d42;box-shadow:0 0 0 3px rgba(43,45,66,.1)}',
+      '.wvRow{display:flex;gap:7px;margin-top:11px}',
+      '.wvBtn{flex:1;padding:11px;border:0;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;transition:.15s}',
+      '.wvBtn.p{background:#2b2d42;color:#fff}.wvBtn.p:hover{background:#3a3d5a}',
+      '.wvBtn.g{background:#f1f2f6;color:#4a4b57}.wvBtn.g:hover{background:#e6e7ee}',
+      '.wvErr{font-size:12px;color:#c62828;margin-top:9px;min-height:15px;text-align:center}',
+      '#wvBarEd{position:fixed;left:0;right:0;bottom:0;background:#14151f;color:#fff;z-index:99998;padding:9px 12px;display:none;gap:7px;align-items:center;flex-wrap:wrap;box-shadow:0 -6px 24px rgba(0,0,0,.28)}',
+      '#wvBarEd .t{font-size:12.5px;font-weight:700;margin-right:2px}',
+      '#wvBarEd .n{font-size:11.5px;color:#9a9ab0}',
+      '#wvBarEd button{padding:7px 11px;border:0;border-radius:8px;font-size:12.5px;font-weight:700;cursor:pointer;background:#2b2d42;color:#dfe0ea}',
+      '#wvBarEd button:hover{background:#3a3d5a;color:#fff}',
+      '#wvBarEd button.save{background:#f2c50f;color:#14151f}',
+      '#wvBarEd button.exit{background:transparent;color:#8a8b9c}',
+      'body.wvEditing #schedTable td.day{cursor:pointer}',
+      'body.wvEditing #schedTable td.day:hover{outline:2px solid #5b6cff;outline-offset:-2px}',
+      '#schedTable td.wvChg{box-shadow:inset 0 0 0 2px #f2c50f}',
+      '#schedTable td.wvGap{box-shadow:inset 0 0 0 2px #c62828}',
+      '#schedTable thead th.wvGapH,#schedTable th.wvGapH{background:#c62828 !important;color:#fff !important}',
+      '#schedTable td.wvDup{outline:2px dashed #e07800;outline-offset:-2px}',
+      '#wvNotice{margin:0 4px 10px;border:1px solid var(--line);border-radius:12px;background:#fff;padding:11px 13px}',
+      '#wvNotice b{font-size:12.5px}',
+      '#wvNotice .it{font-size:12px;color:#555;line-height:1.65;margin-top:5px;padding-top:6px;border-top:1px dashed #eceef3}',
+      '#wvNotice .it:first-of-type{border-top:0;padding-top:0}',
+      '#wvNotice .dt{color:#9a9ba6;font-size:11px;margin-right:5px}',
+      '#wvPick{position:fixed;z-index:100002;background:#fff;border:1px solid #dcdde5;border-radius:12px;box-shadow:0 14px 44px rgba(0,0,0,.24);padding:6px;display:none;max-height:60vh;overflow:auto;min-width:132px}',
+      '#wvPick button{display:block;width:100%;text-align:left;padding:8px 11px;border:0;background:none;font-size:13.5px;border-radius:8px;cursor:pointer}',
+      '#wvPick button:hover{background:#f2f3f8}',
+      '@media(max-width:720px){#wvBarEd{padding:8px}#wvBarEd button{padding:8px 9px;font-size:12px}}'
+    ].join('\n');
+    document.head.appendChild(s);
+  }
+
+  function sha(t){
+    var b = new TextEncoder().encode(t);
+    return crypto.subtle.digest('SHA-256', b).then(function(d){
+      return [].map.call(new Uint8Array(d), function(x){ return x.toString(16).padStart(2,'0'); }).join('');
+    });
+  }
+  function ovClose(){ var o = document.getElementById('wvOv'); if(o) o.remove(); }
+  function overlay(html){
+    ovClose();
+    var d = document.createElement('div'); d.className = 'wvOv'; d.id = 'wvOv';
+    d.innerHTML = '<div class="wvCard">' + html + '</div>';
+    d.addEventListener('click', function(e){ if(e.target === d) ovClose(); });
+    document.body.appendChild(d);
+    return d;
+  }
+
+  /* ---------- 비밀번호 ---------- */
+  function askPw(){
+    var d = overlay(
+      '<h3>관리자 모드</h3><p>비밀번호를 입력하면 이 화면에서 스케줄을 직접 수정할 수 있습니다.</p>' +
+      '<input id="wvApw" class="wvIn" type="password" placeholder="비밀번호" name="wvadm" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true">' +
+      '<div class="wvErr" id="wvAerr"></div>' +
+      '<div class="wvRow"><button class="wvBtn g" id="wvAclr">지우기</button><button class="wvBtn g" id="wvAx">취소</button><button class="wvBtn p" id="wvAok">확인</button></div>'
+    );
+    var inp = d.querySelector('#wvApw');
+    setTimeout(function(){ inp.focus(); }, 120);
+    d.querySelector('#wvAclr').onclick = function(){ inp.value = ''; d.querySelector('#wvAerr').textContent = ''; inp.focus(); };
+    d.querySelector('#wvAx').onclick = ovClose;
+    d.querySelector('#wvAok').onclick = go;
+    inp.addEventListener('keydown', function(e){ if(e.key === 'Enter') go(); });
+    function go(){
+      sha(inp.value).then(function(h){
+        if(h === PWHASH){ window.__wvPw = inp.value; ovClose(); startEdit(); }
+        else { d.querySelector('#wvAerr').textContent = '비밀번호가 맞지 않습니다.'; inp.value = ''; inp.focus(); }
+      });
+    }
+  }
+
+  /* ---------- 편집 시작 ---------- */
+  function meta(rows){
+    var hi = -1;
+    for(var i = 0; i < rows.length; i++)
+      if((rows[i] || []).some(function(x){ return String(x).trim() === '성명'; })){ hi = i; break; }
+    if(hi < 0) hi = 1;
+    var head = (rows[hi] || []).map(function(x){ return String(x).trim(); });
+    var nameCol = head.indexOf('성명'); if(nameCol < 0) nameCol = 1;
+    var dayIdx = [];
+    for(var c = 0; c < head.length; c++) if(/^\d{1,2}$/.test(head[c])) dayIdx.push(c);
+    var st = {};
+    for(var r = hi + 2; r < rows.length; r++)
+      dayIdx.forEach(function(c){
+        var v = String((rows[r] || [])[c] || '').trim().replace(/\((OP|CL)\)$/, '').trim();
+        if(v && SPECIAL.indexOf(v) < 0) st[v] = 1;
+      });
+    return { hi: hi, head: head, nameCol: nameCol, dayIdx: dayIdx, stores: Object.keys(st).sort() };
+  }
+
+  function startEdit(){
+    var rows = window.__wvRows;
+    if(!rows || !rows.length){ alert('스케줄을 먼저 불러온 뒤 수정할 수 있습니다.'); return; }
+    var mt = meta(rows);
+    ED = { orig: JSON.parse(JSON.stringify(rows)), rows: JSON.parse(JSON.stringify(rows)),
+           hi: mt.hi, dayIdx: mt.dayIdx, nameCol: mt.nameCol, stores: mt.stores, undo: [] };
+    document.body.classList.add('wvEditing');
+    tagCells();
+    bar(true);
+  }
+
+  function tagCells(){
+    var tbl = document.getElementById('schedTable'); if(!tbl) return;
+    var trs = [].slice.call(tbl.querySelectorAll('tr'));
+    var body = trs.slice(1);
+    for(var i = 0; i < body.length; i++){
+      var tds = [].slice.call(body[i].children);
+      var rIdx = ED.hi + 2 + i;
+      for(var j = 0; j < ED.dayIdx.length; j++){
+        var td = tds[j + 2];
+        if(!td) continue;
+        td.setAttribute('data-r', rIdx);
+        td.setAttribute('data-c', ED.dayIdx[j]);
+        if(!td.__wvE){ td.__wvE = true; td.addEventListener('click', onCell); }
+      }
+    }
+  }
+
+  function onCell(e){
+    if(!document.body.classList.contains('wvEditing')) return;
+    e.stopPropagation();
+    openPick(this);
+  }
+
+  function openPick(td){
+    var p = document.getElementById('wvPick');
+    if(!p){ p = document.createElement('div'); p.id = 'wvPick'; document.body.appendChild(p);
+      document.addEventListener('click', function(){ p.style.display = 'none'; }); }
+    var opts = ['(휴무)'].concat(ED.stores).concat(SPECIAL);
+    p.innerHTML = opts.map(function(o){ return '<button data-v="' + o + '">' + o + '</button>'; }).join('');
+    p.onclick = function(ev){
+      var b = ev.target.closest('button'); if(!b) return;
+      ev.stopPropagation();
+      setCell(td, b.getAttribute('data-v') === '(휴무)' ? '' : b.getAttribute('data-v'));
+      p.style.display = 'none';
+    };
+    var rc = td.getBoundingClientRect();
+    p.style.display = 'block';
+    var w = p.offsetWidth, h = p.offsetHeight;
+    p.style.left = Math.max(6, Math.min(window.innerWidth - w - 6, rc.left)) + 'px';
+    p.style.top  = (rc.bottom + h + 10 > window.innerHeight ? Math.max(6, rc.top - h - 4) : rc.bottom + 4) + 'px';
+  }
+
+  function color(v){
+    var b = String(v).replace(/\((OP|CL)\)$/, '').trim();
+    if(!b) return 'var(--off)';
+    if(b === '전휴무') return 'var(--hol)';
+    if(b === '휴가') return 'var(--vac)';
+    if(b === '훈련') return 'var(--train)';
+    if(b === '병가') return 'var(--sick)';
+    if(b === '출장') return 'var(--trip)';
+    var i = ED.stores.indexOf(b);
+    return i < 0 ? '#fff' : PAL[i % PAL.length];
+  }
+
+  function setCell(td, v){
+    var r = +td.getAttribute('data-r'), c = +td.getAttribute('data-c');
+    var old = String(ED.rows[r][c] == null ? '' : ED.rows[r][c]);
+    if(old === v) return;
+    ED.undo.push({ td: td, r: r, c: c, v: old });
+    ED.rows[r][c] = v;
+    td.textContent = v;
+    td.style.background = color(v);
+    td.className = 'day ' + (v === '' ? 'off' : 'store') + ' wvChg';
+    if(String(ED.orig[r][c] || '') === v) td.classList.remove('wvChg');
+    bar();
+  }
+
+  function undo(){
+    if(!ED.undo.length) return;
+    var u = ED.undo.pop();
+    ED.rows[u.r][u.c] = u.v;
+    u.td.textContent = u.v;
+    u.td.style.background = color(u.v);
+    u.td.className = 'day ' + (u.v === '' ? 'off' : 'store') + (String(ED.orig[u.r][u.c] || '') === u.v ? '' : ' wvChg');
+    bar();
+  }
+
+  /* ---------- 검토 ---------- */
+  function clearMarks(cls){
+    var tbl = document.getElementById('schedTable'); if(!tbl) return;
+    [].forEach.call(tbl.querySelectorAll('.' + cls), function(x){ x.classList.remove(cls); });
+  }
+  function dayCount(){
+    var out = [];
+    for(var j = 0; j < ED.dayIdx.length; j++){
+      var c = ED.dayIdx[j], at = {};
+      for(var r = ED.hi + 2; r < ED.rows.length; r++){
+        var v = String(ED.rows[r][c] || '').trim().replace(/\((OP|CL)\)$/, '').trim();
+        if(!v || SPECIAL.indexOf(v) >= 0) continue;
+        (at[v] = at[v] || []).push(String(ED.rows[r][ED.nameCol] || '').trim());
+      }
+      out.push({ j: j, day: ED.rows[ED.hi][c], at: at });
+    }
+    return out;
+  }
+  function reviewGap(){
+    clearMarks('wvGapH'); clearMarks('wvDup');
+    var tbl = document.getElementById('schedTable');
+    var head = tbl.querySelectorAll('tr')[0].children;
+    var miss = [];
+    dayCount().forEach(function(d){
+      var empty = ED.stores.filter(function(s){ return !d.at[s]; });
+      if(empty.length){ miss.push(d.day + '일 ' + empty.join(', '));
+        var th = head[d.j + 2]; if(th) th.classList.add('wvGapH'); }
+    });
+    alert(miss.length ? '공백 매장 ' + miss.length + '건\n\n' + miss.join('\n') : '공백 매장 없음 — 모든 매장에 사람이 있습니다.');
+  }
+  function reviewDup(){
+    clearMarks('wvGapH'); clearMarks('wvDup');
+    var tbl = document.getElementById('schedTable');
+    var list = [];
+    dayCount().forEach(function(d){
+      Object.keys(d.at).forEach(function(s){
+        if(d.at[s].length < 2) return;
+        list.push(d.day + '일 ' + s + ' — ' + d.at[s].join(', '));
+        [].forEach.call(tbl.querySelectorAll('td[data-c="' + ED.dayIdx[d.j] + '"]'), function(td){
+          var v = String(td.textContent).replace(/\((OP|CL)\)$/, '').trim();
+          if(v === s) td.classList.add('wvDup');
+        });
+      });
+    });
+    alert(list.length ? '중복 근무 ' + list.length + '건\n\n' + list.slice(0, 25).join('\n') + (list.length > 25 ? '\n외 ' + (list.length - 25) + '건' : '') : '중복 근무 없음 — 모든 매장이 정원대로입니다.');
+  }
+
+  /* ---------- 변경 요약 ---------- */
+  function diff(){
+    var out = [];
+    for(var r = ED.hi + 2; r < ED.rows.length; r++){
+      var nm = String(ED.rows[r][ED.nameCol] || '').trim();
+      for(var j = 0; j < ED.dayIdx.length; j++){
+        var c = ED.dayIdx[j];
+        var a = String(ED.orig[r][c] == null ? '' : ED.orig[r][c]).trim();
+        var b = String(ED.rows[r][c] == null ? '' : ED.rows[r][c]).trim();
+        if(a === b) continue;
+        out.push(ED.rows[ED.hi][c] + '일 ' + nm + ' ' + (a || '휴무') + '→' + (b || '휴무'));
+      }
+    }
+    return out;
+  }
+
+  /* ---------- 저장 ---------- */
+  function save(){
+    var ch = diff();
+    if(!ch.length){ alert('변경된 내용이 없습니다.'); return; }
+    var d = overlay(
+      '<h3>수정된 스케줄로 반영하시겠습니까?</h3>' +
+      '<p>변경 ' + ch.length + '건이 구글시트에 새 탭으로 저장되고, 직원 화면에 바로 반영됩니다.</p>' +
+      '<div style="max-height:200px;overflow:auto;background:#f7f8fb;border-radius:10px;padding:10px 12px;font-size:12.5px;line-height:1.75;color:#3a3b47">' +
+      ch.map(function(x){ return '· ' + x; }).join('<br>') + '</div>' +
+      '<p style="margin:14px 0 6px;font-size:12.5px;color:#4a4b57;font-weight:700">직원에게 남길 말 (선택)</p>' +
+      '<input id="wvMemo" class="wvIn" style="text-align:left" placeholder="예) 8월 12일 인수인계로 매장 조정했습니다">' +
+      '<div class="wvErr" id="wvSerr"></div>' +
+      '<div class="wvRow"><button class="wvBtn g" id="wvSx">아니오</button><button class="wvBtn p" id="wvSok">네, 반영합니다</button></div>'
+    );
+    d.querySelector('#wvSx').onclick = ovClose;
+    d.querySelector('#wvSok').onclick = function(){
+      var btn = this; btn.disabled = true; btn.textContent = '저장 중…';
+      var memo = d.querySelector('#wvMemo').value;
+      fetch(WEBAPP_URL, { method: 'POST', mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ token: SHEET_TOKEN || 'wevape2026', action: 'edit', pw: window.__wvPw,
+                               month: curMonth(), rows: ED.rows, auto: ch.join(' · '), memo: memo })
+      }).then(function(){
+        ovClose(); exitEdit();
+        alert('반영했습니다. 잠시 후 화면을 새로 불러옵니다.');
+        setTimeout(function(){ location.reload(); }, 1200);
+      }).catch(function(){
+        btn.disabled = false; btn.textContent = '네, 반영합니다';
+        d.querySelector('#wvSerr').textContent = '저장에 실패했습니다. 잠시 후 다시 시도해주세요.';
+      });
+    };
+  }
+
+  function curMonth(){ var s = document.getElementById('monthSel'); return s && s.value ? s.value : ''; }
+
+  /* ---------- 하단 바 ---------- */
+  function bar(show){
+    var b = document.getElementById('wvBarEd');
+    if(!b){ b = document.createElement('div'); b.id = 'wvBarEd'; document.body.appendChild(b); }
+    if(show === false){ b.style.display = 'none'; return; }
+    var n = ED ? diff().length : 0;
+    b.innerHTML = '<span class="t">관리자 편집 중</span><span class="n">변경 ' + n + '건 · 칸을 눌러 바꾸세요</span>' +
+      '<span style="flex:1"></span>' +
+      '<button id="wvRg">공백매장 검토</button><button id="wvRd">중복근무 검토</button>' +
+      '<button id="wvUn">되돌리기</button><button class="save" id="wvSv">저장</button><button class="exit" id="wvEx">나가기</button>';
+    b.style.display = 'flex';
+    b.querySelector('#wvRg').onclick = reviewGap;
+    b.querySelector('#wvRd').onclick = reviewDup;
+    b.querySelector('#wvUn').onclick = undo;
+    b.querySelector('#wvSv').onclick = save;
+    b.querySelector('#wvEx').onclick = function(){
+      if(diff().length && !confirm('저장하지 않은 변경이 있습니다. 나가시겠습니까?')) return;
+      exitEdit(); location.reload();
+    };
+  }
+  function exitEdit(){
+    document.body.classList.remove('wvEditing');
+    ED = null; bar(false);
+    var p = document.getElementById('wvPick'); if(p) p.style.display = 'none';
+  }
+
+  /* ---------- 공지사항 ---------- */
+  function loadNotice(){
+    var m = curMonth(); if(!m) return;
+    fetch(WEBAPP_URL + '?mode=notice&month=' + encodeURIComponent(m) + '&t=' + Date.now())
+      .then(function(r){ return r.text(); })
+      .then(function(t){
+        var list = []; try{ list = JSON.parse(t); }catch(e){ return; }
+        var box = document.getElementById('wvNotice');
+        if(!list.length){ if(box) box.remove(); return; }
+        if(!box){ box = document.createElement('div'); box.id = 'wvNotice';
+          var lg = document.getElementById('legend');
+          lg.parentNode.insertBefore(box, lg.nextSibling); }
+        box.innerHTML = '<b>📌 변경 안내</b>' + list.slice(0, 4).map(function(x){
+          return '<div class="it"><span class="dt">' + x.at + '</span>' +
+                 (x.memo ? '<b style="color:#2b2d42">' + x.memo + '</b><br>' : '') +
+                 (x.auto || '') + '</div>';
+        }).join('');
+      }).catch(function(){});
+  }
+
+  /* ---------- 진입 ---------- */
+  function addGear(){
+    if(document.getElementById('wvGear')) return;
+    var stamp = document.getElementById('stamp');
+    if(!stamp || !stamp.parentNode) return;
+    var g = document.createElement('button');
+    g.id = 'wvGear'; g.type = 'button'; g.title = '관리자 모드'; g.textContent = '⚙';
+    g.addEventListener('click', function(){ if(ED) return; askPw(); });
+    stamp.parentNode.insertBefore(g, stamp);
+  }
+
+  css();
+  if(typeof render === 'function' && !render.__wvadm){
+    var _r = render;
+    var w = function(rows){ try{ window.__wvRows = rows; }catch(e){} var o = _r.apply(this, arguments);
+      try{ addGear(); loadNotice(); }catch(e){} return o; };
+    w.__wvadm = true; render = w;
+  }
+  try{ addGear(); }catch(e){}
+  setTimeout(function(){ try{ loadNotice(); }catch(e){} }, 1500);
+})();
+</script>
 </html>
