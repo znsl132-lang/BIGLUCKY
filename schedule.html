@@ -3143,4 +3143,101 @@ function wvBusy(msg){
   generate = wrapped;
 })();
 </script>
+<script>
+/* ===== 전월 마지막 스케줄을 구글시트에서 가져와 연속근무 이월에 반영 =====
+   생성 버튼을 누르면 먼저 전월(최신 수정본)을 받아 S.lastSched에 넣고 생성한다.
+   실패하면 기존 동작(브라우저 저장본)으로 조용히 넘어간다.                    */
+(function(){
+  if(typeof generate !== 'function' || generate.__wvprev) return;
+  var _g = generate, busy = false;
+
+  function pKey(mk){
+    var p = String(mk).split('-'); var y = +p[0], m = +p[1];
+    if(!y || !m) return '';
+    var d = new Date(y, m - 2, 1);
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+  }
+
+  function parseCSV(text){
+    var rows = [], row = [], cur = '', q = false;
+    text = String(text).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    for(var i = 0; i < text.length; i++){
+      var c = text[i];
+      if(q){
+        if(c === '"'){ if(text[i + 1] === '"'){ cur += '"'; i++; } else q = false; }
+        else cur += c;
+      } else {
+        if(c === '"') q = true;
+        else if(c === ','){ row.push(cur); cur = ''; }
+        else if(c === '\n'){ row.push(cur); rows.push(row); row = []; cur = ''; }
+        else cur += c;
+      }
+    }
+    row.push(cur); rows.push(row);
+    return rows.filter(function(r){ return r.some(function(x){ return String(x).trim() !== ''; }); });
+  }
+
+  function toMap(rows){
+    var hi = -1;
+    for(var i = 0; i < rows.length; i++)
+      if((rows[i] || []).some(function(x){ return String(x).trim() === '성명'; })){ hi = i; break; }
+    if(hi < 0) return null;
+    var head = rows[hi].map(function(x){ return String(x).trim(); });
+    var nameCol = head.indexOf('성명'); if(nameCol < 0) return null;
+    var dayIdx = [];
+    for(var c = 0; c < head.length; c++) if(/^\d{1,2}$/.test(head[c])) dayIdx.push(c);
+    if(!dayIdx.length) return null;
+    var map = {}, n = 0;
+    for(var r = hi + 2; r < rows.length; r++){
+      var nm = String((rows[r] || [])[nameCol] || '').trim();
+      if(!nm) continue;
+      map[nm] = dayIdx.map(function(c2){ return String((rows[r] || [])[c2] || '').trim(); });
+      n++;
+    }
+    return n ? map : null;
+  }
+
+  function toast(msg){
+    var t = document.getElementById('wvPrevToast');
+    if(!msg){ if(t) t.remove(); return; }
+    if(!t){
+      t = document.createElement('div'); t.id = 'wvPrevToast';
+      t.style.cssText = 'position:fixed;left:50%;top:18px;transform:translateX(-50%);background:#14151f;color:#fff;padding:9px 16px;border-radius:10px;font-size:13px;z-index:100010;box-shadow:0 8px 26px rgba(0,0,0,.3)';
+      document.body.appendChild(t);
+    }
+    t.textContent = msg;
+  }
+
+  function pull(mk){
+    var pk = pKey(mk);
+    if(!pk || typeof SHEET_WEBAPP_URL === 'undefined' || !SHEET_WEBAPP_URL) return Promise.resolve(false);
+    return fetch(SHEET_WEBAPP_URL + '?month=' + encodeURIComponent(pk) + '&t=' + Date.now())
+      .then(function(r){ return r.text(); })
+      .then(function(t){
+        var map = toMap(parseCSV(t));
+        if(!map) return false;
+        if(!S.lastSched) S.lastSched = {};
+        S.lastSched[pk] = map;
+        try{ save(); }catch(e){}
+        window.__wvPrevKey = pk;
+        return true;
+      });
+  }
+
+  var wrapped = function(){
+    var self = this, args = arguments;
+    var mk = document.getElementById('monthPick') ? document.getElementById('monthPick').value : '';
+    if(busy || !mk) return _g.apply(self, args);
+    busy = true;
+    toast('전월(' + pKey(mk) + ') 스케줄을 시트에서 확인하는 중…');
+    pull(mk).catch(function(){ return false; }).then(function(ok){
+      toast(null); busy = false;
+      if(!ok) console.warn('전월 시트를 불러오지 못해 브라우저 저장본으로 진행합니다.');
+      _g.apply(self, args);
+    });
+  };
+  wrapped.__wvprev = true;
+  generate = wrapped;
+})();
+</script>
 </html>
