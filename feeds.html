@@ -87,6 +87,26 @@
   .item .f .gov{background:#1d4ed8;color:#fff;border-radius:5px;padding:2px 7px;font-weight:800}
   .item .f .press{background:#374151;color:#fff;border-radius:5px;padding:2px 7px;font-weight:700}
 
+  /* 시행 예정 — 언제부터 뭐가 바뀌는지 */
+  .cal{background:#111;color:#fff;border-radius:var(--radius);padding:14px 16px;
+    margin-bottom:14px;box-shadow:var(--shadow)}
+  .cal h3{font-size:12px;color:var(--yellow);font-weight:800;margin-bottom:11px;letter-spacing:.3px}
+  .cal a{display:flex;gap:12px;align-items:flex-start;text-decoration:none;color:inherit;
+    padding:9px 0;border-top:1px solid #2a2a2a}
+  .cal a:first-of-type{border-top:0}
+  .cal a:hover .ct{text-decoration:underline}
+  .cal .dd{flex:0 0 auto;background:var(--yellow);color:#111;border-radius:6px;
+    padding:3px 9px;font-size:11.5px;font-weight:800;white-space:nowrap;min-width:62px;text-align:center}
+  .cal .dd.past{background:#4b5563;color:#e5e7eb}
+  .cal .ct{font-size:13.5px;font-weight:600;line-height:1.45}
+  .cal .cm{font-size:11px;color:#9ca3af;margin-top:2px}
+
+  /* 누적 보관 토글 */
+  .arch{margin:2px 0 12px}
+  .arch button{border:1px dashed var(--line);background:transparent;color:var(--sub);
+    border-radius:8px;padding:7px 13px;font-size:12px;cursor:pointer;font-family:inherit;width:100%}
+  .arch button:hover{border-color:var(--yellow);color:var(--text)}
+
   /* 아침에 30초만 보는 사람을 위한 '꼭 볼 것' */
   .top3{background:var(--card);border:2px solid var(--yellow);border-radius:var(--radius);
     padding:14px 16px;margin-bottom:14px;box-shadow:var(--shadow)}
@@ -134,6 +154,11 @@
     <ul id="summary"><li>불러오는 중…</li></ul>
   </section>
 
+  <section class="cal" id="calBox" hidden>
+    <h3>⏰ 시행 예정 — 언제부터 바뀌나</h3>
+    <div id="calList"></div>
+  </section>
+
   <section class="top3" id="top3Box" hidden>
     <h3>⚡ 오늘 꼭 볼 것</h3>
     <div id="top3List"></div>
@@ -148,6 +173,7 @@
   <div class="why" id="why" hidden></div>
   <div class="desc" id="gdesc"></div>
   <div class="kwbar" id="kwbar"></div>
+  <div class="arch" id="archBox" hidden><button id="archBtn"></button></div>
   <div id="list"></div>
 
   <section class="trend" id="trendBox" hidden>
@@ -195,7 +221,7 @@ const SAMPLE = {
   trend:null
 };
 
-let DATA=null, curG=0, curKw=null, chart=null;
+let DATA=null, curG=0, curKw=null, chart=null, showArch=false;
 const $ = id => document.getElementById(id);
 const esc = s => String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 // "2026-07-24" → "6일 전" 처럼 바꿔 보여준다. 오래된 글을 바로 알아채게.
@@ -242,6 +268,17 @@ function renderAll(){
 
   $("summary").innerHTML = (DATA.summary||["-"]).map(s=>`<li>${esc(s)}</li>`).join("");
 
+  const up = DATA.upcoming||[];
+  $("calBox").hidden = !up.length;
+  $("calList").innerHTML = up.map(i=>{
+    const d = i.dday;
+    const lbl = d > 0 ? `D-${d}` : d === 0 ? "오늘" : `${-d}일 전`;
+    return `<a href="${esc(i.link)}" target="_blank" rel="noopener noreferrer">
+      <span class="dd ${d<0?"past":""}">${lbl}</span>
+      <span><span class="ct">${esc(i.title)}</span>
+      <div class="cm">${esc(i.eff)} 시행 · ${tierLabel(i.tier)} ${esc(i.where||"")}</div></span></a>`;
+  }).join("");
+
   const t3 = DATA.top3||[];
   $("top3Box").hidden = !t3.length;
   $("top3List").innerHTML = t3.map(i=>`
@@ -277,7 +314,7 @@ function renderAll(){
       <span class="n">${g.items.length}</span>${ng?`<span class="dot" style="width:8px;height:8px"></span>`:n?'<span class="dot" style="background:var(--sub)"></span>':''}</button>`;
   }).join("");
   $("tabs").querySelectorAll("button").forEach(b=>b.onclick=()=>{
-    curG=+b.dataset.i; curKw=null; $("why").hidden=true; render();});
+    curG=+b.dataset.i; curKw=null; showArch=false; $("why").hidden=true; render();});
 
   const g = (DATA.groups||[])[curG];
   if(!g){ $("list").innerHTML=`<div class="empty">데이터가 없습니다.</div>`; return; }
@@ -293,7 +330,18 @@ function renderAll(){
   $("kwbar").innerHTML = (kws.length || negN) ? bar.join("") : "";
   $("kwbar").querySelectorAll("button").forEach(b=>b.onclick=()=>{curKw=b.dataset.k||null;render();});
 
-  const items = !curKw ? g.items
+  // 규제 탭에서만 '누적 보관' 토글을 보여준다
+  const arch = (g.id==="reg") ? (DATA.regArchive||[]) : [];
+  const older = arch.filter(a => !g.items.some(i => i.link === a.link));
+  $("archBox").hidden = !older.length;
+  if(older.length){
+    $("archBtn").textContent = showArch
+      ? `▲ 누적 보관 ${older.length}건 접기`
+      : `▼ 지난 규제 소식 ${older.length}건 더 보기 (누적 보관)`;
+    $("archBtn").onclick = ()=>{ showArch = !showArch; render(); };
+  }
+
+  const items = !curKw ? (showArch ? g.items.concat(older) : g.items)
     : curKw==="__neg__" ? g.items.filter(i=>i.neg)
     : g.items.filter(i=>i.kw===curKw);
   $("list").innerHTML = items.length ? items.map(i=>`
@@ -303,6 +351,7 @@ function renderAll(){
       <div class="f">
         <span class="src">${esc(i.src)}</span>
         ${i.tier==="gov"?'<span class="gov">🏛 공식</span>':i.tier==="press"?'<span class="press">📰 주요언론</span>':""}
+        ${i.eff?`<span class="badge">📅 ${esc(i.eff)} 시행</span>`:""}
         ${i.neg?`<span class="neg">⚠ ${esc((i.negWords||[]).join(", "))}</span>`:""}
         ${i.new?'<span class="badge">NEW</span>':''}
         <span class="tag">${esc(i.kw)}</span>

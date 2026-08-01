@@ -347,8 +347,10 @@ GROUPS = [
         # 직원이 아침에 가장 먼저 봐야 할 것. 법안·단속·처분은 매장 운영에 직접 걸린다.
         "id": "reg",
         "label": "규제·단속",
-        "desc": "법안 개정 · 단속 강화 · 행정처분",
-        "sources": ["news"],
+        "desc": "법안 개정 · 단속 강화 · 시행 예정",
+        # 웹문서를 추가한다. 식약처·기재부·관세청 보도자료 원문이 여기로 잡힌다.
+        # 게시일 조회 기능이 있어 오래된 문서는 자동으로 걸러진다.
+        "sources": ["news", "webkr"],
         "keywords": [
             "담배사업법 개정",
             "전자담배 법안",
@@ -378,6 +380,21 @@ GROUPS = [
             "전자담배 광고 제한",
             "전자담배 성분 표시",
             "무인 전자담배 자판기",
+            # 세금 체계
+            "액상 개별소비세", "담배소비세 전자담배", "지방교육세 담배",
+            "국민건강증진부담금", "전자담배 부담금",
+            # 성분·표시
+            "니코틴 함량 기준", "전자담배 가향물질", "전자담배 향료 규제",
+            "전자담배 경고그림", "전자담배 성분 공개", "액상 유해성 심의",
+            # 판매 방식
+            "전자담배 통신판매", "전자담배 자판기 규제", "전자담배 거리제한",
+            # 통관·수입
+            "니코틴 원료 수입", "전자담배 관세", "액상 통관",
+            # 입법 절차
+            "담배사업법 의안", "전자담배 입법예고", "전자담배 상임위",
+            # 해외 동향 (한국 규제의 선행지표)
+            "EU 전자담배 규제", "미국 FDA 전자담배", "일본 전자담배 규제",
+            "해외 액상 규제",
         ],
         "drop_ads": False,
         "drop_politics": False,     # 규제 뉴스는 국회·법안 언급이 필연이다
@@ -387,8 +404,8 @@ GROUPS = [
         "drop_words": LOCAL_HEALTH_NOISE + ENTERTAIN_NOISE + YOUTH_CRACKDOWN_NOISE,
         "rescue_any": ENFORCEMENT_RESCUE,   # 판매업소 단속 기사는 살린다
         "hard_words": NUISANCE_NOISE,       # 민폐·화제성 기사는 구제 없이 차단
-        # 규제 뉴스는 매일 나오지 않는다. 30시간이면 화면이 빈다. 7일치를 본다.
-        "window_days": 7,
+        # 법안은 몇 주에 걸쳐 진행된다. 30일치를 봐야 '어디까지 왔나'가 보인다.
+        "window_days": 30,
         "alert": True,              # 규제 신규 건은 카톡으로도 알린다
     },
     {
@@ -646,6 +663,55 @@ def resolve_pubdate(link, cache):
     return d
 
 
+# ─────────────────────────────────────────────────────────────
+# 시행일 뽑아내기
+#   직원이 알아야 하는 건 "법이 바뀐다"가 아니라 "언제부터 어떻게 해야 하나"다.
+#   [26.08.18 시행] · 2026년 8월 18일부터 시행 · 8월 18일부터 → 날짜로 뽑는다.
+# ─────────────────────────────────────────────────────────────
+EFF_RES = [
+    re.compile(r"\[?\s*(\d{2,4})[.\-년]\s*(\d{1,2})[.\-월]\s*(\d{1,2})\s*일?\s*"
+               r"(?:부터)?\s*(?:시행|적용|발효)"),
+    re.compile(r"(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일\s*(?:부터)?\s*(?:시행|적용|발효)"),
+    re.compile(r"(\d{1,2})월\s*(\d{1,2})일\s*부터\s*(?:시행|적용|금지|의무)"),
+]
+
+
+def extract_effective(blob, now):
+    """본문에서 시행일을 찾아 YYYY-MM-DD 로 돌려준다. 없으면 빈 문자열."""
+    for i, rx in enumerate(EFF_RES):
+        m = rx.search(blob)
+        if not m:
+            continue
+        g = m.groups()
+        if len(g) == 3:
+            y, mo, d = g
+            y = int(y)
+            if y < 100:                      # '26' → 2026
+                y += 2000
+        else:
+            continue
+        try:
+            dt = datetime(y, int(mo), int(d))
+        except ValueError:
+            continue
+        # 너무 먼 과거·미래는 오탐으로 본다
+        if abs((dt.date() - now.date()).days) > 900:
+            continue
+        return dt.strftime("%Y-%m-%d")
+    # '8월 18일부터 시행' 처럼 연도가 없는 경우
+    m = EFF_RES[2].search(blob)
+    if m:
+        mo, d = int(m.group(1)), int(m.group(2))
+        for y in (now.year, now.year + 1):
+            try:
+                dt = datetime(y, mo, d)
+            except ValueError:
+                continue
+            if (dt.date() - now.date()).days >= -60:
+                return dt.strftime("%Y-%m-%d")
+    return ""
+
+
 def call(path, params, cid, csec, retries=3):
     url = f"{SEARCH_HOST}{path}?{urlencode(params)}"
     req = Request(url, headers={"X-NCP-APIGW-API-KEY-ID": cid,
@@ -720,6 +786,7 @@ def main():
     history = [h for h in prev.get("history", []) if h.get("date") != today]
     seen = prev.get("seen", {})                 # {링크해시: 최초발견일}
     pubdates = prev.get("pubdates", {})         # {링크: 게시일} — 두 번 조회하지 않는다
+    reg_archive = prev.get("regArchive", [])    # 규제 항목은 기간이 지나도 계속 쌓아둔다
     seen_cut = (now - timedelta(days=SEEN_DAYS)).strftime("%Y-%m-%d")
     seen = {k: v for k, v in seen.items() if v >= seen_cut}
 
@@ -886,6 +953,7 @@ def main():
                         "kw": kw,
                         "new": is_new,
                         "tier": source_tier(src, link, blob),
+                        "eff": extract_effective(blob, now) if g["id"] == "reg" else "",
                         "neg": bool(hits),
                         "negWords": hits[:4],
                     }
@@ -923,6 +991,32 @@ def main():
                            "ratio": round(c / b, 1) if b else None})
     rising.sort(key=lambda x: (x["ratio"] or 99, x["count"]), reverse=True)
 
+    # ── 규제 항목 누적 보관 ──
+    #   규제는 30일이 지나도 사라지면 안 된다. "그때 뭐가 바뀌었더라"를 계속 볼 수 있어야 한다.
+    reg_now = next((g["items"] for g in out_groups if g["id"] == "reg"), [])
+    have = {i["link"] for i in reg_archive}
+    for it in reg_now:
+        if it["link"] not in have:
+            reg_archive.append({k: it[k] for k in
+                                ("title", "desc", "link", "src", "where", "pub", "tier", "eff")})
+            have.add(it["link"])
+    reg_archive.sort(key=lambda x: x.get("pub") or "", reverse=True)
+    reg_archive = reg_archive[:200]
+
+    # ── 시행 예정: 시행일이 아직 안 지난 것 (지난 것도 14일까지는 남긴다) ──
+    today = now.strftime("%Y-%m-%d")
+    keep_from = (now - timedelta(days=14)).strftime("%Y-%m-%d")
+    upcoming = [i for i in reg_archive if i.get("eff") and i["eff"] >= keep_from]
+    seen_eff = set()
+    uniq = []
+    for i in sorted(upcoming, key=lambda x: x["eff"]):
+        key = (i["eff"], i["title"][:20])
+        if key in seen_eff:
+            continue
+        seen_eff.add(key)
+        uniq.append({**i, "dday": (datetime.strptime(i["eff"], "%Y-%m-%d").date() - now.date()).days})
+    upcoming = uniq[:12]
+
     # ── 오늘 요약 3줄 + 꼭 볼 것 3건 ──
     summary = build_summary(out_groups, rising)
     top3 = build_top3(out_groups, now)
@@ -935,6 +1029,8 @@ def main():
         "apiCalls": calls,
         "summary": summary,
         "top3": top3,
+        "upcoming": upcoming,
+        "regArchive": reg_archive,
         "rising": rising[:8],
         "alerts": new_alerts[:30],
         "groups": out_groups,
@@ -979,13 +1075,15 @@ def build_top3(groups, now):
             if limit <= 0:
                 return
 
-    take([i for i in by.get("store", []) if i.get("neg")], "우리 매장 불만족", 2)
+    # 순서가 곧 우선순위다. 규제·법안이 맨 위에 온다.
+    take([i for i in by.get("reg", []) if i.get("eff")], "시행일 확정", 2)
     take([i for i in by.get("reg", []) if i.get("tier") == "gov"], "공식 규제 발표", 2)
-    take([i for i in by.get("reg", []) if i.get("new")], "새 규제·단속", 2)
+    take([i for i in by.get("reg", []) if i.get("new")], "새 법안·규제", 2)
+    take([i for i in by.get("store", []) if i.get("neg")], "우리 매장 불만족", 1)
+    take(by.get("reg", []), "규제·단속", 3)
+    take([i for i in by.get("nonic", []) if i.get("new")], "무니코틴 이슈", 1)
     take([i for i in by.get("watch", []) if i.get("new")], "온라인 판매 의심", 1)
     take([i for i in by.get("store", []) if i.get("new")], "우리 매장 언급", 1)
-    take(by.get("reg", []), "규제·단속", 3)
-    take(by.get("nonic", []), "무니코틴 이슈", 1)
 
     # 48시간 안에 3건이 안 되면 그 이상 된 것도 채우되 라벨로 구분한다
     if len(picked) < 3:
