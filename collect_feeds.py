@@ -108,6 +108,23 @@ VAPE_COMMUNITY = VAPE_WORDS + [
     "드립팁", "탱크", "저항값", "옴", "니코틴 함량",
 ]
 
+# ★ 카페 이름 검증 — 커뮤니티 노이즈의 근본 해법
+#   글 내용만 거르면 에어비앤비·베트남여행 카페가 계속 샌다.
+#   카페 이름 자체에 전자담배 관련어가 있어야 통과시킨다.
+#   (신림역 숙소 = 에어비앤비 호스트 카페 글이 들어온 것을 계기로 — 2026-08-01)
+VAPE_CAFE_WORDS = [
+    "전자담배", "전담", "액상", "베이프", "vape", "입호흡", "폐호흡",
+    "궐련형", "일회용전자담배", "니코틴", "무화기", "베이핑", "전자연초",
+]
+
+# 카페 고정 안내문구·인사글. 본문 하단 서명에 전자담배 단어가 박혀 있어 통과한다.
+CHITCHAT_WORDS = [
+    "제목에 기기", "사진과 함께 일상", "소통해 보세요", "소통해보세요",
+    "가족분들", "회원님들", "출석체크", "출첵", "좋은 아침", "안녕하세요 여러분",
+    "건강 관리 잘하", "건강관리 잘하", "무더위", "폭염", "체고", "뒹굴",
+    "인사드립니다", "가입인사", "등업", "눈팅", "잡담",
+]
+
 # 자동차 정비 글. '코일'·'누유'·'교체' 같은 말이 전자담배와 겹쳐 대량으로 딸려온다.
 AUTO_NOISE = [
     "점화코일", "점화 코일", "점화플러그", "점화 플러그",
@@ -482,7 +499,8 @@ GROUPS = [
         "drop_ads": True,           # 체험단·협찬 포스팅 제거
         "drop_politics": False,
         "require_any": VAPE_COMMUNITY,
-        "drop_words": PROMO_WORDS + AUTO_NOISE,
+        "require_where": VAPE_CAFE_WORDS,   # 카페 이름에 전자담배 관련어가 있어야 통과
+        "drop_words": PROMO_WORDS + AUTO_NOISE + CHITCHAT_WORDS,
         "alert": False,
     },
     {
@@ -878,6 +896,12 @@ def main():
                         low = blob.lower()
                         if not all(any(w in low for w in s) for s in sets):
                             continue
+                    # 카페·블로그 이름에 소재가 있어야 통과 (무관한 카페 차단)
+                    rw = g.get("require_where") or []
+                    if rw:
+                        w = (it.get("cafename") or it.get("bloggername") or "").lower()
+                        if not any(x in w for x in rw):
+                            continue
                     # 뉴스는 '제목'에 소재가 있어야 그 기사의 주제로 본다.
                     # 본문에 한 번 스친 기사(청계천 단속, 공항 보조배터리 등)를 잘라낸다.
                     rt = g.get("require_title") or []
@@ -1087,9 +1111,15 @@ def build_top3(groups, now):
 
     # 48시간 안에 3건이 안 되면 그 이상 된 것도 채우되 라벨로 구분한다
     if len(picked) < 3:
+        # 보충분도 7일 이내로 제한한다. 그보다 오래된 건 '오늘 볼 것'이 아니다.
+        week = (now - timedelta(days=7)).strftime("%Y-%m-%d")
+        def recent(items):
+            return [i for i in items
+                    if i["link"] not in seen_links
+                    and (i.get("pub") or "")[:10] >= week]
         allg = {g["id"]: g.get("items", []) for g in groups}
-        take([i for i in allg.get("reg", []) if i["link"] not in seen_links], "지난 규제 소식", 3)
-        take([i for i in allg.get("nonic", []) if i["link"] not in seen_links], "지난 무니코틴 이슈", 2)
+        take(recent(allg.get("reg", [])), "지난 규제 소식", 3)
+        take(recent(allg.get("nonic", [])), "지난 무니코틴 이슈", 2)
     return picked
 
 
