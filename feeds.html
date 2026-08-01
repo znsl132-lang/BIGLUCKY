@@ -86,6 +86,20 @@
   .item .f .neg{background:var(--hot);color:#fff;border-radius:5px;padding:2px 7px;font-weight:800}
   .item .f .gov{background:#1d4ed8;color:#fff;border-radius:5px;padding:2px 7px;font-weight:800}
   .item .f .press{background:#374151;color:#fff;border-radius:5px;padding:2px 7px;font-weight:700}
+  .item .f .cust{background:#1d4ed8;color:#fff;border-radius:5px;padding:2px 7px;font-weight:800}
+  .item .f .promo{background:#e5e7eb;color:#6b7280;border-radius:5px;padding:2px 7px;font-weight:700}
+  .item.promo{opacity:.72}
+  .item.cust{border-left:3px solid #1d4ed8}
+
+  /* 필터 통계 — 오탐이 다시 새는지 숫자로 본다 */
+  .stats{margin-top:20px;border-top:1px solid var(--line);padding-top:14px}
+  .stats h3{font-size:12px;color:var(--sub);font-weight:700;margin-bottom:9px}
+  .stats table{width:100%;border-collapse:collapse;font-size:11.5px}
+  .stats th,.stats td{padding:5px 7px;text-align:right;border-bottom:1px solid var(--line)}
+  .stats th:first-child,.stats td:first-child{text-align:left;font-weight:600}
+  .stats th{color:var(--sub);font-weight:600;font-size:10.5px}
+  .stats td.keep{color:var(--text);font-weight:800}
+  .stats td.zero{color:#d1d5db}
 
   /* 시행 예정 — 언제부터 뭐가 바뀌는지 */
   .cal{background:#111;color:#fff;border-radius:var(--radius);padding:14px 16px;
@@ -180,6 +194,11 @@
     <h3>검색어 트렌드</h3>
     <p>네이버 통합검색 검색량 상대 추이 (최근 90일, 주 단위). 절대 건수가 아니라 기간 내 최대값을 100으로 둔 지수입니다.</p>
     <div class="chartbox"><canvas id="trendChart"></canvas></div>
+  </section>
+
+  <section class="stats" id="statsBox" hidden>
+    <h3>수집·필터 현황 — 오탐이 다시 새는지 숫자로 확인</h3>
+    <div id="statsTable"></div>
   </section>
 
   <div class="note">
@@ -311,22 +330,23 @@ function renderAll(){
     const n = g.items.filter(x=>x.new).length;
     const ng = g.items.filter(x=>x.neg).length;
     return `<button class="${i===curG?"on":""}" data-i="${i}">${esc(g.label)}
-      <span class="n">${g.items.length}</span>${ng?`<span class="dot" style="width:8px;height:8px"></span>`:n?'<span class="dot" style="background:var(--sub)"></span>':''}</button>`;
+      <span class="n">${g.items.length}건</span>${ng?`<span class="dot" style="width:8px;height:8px"></span>`:n?'<span class="dot" style="background:var(--sub)"></span>':''}</button>`;
   }).join("");
   $("tabs").querySelectorAll("button").forEach(b=>b.onclick=()=>{
     curG=+b.dataset.i; curKw=null; showArch=false; $("why").hidden=true; render();});
 
   const g = (DATA.groups||[])[curG];
   if(!g){ $("list").innerHTML=`<div class="empty">데이터가 없습니다.</div>`; return; }
-  $("gdesc").textContent = g.desc||"";
+  $("gdesc").textContent = (g.desc||"") + (g.id==="store" && DATA.storeCount
+    ? `  ·  ${DATA.storeCount}개 지점 감시 중 (아래 숫자는 지점 수가 아니라 잡힌 글 건수)` : "");
 
   const cnt={}; g.items.forEach(i=>cnt[i.kw]=(cnt[i.kw]||0)+1);
   const kws = Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]);
   const negN = g.items.filter(i=>i.neg).length;
-  const bar = [`<button class="${curKw===null?"on":""}" data-k="">전체 ${g.items.length}</button>`];
+  const bar = [`<button class="${curKw===null?"on":""}" data-k="">전체 ${g.items.length}건</button>`];
   if(negN) bar.push(`<button class="${curKw==="__neg__"?"on":""}" data-k="__neg__"
     style="border-color:var(--hot);color:${curKw==="__neg__"?"#fff":"var(--hot)"};${curKw==="__neg__"?"background:var(--hot);":""}">⚠ 불만족 ${negN}</button>`);
-  kws.forEach(k=>bar.push(`<button class="${curKw===k?"on":""}" data-k="${esc(k)}">${esc(k)} ${cnt[k]}</button>`));
+  kws.forEach(k=>bar.push(`<button class="${curKw===k?"on":""}" data-k="${esc(k)}">${esc(k)} ${cnt[k]}건</button>`));
   $("kwbar").innerHTML = (kws.length || negN) ? bar.join("") : "";
   $("kwbar").querySelectorAll("button").forEach(b=>b.onclick=()=>{curKw=b.dataset.k||null;render();});
 
@@ -345,12 +365,13 @@ function renderAll(){
     : curKw==="__neg__" ? g.items.filter(i=>i.neg)
     : g.items.filter(i=>i.kw===curKw);
   $("list").innerHTML = items.length ? items.map(i=>`
-    <a class="item ${i.neg?"neg":i.new?"new":""}" href="${esc(i.link)}" target="_blank" rel="noopener noreferrer">
+    <a class="item ${i.neg?"neg":i.voice==="promo"?"promo":i.voice==="customer"?"cust":i.new?"new":""}" href="${esc(i.link)}" target="_blank" rel="noopener noreferrer">
       <div class="t">${esc(i.title)}</div>
       ${i.desc?`<div class="d">${esc(i.desc)}</div>`:""}
       <div class="f">
         <span class="src">${esc(i.src)}</span>
         ${i.tier==="gov"?'<span class="gov">🏛 공식</span>':i.tier==="press"?'<span class="press">📰 주요언론</span>':""}
+        ${i.voice==="customer"?'<span class="cust">🙋 손님</span>':i.voice==="promo"?'<span class="promo">📣 홍보</span>':""}
         ${i.eff?`<span class="badge">📅 ${esc(i.eff)} 시행</span>`:""}
         ${i.neg?`<span class="neg">⚠ ${esc((i.negWords||[]).join(", "))}</span>`:""}
         ${i.new?'<span class="badge">NEW</span>':''}
@@ -360,7 +381,39 @@ function renderAll(){
       </div>
     </a>`).join("") : `<div class="empty">잡힌 글이 없습니다.</div>`;
 
+  drawStats();
   drawTrend();
+}
+
+// 감독관 지시 ④ — 매 실행의 수집·차단 건수를 화면 아래에 남긴다
+function drawStats(){
+  const st = DATA.stats;
+  if(!st || !Object.keys(st).length){ $("statsBox").hidden = true; return; }
+  $("statsBox").hidden = false;
+  const cols = ["수집","기간밖","날짜불명","스팸","차단도메인","차단어","소재불일치","제목불일치","카페불일치","중복","매체상한","최종"];
+  const label = {store:"우리 매장",watch:"판매 감시",reg:"규제·단속",vape:"업계·시장",
+                 nonic:"무니코틴",community:"커뮤니티",brand:"경쟁사·브랜드"};
+  const rows = (DATA.groups||[]).map(g=>{
+    const r = st[g.id]; if(!r) return "";
+    return `<tr><td>${esc(g.label)}</td>` + cols.map(c=>{
+      const v = r[c] ?? 0;
+      const cls = c==="최종" ? "keep" : (v===0 ? "zero" : "");
+      return `<td class="${cls}">${v.toLocaleString()}</td>`;
+    }).join("") + "</tr>";
+  }).join("");
+  const tot = {};
+  cols.forEach(c=> tot[c] = Object.values(st).reduce((a,r)=>a+(r[c]||0),0));
+  $("statsTable").innerHTML = `<table>
+    <thead><tr><th>탭</th>${cols.map(c=>`<th>${c}</th>`).join("")}</tr></thead>
+    <tbody>${rows}
+      <tr style="border-top:2px solid var(--line)"><td>합계</td>${
+        cols.map(c=>`<td class="${c==="최종"?"keep":""}">${tot[c].toLocaleString()}</td>`).join("")}</tr>
+    </tbody></table>
+    <div style="font-size:11px;color:var(--sub);margin-top:8px">
+      수집 ${tot["수집"].toLocaleString()}건 중 ${tot["최종"].toLocaleString()}건 통과
+      (통과율 ${(tot["최종"]/Math.max(tot["수집"],1)*100).toFixed(1)}%) ·
+      API 호출 ${DATA.apiCalls||0}회 · 매장 ${DATA.storeCount||0}개 지점
+    </div>`;
 }
 
 // 급상승 키워드를 눌렀을 때 '어디서 왜' 를 한 줄로 설명한다

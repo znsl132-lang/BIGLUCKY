@@ -1,0 +1,68 @@
+{
+  "_설명": "필터 회귀 테스트용 고정 샘플. 실제로 잘못 걸렸던 글과 반드시 통과해야 하는 글을 남겨둔 것.",
+  "_사용법": "python3 test_filters.py  → 전부 PASS 여야 한다. 필터를 고칠 때마다 반드시 돌린다.",
+  "_원칙": "새 오탐을 발견하면 여기에 케이스를 추가한다. 필터만 고치고 샘플을 안 남기면 같은 실수가 반복된다.",
+  "_갱신": "2026-08-01",
+
+  "cases": [
+    { "id": 1,  "expect": "block", "group": "store", "why": "Bape 의류 — '베이프'+'구월' 부분 매칭",
+      "title": "베이프 × 에스파 베이비 마일로 캡슐 컬렉션", "desc": "Bape x AESPA 스트리트웨어 K-POP 아이콘", "where": "패션카페", "src": "cafearticle" },
+
+    { "id": 2,  "expect": "pass",  "group": "store", "why": "본문에 우리 지점 언급",
+      "title": "버블온 팟추가했어요!", "desc": "팟불량이라 위베이프 구월점에 방문했으니 교체해주셨어요", "where": "입호흡전자담배", "src": "cafearticle" },
+
+    { "id": 3,  "expect": "block", "group": "store", "why": "타 지역 가맹점",
+      "title": "위베이프전자담배 강남역점 가본 사람", "desc": "강남역점 팩트 체크 좀 해주셈", "where": "필로버터", "src": "cafearticle" },
+
+    { "id": 4,  "expect": "block", "group": "store", "why": "중동현대점은 우리 매장이 아님",
+      "title": "위베이프 중동현대점, 트렌디한 전자담배의 세계", "desc": "중동현대점 후기", "where": "블로그", "src": "blog" },
+
+    { "id": 5,  "expect": "block", "group": "reg", "why": "아동 성범죄 — 본문 '담배 심부름'에 걸렸던 건",
+      "title": "10대 아동 성매매 알선 일당 검거", "desc": "담배 심부름을 시키며 접근했다 전자담배 규제", "where": "a.co.kr", "src": "news" },
+
+    { "id": 6,  "expect": "block", "group": "reg", "why": "지자체 금연 통계 — 매장 무관",
+      "title": "괴산군, 건강지표 전반적 개선", "desc": "전자담배 등을 포함한 남성 담배제품 현재사용률 지역사회건강조사 규제", "where": "cctimes.kr", "src": "news" },
+
+    { "id": 7,  "expect": "pass",  "group": "reg", "why": "보건소 판매업소 단속 — 구제 조건으로 살려야 함",
+      "title": "보건소, 관내 전자담배 판매업소 20곳 점검…3곳 적발", "desc": "청소년 판매 여부 단속, 소매인 지정 위반 처분", "where": "news1.kr", "src": "news" },
+
+    { "id": 8,  "expect": "block", "group": "reg", "why": "민폐·화제성 기사",
+      "title": "탑승구 앞에서 대놓고 전자담배 '뻐끔'…인천공항 '민폐 외국인 승객' 논란", "desc": "누리꾼 공분 적발 규제", "where": "nownews.seoul.co.kr", "src": "news" },
+
+    { "id": 9,  "expect": "pass",  "group": "reg", "why": "핵심 규제 뉴스",
+      "title": "담배사업법 개정안 국회 통과…액상형 전자담배 온라인 판매 금지", "desc": "시행령 마련 단속 강화", "where": "yna.co.kr", "src": "news" },
+
+    { "id": 10, "expect": "pass",  "group": "reg", "why": "시행일이 명시된 통관 지침",
+      "title": "[26.08.18 시행] 전자담배 니코틴 용액 수입통관 지침 재개정", "desc": "관세청 세금 탈루 의혹 유해성 서류 구비 규제", "where": "customs.go.kr", "src": "news" },
+
+    { "id": 11, "expect": "block", "group": "vape", "why": "'액상'이 액상 알룰로스(식품)",
+      "title": "삼양사 액상 알룰로스 신제품 3종 출시", "desc": "B2C 알룰로스 신제품 라인업 확장 시장", "where": "insightkorea.co.kr", "src": "news" },
+
+    { "id": 12, "expect": "block", "group": "vape", "why": "'액상'이 지반 액상화",
+      "title": "구마모토 덮친 진도 7 강진 여파", "desc": "구마모토현에서 지반 액상화 현상과 심각한 함몰 시장", "where": "opinionnews.co.kr", "src": "news" },
+
+    { "id": 13, "expect": "block", "group": "vape", "why": "연예 기사",
+      "title": "김준호-김지민, 부모 된다…임신 12주 차", "desc": "지금 전자담배를 3개째 피우고 있다 시장", "where": "joynews24.com", "src": "news" },
+
+    { "id": 14, "expect": "block", "group": "community", "why": "자동차 정비 — 점화코일·엔진오일 누유",
+      "title": "hg그랜저 엔진떨림, hg그랜저 엔진오일누유", "desc": "점화플러그및 코일문제로 엔진떨림이 발생하여 교환이 필요합니다", "where": "경주새대구정비", "src": "cafearticle" },
+
+    { "id": 15, "expect": "block", "group": "community", "why": "전자담배와 무관한 카페",
+      "title": "신림역 숙소", "desc": "건물 전체 내 절대 금연이며 전자담배, 일반담배 모두 금지이며", "where": "에어비앤비 호스트, 예비호스트 모임", "src": "cafearticle" },
+
+    { "id": 16, "expect": "block", "group": "community", "why": "카페 고정 서명에 전자담배 단어가 박힌 잡담",
+      "title": "집에서 에어컨 뒹굴이 체고..", "desc": "오늘 체감온도가 35도래요 전담기기 또는 전자액상 사진과 함께 일상을 전하며 소통해 보세요", "where": "액상 궐련형 중고 일회용전자담배 입호흡", "src": "cafearticle" },
+
+    { "id": 17, "expect": "pass",  "group": "community", "why": "실사용 고장 질문 — 반드시 통과",
+      "title": "코일 누유 심한데 방법 없나요", "desc": "전자담배 코일에서 액상이 새서 입에 들어와요 무화기 불량인가요", "where": "전자담배 정보공유", "src": "cafearticle" },
+
+    { "id": 18, "expect": "block", "group": "community", "why": "유흥 키워드 나열 스팸",
+      "title": "놀라운 신개념 사유", "desc": "호치민/유흥/마사지/아파트/숙소/가라오케/호텔/풍가이/풀빌라/황제/이발소/여행/골프/밤문화/하노이/렌트카/공항/환전/전자담배/클럽", "where": "베트남여행 시즌1", "src": "cafearticle" },
+
+    { "id": 19, "expect": "pass",  "group": "watch", "why": "액상 온라인 판매 — 감시 대상. 0건 사고의 기준선",
+      "title": "액상 30ml 택배 가능한가요", "desc": "무니코틴 액상 택배발송 되나요 직거래만 되는지 궁금합니다 가격도 알려주세요", "where": "중고나라", "src": "cafearticle" },
+
+    { "id": 20, "expect": "pass",  "group": "brand", "why": "브랜드 신제품 — 홍보성이지만 통과해야 함. 0건 사고의 기준선",
+      "title": "오지구 동성로점 슈가캔디 액상 신제품", "desc": "달콤한 캔디의 매력을 그대로 담아낸 전자담배 액상 시연 가능", "where": "오지구 대구 동성로점", "src": "blog" }
+  ]
+}

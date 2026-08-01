@@ -46,35 +46,48 @@ SEEN_DAYS = 30                                            # 중복 판정용 링
 # ─────────────────────────────────────────────────────────────
 # ① 우리 매장 — 여기가 가장 중요하다. 실제 표기로 맞출 것
 # ─────────────────────────────────────────────────────────────
-BRAND_TERMS = ["위베이프", "WEVAPE", "위베이프 전자담배"]
+# ─────────────────────────────────────────────────────────────
+# 매장 명단은 stores.json 에서 읽는다. 코드를 고치지 않고 명단만 바꾸면 된다.
+#   STORES_URL 환경변수를 주면 외부(허브)의 명단을 그대로 쓴다.
+#   (감독관 지시 ③ — 2026-08-01)
+# ─────────────────────────────────────────────────────────────
+def load_stores():
+    url = os.environ.get("STORES_URL", "").strip()
+    if url:
+        try:
+            with urlopen(Request(url, headers={"User-Agent": "WeVapeMonitor/1.0"}), timeout=10) as r:
+                return json.loads(r.read().decode("utf-8"))
+        except Exception as e:
+            print(f"[경고] STORES_URL 조회 실패 → 로컬 stores.json 사용: {e}")
+    try:
+        with open("stores.json", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        sys.exit(f"[중단] stores.json 을 읽을 수 없습니다: {e}")
+
+
+STORES = load_stores()
+STORE_LIST = STORES["stores"]
+STORE_COUNT = len(STORE_LIST)
+
+BRAND_TERMS = STORES["brand"]
 
 # 우리 9지점 (2026-07-30 대표 확인). 정식 상호는 "위베이프 전자담배 ○○점" 형태다.
 #   구월길병원점(=구월점) · 구월로데오점 · 부천상동점 · 부천 신중동점
 #   인천공항점 · 인천연수점 · 인천논현점 · 인천계산점 · 인천검단점
-STORE_TERMS = [
-    "위베이프 구월길병원",
-    "위베이프 길병원",
-    "위베이프 구월로데오",
-    "위베이프 로데오",
-    "위베이프 부천상동",
-    "위베이프 부천 신중동",
-    "위베이프 신중동",
-    "위베이프 인천공항",
-    "위베이프 인천연수",
-    "위베이프 인천논현",
-    "위베이프 인천계산",
-    "위베이프 인천검단",
-]
+STORE_TERMS = [s["query"] for s in STORE_LIST] + STORES.get("extra_queries", [])
 
 # 우리 9지점을 가리키는 지역 토큰. 타 가맹점 글을 걸러내는 기준이다.
 # '중동'은 신중동을 포함하려고 넣었다. '중동현대'는 아래 OTHER_STORES 에서 제외된다.
-OUR_AREAS = ["길병원", "로데오", "구월", "상동", "중동", "공항", "연수", "논현", "계산", "검단"]
+OUR_AREAS = sorted({s["area"] for s in STORE_LIST} | {"구월"})
 
 # 타 지역·타 가맹점 표기. 위베이프 브랜드 글이지만 우리 매장이 아니다.
 # 화면에서 우리 지점이 아닌 글이 보이면 여기에 지역명을 추가하면 된다.
 #   '중동현대'는 우리 부천중동점이 아니다 (2026-07-30 확인)
-OTHER_STORES = ["중동현대", "강남역", "신논현", "역삼", "압구정", "대구", "호산동",
-                "부평", "굴포천", "부산", "대전", "광주", "천안", "수원", "청라", "송도"]
+OTHER_STORES = STORES.get("other_stores", [])
+
+# 우리·가맹점 공식 블로그. 여기서 쓴 글은 '홍보'로 분류해 손님 글과 나눈다 (지시 ②)
+OWN_MEDIA = STORES.get("own_media", [])
 
 # 불만족·컴플레인 신호. 매장 언급 글에서 이게 잡히면 먼저 보여주고 카톡으로도 알린다.
 NEGATIVE_WORDS = [
@@ -250,7 +263,9 @@ SPAM_CAFE_WORDS = [
 def is_keyword_spam(title, desc, where):
     """검색 노출용 키워드 나열 글인지 판정한다."""
     blob = f"{title} {desc}"
-    if blob.count("/") >= 12:           # 슬래시로 이어붙인 키워드 뭉치
+    # 중고거래 글은 사양을 '액상/기기/코일/팟' 식으로 나열한다. 12개는 너무 빡빡했다.
+    # (판매 감시 탭이 0건이 된 원인 — 감독관 지시 ① / 2026-08-01)
+    if blob.count("/") >= 22:
         return True
     if blob.count("#") >= 12:           # 해시태그 남발
         return True
@@ -291,7 +306,9 @@ STORE_REQUIRE = [
 WATCH_REQUIRE = [
     ["전자담배", "전담", "니코틴", "무니코틴", "합성니코틴", "리퀴드",
      "액상 전자담배", "전자담배 액상", "입호흡", "폐호흡", "카트리지", "베이프"],
-    ["판매", "팝니다", "팔아", "택배", "거래", "구매대행", "양도", "넘겨"],
+    ["판매", "팝니다", "팜", "팔아", "택배", "거래", "구매대행", "양도", "넘겨",
+     "삽니다", "구합니다", "직거래", "반택", "택포", "나눔", "처분", "정리",
+     "새제품", "미개봉", "중고", "가격", "원에", "만원"],
 ]
 
 # ─────────────────────────────────────────────────────────────
@@ -308,6 +325,23 @@ MAJOR_PRESS = ["yna.co.kr", "news1.kr", "newsis.com", "chosun.com", "joongang.co
                "mk.co.kr", "sedaily.com", "edaily.co.kr", "mt.co.kr", "fnnews.com",
                "kbs.co.kr", "imbc.com", "sbs.co.kr", "ytn.co.kr", "jtbc.co.kr",
                "dt.co.kr", "etnews.com", "biz.chosun.com", "seoul.co.kr", "kmib.co.kr"]
+
+
+def classify_voice(src, where, blob, link):
+    """손님이 쓴 글인가, 매장·업체가 쓴 홍보 글인가.
+    감독관 지시 ② — 우리매장 탭이 자사 홍보 블로그로 채워지는 문제."""
+    w = (where or "").lower()
+    if any(m.lower() in w for m in OWN_MEDIA):
+        return "promo"                      # 작성자가 매장·업체 공식 채널
+    if any(m.lower() in (link or "").lower() for m in ["wevape", "vape"]):
+        if src == "blog":
+            return "promo"
+    hits = sum(1 for x in PROMO_WORDS if x in blob)
+    if hits >= 2:
+        return "promo"                      # 홍보 문구가 여러 개
+    if src == "cafearticle":
+        return "customer"                   # 카페글은 대체로 손님 목소리
+    return "customer" if hits == 0 else "promo"
 
 
 def source_tier(src, link, blob):
@@ -507,9 +541,9 @@ GROUPS = [
         "id": "brand",
         "label": "경쟁사·브랜드",
         "desc": "액상형 중심 · 궐련형 포함",
-        # 블로그 제외. '액상 브랜드' 검색에 알룰로스·분유·미녹시딜·클라이밍 초크가
-        # 대량으로 딸려왔다. 브랜드명은 카페·뉴스에서 잡는다 (2026-07-30)
-        "sources": ["news", "cafearticle"],
+        # 블로그를 되살렸다. 액상 브랜드 소식은 뉴스에 거의 안 나오고 카페·블로그가 주력이다.
+        # 무관한 산업 기사는 '액상 브랜드' 검색어를 없애 이미 막았다.
+        "sources": ["news", "cafearticle", "blog"],
         # 액상형(입호흡·폐호흡) 브랜드를 먼저 두고 궐련형을 뒤에 둔다
         "keywords": [
             # 액상형 · 기기 브랜드 — 반드시 전자담배 맥락을 붙인다
@@ -521,9 +555,11 @@ GROUPS = [
             "쥴 전자담배", "릴 전자담배", "아이코스", "글로 전자담배",
             "KT&G 전자담배", "필립모리스 전자담배", "BAT로스만스",
         ],
-        "drop_ads": True,
+        # ★ 홍보 차단을 껐다. 브랜드 소식은 본질이 홍보성이라, 막으면 볼 게 없어진다.
+        #   대신 화면에서 '홍보/손님' 배지로 구분한다 (감독관 지시 ① — 0건 원인)
+        "drop_ads": False,
         "drop_politics": False,
-        "drop_words": PROMO_WORDS,
+        "drop_words": AUTO_NOISE,
         # KT&G 인삼공사·부동산 기사, 필립모리스 주가 기사 등을 걸러낸다
         "require_any": VAPE_WORDS,
         "require_title": VAPE_WORDS + ["오지구", "벱티오", "긱베이프", "복스미니",
@@ -810,6 +846,8 @@ def main():
 
     calls = 0
     out_groups, counts, new_alerts = [], {}, []
+    # 감독관 지시 ④ — 오탐이 다시 새는지 숫자로 보이게 한다
+    stats = {}
     taken = set()          # 앞선 그룹에 이미 실린 링크. 탭 간 중복을 막는다
 
     for g in GROUPS:
@@ -819,6 +857,9 @@ def main():
         g_cutoff = (now - timedelta(days=wd)) if wd else cutoff
         g_blog_days = wd if wd else 2
         items, dup_links, dup_titles, dup_descs = [], set(), set(), set()
+        st = {"수집": 0, "기간밖": 0, "날짜불명": 0, "스팸": 0, "차단도메인": 0,
+              "차단어": 0, "소재불일치": 0, "제목불일치": 0, "카페불일치": 0,
+              "중복": 0, "매체상한": 0, "최종": 0}
         per_source = {}          # 같은 언론사·카페가 화면을 점령하는 것을 막는다
 
         for src in g["sources"]:
@@ -840,6 +881,7 @@ def main():
                     link = it.get("originallink") or it.get("link") or ""
                     if not link:
                         continue
+                    st["수집"] += 1
                     blob = title + " " + desc
 
                     # ── 날짜 ──
@@ -881,21 +923,22 @@ def main():
                     # 검색 노출용 키워드 나열 스팸은 어느 그룹에서도 버린다
                     if is_keyword_spam(title, desc,
                                        it.get("cafename") or it.get("bloggername") or ""):
-                        continue
+                        st["스팸"] += 1; continue
                     # 잡담 커뮤니티는 도메인째로 버린다
                     low_link = (link or "").lower()
                     if any(d in low_link for d in BAD_DOMAINS):
-                        continue
+                        st["차단도메인"] += 1; continue
                     # 구제 불가 차단어 (뉴스 그룹의 민폐·화제성 기사)
                     hw = g.get("hard_words") or []
                     if hw and any(w in blob for w in hw):
-                        continue
+                        st["차단어"] += 1; continue
                     dw = g.get("drop_words") or []
                     if dw and any(w in (blob + " " + link) for w in dw):
                         # 판매업소 단속 기사면 살린다
                         rs = g.get("rescue_any")
                         low_r = blob.lower()
-                        if not (rs and all(any(w in low_r for w in st) for st in rs)):
+                        if not (rs and all(any(w in low_r for w in grp) for grp in rs)):
+                            st["차단어"] += 1
                             continue
                     # 네이버 검색의 느슨한 매칭을 후처리로 조인다.
                     # 카페명·블로그명은 검사하지 않는다 (카페 이름에 '액상'이 들어있는 경우가 많다)
@@ -905,18 +948,18 @@ def main():
                         sets = ra if isinstance(ra[0], list) else [ra]
                         low = blob.lower()
                         if not all(any(w in low for w in s) for s in sets):
-                            continue
+                            st["소재불일치"] += 1; continue
                     # 카페·블로그 이름에 소재가 있어야 통과 (무관한 카페 차단)
                     rw = g.get("require_where") or []
                     if rw:
                         w = (it.get("cafename") or it.get("bloggername") or "").lower()
                         if not any(x in w for x in rw):
-                            continue
+                            st["카페불일치"] += 1; continue
                     # 뉴스는 '제목'에 소재가 있어야 그 기사의 주제로 본다.
                     # 본문에 한 번 스친 기사(청계천 단속, 공항 보조배터리 등)를 잘라낸다.
                     rt = g.get("require_title") or []
                     if rt and not any(w in title.lower() for w in rt):
-                        continue
+                        st["제목불일치"] += 1; continue
                     if any(w in title for w in NOISE_WORDS):
                         continue
                     # 강력범죄·사건 기사는 어느 그룹에서도 제외 (제목+요약 모두 검사)
@@ -969,7 +1012,7 @@ def main():
                     if not g["alert"]:
                         per_source[where] = per_source.get(where, 0) + 1
                         if per_source[where] > MAX_PER_SOURCE:
-                            continue
+                            st["매체상한"] += 1; continue
 
                     # 불만족 신호. '우리 매장' 그룹에서만 판정한다.
                     # 커뮤니티·업종 뉴스의 일반적인 기기 불만은 우리 매장 컴플레인이 아니다.
@@ -987,6 +1030,7 @@ def main():
                         "kw": kw,
                         "new": is_new,
                         "tier": source_tier(src, link, blob),
+                        "voice": classify_voice(src, where, blob, link),
                         "eff": extract_effective(blob, now) if g["id"] == "reg" else "",
                         "neg": bool(hits),
                         "negWords": hits[:4],
@@ -1002,7 +1046,12 @@ def main():
 
         # 불만족 글을 맨 위로, 그다음 신규, 그다음 최신순
         TIER_RANK = {"gov": 3, "press": 2, "news": 1, "user": 0}
-        items.sort(key=lambda x: (x["neg"], TIER_RANK.get(x.get("tier"), 0),
+        # 매장 탭은 '손님 글'을 홍보 글보다 위로 올린다 (지시 ②)
+        st["최종"] = len(items)
+        stats[g["id"]] = st
+        items.sort(key=lambda x: (x["neg"],
+                                  1 if x.get("voice") == "customer" else 0,
+                                  TIER_RANK.get(x.get("tier"), 0),
                                   x["new"], x["pub"]), reverse=True)
         for i in items[:MAX_PER_GROUP]:
             taken.add(i["link"])
@@ -1061,6 +1110,8 @@ def main():
         "updatedAt": now.strftime("%Y-%m-%d %H:%M:%S KST"),
         "windowHours": WINDOW_HOURS,
         "apiCalls": calls,
+        "stats": stats,
+        "storeCount": STORE_COUNT,
         "summary": summary,
         "top3": top3,
         "upcoming": upcoming,
