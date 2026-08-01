@@ -560,11 +560,18 @@ try{ window.__ENH(); }catch(e){}
       '#schedTable td.wvGap{box-shadow:inset 0 0 0 2px #c62828}',
       '#schedTable thead th.wvGapH,#schedTable th.wvGapH{background:#c62828 !important;color:#fff !important}',
       '#schedTable td.wvDup{outline:2px dashed #e07800;outline-offset:-2px}',
-      '#wvNotice{margin:0 4px 10px;border:1px solid var(--line);border-radius:12px;background:#fff;padding:11px 13px}',
-      '#wvNotice b{font-size:12.5px}',
-      '#wvNotice .it{font-size:12px;color:#555;line-height:1.65;margin-top:5px;padding-top:6px;border-top:1px dashed #eceef3}',
-      '#wvNotice .it:first-of-type{border-top:0;padding-top:0}',
-      '#wvNotice .dt{color:#9a9ba6;font-size:11px;margin-right:5px}',
+      '#wvNotice{display:inline-flex;align-items:center;gap:7px;max-width:min(48vw,540px);margin-left:12px;border:1px solid #efe3b8;background:linear-gradient(180deg,#fffdf4,#fff9e8);border-radius:999px;padding:5px 13px;font-size:12px;color:#4a4b57;cursor:pointer;vertical-align:2px;transition:.16s;box-shadow:0 1px 2px rgba(0,0,0,.03)}',
+      '#wvNotice:hover{border-color:#e3d08d;box-shadow:0 4px 14px rgba(201,162,39,.16)}',
+      '#wvNotice .lbl{color:#a8871a;font-weight:800;white-space:nowrap;letter-spacing:-.2px}',
+      '#wvNotice .txt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}',
+      '#wvNotice .cnt{background:#a8871a;color:#fff;border-radius:999px;font-size:10.5px;font-weight:800;padding:1px 6px;white-space:nowrap}',
+      '#wvNpop{position:fixed;z-index:100003;background:#fff;border:1px solid #e6e7ee;border-radius:14px;box-shadow:0 18px 54px rgba(0,0,0,.22);padding:14px 16px;width:min(460px,94vw);max-height:62vh;overflow:auto;display:none}',
+      '#wvNpop h4{margin:0 0 9px;font-size:13px;font-weight:800;color:#2b2d42}',
+      '#wvNpop .it{font-size:12.5px;color:#4a4b57;line-height:1.7;padding:9px 0;border-top:1px dashed #eceef3}',
+      '#wvNpop .it:first-of-type{border-top:0;padding-top:0}',
+      '#wvNpop .dt{color:#9a9ba6;font-size:11px;display:block;margin-bottom:2px}',
+      '#wvNpop .memo{color:#2b2d42;font-weight:700}',
+      '@media(max-width:720px){#wvNotice{max-width:100%;margin:6px 0 0}}',
       '#wvPick{position:fixed;z-index:100002;background:#fff;border:1px solid #dcdde5;border-radius:12px;box-shadow:0 14px 44px rgba(0,0,0,.24);padding:6px;display:none;max-height:60vh;overflow:auto;min-width:132px}',
       '#wvPick button{display:block;width:100%;text-align:left;padding:8px 11px;border:0;background:none;font-size:13.5px;border-radius:8px;cursor:pointer}',
       '#wvPick button:hover{background:#f2f3f8}',
@@ -853,15 +860,41 @@ try{ window.__ENH(); }catch(e){}
         var list = []; try{ list = JSON.parse(t); }catch(e){ return; }
         var box = document.getElementById('wvNotice');
         if(!list.length){ if(box) box.remove(); return; }
-        if(!box){ box = document.createElement('div'); box.id = 'wvNotice';
-          var lg = document.getElementById('legend');
-          lg.parentNode.insertBefore(box, lg.nextSibling); }
-        box.innerHTML = '<b>📌 변경 안내</b>' + list.slice(0, 4).map(function(x){
-          return '<div class="it"><span class="dt">' + x.at + '</span>' +
-                 (x.memo ? '<b style="color:#2b2d42">' + x.memo + '</b><br>' : '') +
-                 (x.auto || '') + '</div>';
-        }).join('');
+        if(!box){
+          box = document.createElement('div'); box.id = 'wvNotice';
+          var h1 = document.getElementById('title');
+          if(!h1 || !h1.parentNode) return;
+          h1.parentNode.insertBefore(box, h1.nextSibling);
+          box.addEventListener('click', function(e){ e.stopPropagation(); togglePop(list); });
+        }
+        var top = list[0];
+        var one = (top.memo && top.memo.trim()) ? top.memo.trim() : (top.auto || '');
+        box.innerHTML = '<span class="lbl">📌 변경 안내</span><span class="txt">' + esc(one) + '</span>' +
+                        (list.length > 1 ? '<span class="cnt">' + list.length + '</span>' : '');
+        box.title = '눌러서 전체 보기';
       }).catch(function(){});
+  }
+
+  function togglePop(list){
+    var p = document.getElementById('wvNpop');
+    if(p && p.style.display === 'block'){ p.style.display = 'none'; return; }
+    if(!p){
+      p = document.createElement('div'); p.id = 'wvNpop';
+      document.body.appendChild(p);
+      p.addEventListener('click', function(e){ e.stopPropagation(); });
+      document.addEventListener('click', function(){ p.style.display = 'none'; });
+    }
+    p.innerHTML = '<h4>📌 변경 안내</h4>' + list.map(function(x){
+      return '<div class="it"><span class="dt">' + esc(x.at) + '</span>' +
+             (x.memo ? '<span class="memo">' + esc(x.memo) + '</span><br>' : '') +
+             esc(x.auto || '') + '</div>';
+    }).join('');
+    var box = document.getElementById('wvNotice');
+    var rc = box.getBoundingClientRect();
+    p.style.display = 'block';
+    var w = p.offsetWidth, h = p.offsetHeight;
+    p.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, rc.left)) + 'px';
+    p.style.top  = (rc.bottom + h + 12 > window.innerHeight ? Math.max(8, rc.top - h - 6) : rc.bottom + 6) + 'px';
   }
 
   /* ---------- 진입 ---------- */
