@@ -854,6 +854,16 @@ def main():
                             pub, dated = d.strftime("%Y-%m-%d %H:%M"), True
                         except Exception:
                             continue
+                        # ★ 네이버가 주는 pubDate 는 '기사 작성일'이 아니라
+                        #   '네이버에 제공된 시간'이다. 언론사가 옛 기사를 재송고하면
+                        #   2023년 기사도 오늘 날짜로 온다 (라오스 단속 기사 — 2026-08-01).
+                        #   원문 게시일을 확인해 크게 다르면 원문 쪽을 믿는다.
+                        real = resolve_pubdate(link, pubdates)
+                        if real and abs((datetime.strptime(real, "%Y-%m-%d").date()
+                                         - d.date()).days) >= 2:
+                            if real < g_cutoff.strftime("%Y-%m-%d"):
+                                continue        # 실제로는 기간 밖 → 제외
+                            pub = real
                     elif it.get("postdate"):                    # 블로그 (YYYYMMDD)
                         try:
                             d = datetime.strptime(it["postdate"], "%Y%m%d").replace(tzinfo=KST)
