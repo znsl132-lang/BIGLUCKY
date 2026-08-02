@@ -2552,17 +2552,21 @@ function wvOptimize(sc){
    가중치는 아래 WV_W 숫자만 고치면 된다.                                        */
 var WV_W = {
   gap:        6000, // 공백 매장(필요 인원 미달) 1명분
-  offShort:   4000, // 계약 휴무일보다 적게 쉼 = 초과근무 (1일당) — 사실상 금지
-  offOver:     200, // 계약 휴무일보다 많이 쉼 = 인력 낭비 (1일당)
+  offShort:   4000, // 계약 휴무일보다 적게 쉼 = 초과근무 (1일당)
   over6:       600, // 6일 초과 연속근무 (초과일수 제곱)
   dupe:        350, // 중복 편성(필요 인원 초과) 1명분
+  offOver:     200, // 계약 휴무일보다 많이 쉼 = 인력 낭비
   mateAllOff:  200, // 같은 매장 소속 전원 동시 휴무
+  tight:       150, // 4일 이상 근무 사이 휴무가 하루뿐 (5-1-5 패턴)
   restRun3:    150, // 3일 이상 연속 휴무
-  run5:         30, // 5일 연속근무 블록 (같은 사람 반복 시 제곱 = 편중 억제)
-  move:         25, // 매장 이동 1회
-  moveTop:      10  // 이동 최다자 쏠림
+  blockMove:    45, // 연속 근무 도중 매장이 바뀜
+  runCurve:     45, // 연속근무 길이 벌점 (4일 1, 5일 4, 6일부터 급증)
+  restSpread:   25, // 근무 구간 길이가 들쭉날쭉 (휴무 간격 불균등)
+  moveTop:      10, // 이동 최다자 쏠림
+  move:          8  // 매장 이동 1회 (블록 경계 이동은 자연스러우므로 낮게)
 };
 var WV_ITERS = 60000;
+var NOSTORE_S = ['순환'];
 
 function wvCtx(sc){
   var mk = sc.year + '-' + String(sc.month).padStart(2, '0');
@@ -2589,7 +2593,7 @@ function wvCtx(sc){
 
 function scoreSchedule(cells, C){
   var d, i, st, e, v, b, nDays = C.nDays;
-  var det = { gap:0, dupe:0, over6:0, run5:0, move:0, moveTop:0, restRun3:0, mateAllOff:0, offShort:0, offOver:0 };
+  var det = { gap:0, dupe:0, over6:0, runCurve:0, tight:0, restSpread:0, blockMove:0, move:0, moveTop:0, restRun3:0, mateAllOff:0, offShort:0, offOver:0 };
   for(d = 0; d < nDays; d++){
     if(C.hol[d]) continue;
     var at = {}; S.stores.forEach(function(s){ at[s.n] = 0; });
@@ -2604,33 +2608,40 @@ function scoreSchedule(cells, C){
     }
   }
   var moves = [];
+  var curve = function(L){ if(L <= 3) return 0; if(L === 4) return 1; if(L === 5) return 4; return 4 + (L - 5) * 12; };
   for(i = 0; i < C.acts.length; i++){
     e = C.acts[i];
     var a = cells[e.name]; if(!a) continue;
-    var run = 0, blocks5 = 0, rest = 0, last = null, mv = 0, offN = 0;
+    var bl = [], gp = [], run = 0, rest = 0, offN = 0;
     for(d = 0; d <= nDays; d++){
       var w = (d < nDays) && C.isW(a[d]);
-      if(w){
-        run++; rest = 0;
-        b = C.baseOf(a[d]);
-        if(last !== null && b !== last) mv++;
-        last = b;
-      } else {
-        if(run >= 6) det.over6 += (run - 5) * (run - 5);
-        else if(run === 5) blocks5++;
-        run = 0;
-        if(d < nDays){ rest++; if(rest === 3) det.restRun3++; }
-      }
+      if(w){ if(rest > 0){ gp.push(rest); rest = 0; } run++; }
+      else { if(run > 0){ bl.push(run); run = 0; } if(d < nDays) rest++; }
       if(d < nDays && a[d] === '') offN++;
     }
-    det.run5 += blocks5 * blocks5;
+    for(var q = 0; q < bl.length; q++){
+      det.runCurve += curve(bl[q]);
+      if(bl[q] >= 6) det.over6 += (bl[q] - 5) * (bl[q] - 5);
+      if(q > 0 && bl[q - 1] >= 4 && bl[q] >= 4 && gp[q - 1] === 1) det.tight++;
+    }
+    for(var g = 0; g < gp.length; g++) if(gp[g] >= 3) det.restRun3++;
+    if(bl.length > 1){
+      var mx = Math.max.apply(null, bl), sum = 0;
+      for(var z = 0; z < bl.length; z++) sum += bl[z];
+      det.restSpread += Math.max(0, mx - sum / bl.length);
+    }
+    var last = null, inBlock = false, mv = 0;
+    for(d = 0; d < nDays; d++){
+      var v2 = a[d];
+      if(!C.isW(v2)){ inBlock = false; continue; }
+      var b2 = C.baseOf(v2);
+      if(NOSTORE_S.indexOf(b2) >= 0){ inBlock = true; last = b2; continue; }
+      if(last !== null && b2 !== last){ mv++; if(inBlock) det.blockMove++; }
+      last = b2; inBlock = true;
+    }
     var dv = offN - C.target(e);
     if(dv < 0) det.offShort += -dv; else det.offOver += dv;
     det.move += mv; moves.push(mv);
-  }
-  if(moves.length){
-    var avg = moves.reduce(function(x, y){ return x + y; }, 0) / moves.length;
-    det.moveTop = Math.max(0, Math.max.apply(null, moves) - avg);
   }
   var byHome = {};
   C.acts.forEach(function(x){ if(x.home !== '순환'){ (byHome[x.home] = byHome[x.home] || []).push(x); } });
@@ -2759,6 +2770,32 @@ function wvRefine(sc, opts){
       var ST = okSt[ri(okSt.length)].n;
       undo = [[IW.name, d, cells[IW.name][d]]];
       cells[IW.name][d] = C.label(IW, ST);
+    } else if(offs.length && r < 0.92){
+      // 휴무 맞교환: 두 사람이 서로 다른 두 날의 근무/휴무를 통째로 맞바꾼다.
+      // 각자의 휴무 일수와 매장별 인원은 그대로 유지되고, 휴무를 며칠에 두느냐만 바뀐다.
+      var A2 = workers[ri(workers.length)];
+      var B2 = offs[ri(offs.length)];
+      if(A2 === B2) continue;
+      var X2 = C.baseOf(cells[A2.name][d]);
+      var cand2 = [];
+      for(var dd2 = 0; dd2 < nDays; dd2++){
+        if(dd2 === d || C.hol[dd2]) continue;
+        if(lockedDay(A2.name, dd2) || lockedDay(B2.name, dd2)) continue;
+        if(cells[A2.name][dd2] !== '' || (C.prot[A2.name] && C.prot[A2.name][dd2])) continue;
+        if(!C.isW(cells[B2.name][dd2])) continue;
+        cand2.push(dd2);
+      }
+      if(!cand2.length) continue;
+      var D3 = cand2[ri(cand2.length)];
+      var Y2 = C.baseOf(cells[B2.name][D3]);
+      if(!canEnter(B2, X2) || !canEnter(A2, Y2)) continue;
+      if(!canLeave(A2, d) || !canLeave(B2, D3)) continue;
+      undo = [[A2.name, d, cells[A2.name][d]], [B2.name, d, cells[B2.name][d]],
+              [A2.name, D3, cells[A2.name][D3]], [B2.name, D3, cells[B2.name][D3]]];
+      cells[A2.name][d] = '';
+      cells[B2.name][d] = C.label(B2, X2);
+      cells[A2.name][D3] = C.label(A2, Y2);
+      cells[B2.name][D3] = '';
     } else {
       var Cc = workers[ri(workers.length)], from2 = C.baseOf(cells[Cc.name][d]);
       var to = S.stores[ri(S.stores.length)].n;
