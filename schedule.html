@@ -3305,4 +3305,134 @@ function wvBusy(msg){
   generate = wrapped;
 })();
 </script>
+<script>
+/* ===== 근무 수급 분석 — 부족 원인과 충원 효과를 함께 제시 ===== */
+(function(){
+  function nDaysOf(mk){ var p = String(mk).split('-'); return new Date(+p[0], +p[1], 0).getDate(); }
+
+  function analyze(){
+    var mk = document.getElementById('monthPick').value;
+    if(!mk) return null;
+    var nDays = nDaysOf(mk);
+    var holN = ((S.hols && S.hols[mk]) || []).length;
+    var work = Math.max(0, nDays - holN);
+    var acts = S.emps.filter(function(e){ return e.role !== '교육'; });
+
+    var cap = 0;
+    acts.forEach(function(e){ cap += Math.max(0, work - offTarget(e)); });
+    var totalNeed = S.stores.reduce(function(a, s){ return a + s.need; }, 0);
+    var need = totalNeed * work;
+
+    var reach = function(e){
+      var out = [];
+      S.stores.forEach(function(st){
+        if((e.ban || []).indexOf(st.n) >= 0) return;
+        if(e.home === '순환' || st.n === e.home || (e.pref || []).indexOf(st.n) >= 0) out.push(st.n);
+      });
+      return out;
+    };
+
+    var lock = {}, waste = [];
+    acts.forEach(function(e){
+      var r = reach(e);
+      if(r.length === 1){ (lock[r[0]] = lock[r[0]] || []).push(e); }
+    });
+    Object.keys(lock).forEach(function(sn){
+      var st = S.stores.filter(function(x){ return x.n === sn; })[0];
+      if(!st) return;
+      var have = lock[sn].reduce(function(a, e){ return a + Math.max(0, work - offTarget(e)); }, 0);
+      var mine = st.need * work;
+      if(have > mine) waste.push({ store: sn, days: have - mine, who: lock[sn].map(function(e){ return e.name; }) });
+    });
+    var wasteN = waste.reduce(function(a, x){ return a + x.days; }, 0);
+
+    var thin = [];
+    S.stores.forEach(function(st){
+      var have = 0;
+      acts.forEach(function(e){ if(reach(e).indexOf(st.n) >= 0) have += Math.max(0, work - offTarget(e)); });
+      if(have < st.need * work) thin.push({ store: st.n, short: st.need * work - have });
+    });
+
+    return { mk: mk, work: work, cap: cap, need: need, slack: cap - need,
+             waste: waste, wasteN: wasteN, thin: thin, real: cap - need - wasteN,
+             heads: acts.length };
+  }
+
+  function hire(a, n){
+    var add = (a.work - 10) * n;
+    return { slack: a.slack + add, real: a.real + add, add: add };
+  }
+
+  function esc2(s){ return String(s).replace(/[&<>]/g, function(c){ return { '&':'&amp;','<':'&lt;','>':'&gt;' }[c]; }); }
+
+  window.wvSupplyAdvice = function(){
+    var box = document.getElementById('capBox'); if(!box) return;
+    var old = document.getElementById('wvSup'); if(old) old.remove();
+    var a = analyze(); if(!a) return;
+
+    var ok = a.real >= 3;
+    var warn = a.real >= 0 && a.real < 3;
+    var color = ok ? '#2e7d32' : (warn ? '#b06d00' : '#c62828');
+    var bg = ok ? '#f2f9f3' : (warn ? '#fff9ec' : '#fff5f5');
+    var bd = ok ? '#cfe6d3' : (warn ? '#f0dcae' : '#f2c9c9');
+    var head = ok ? '수급 여유 ' + a.real + '일 — 편성에 무리가 없습니다'
+             : warn ? '수급 여유 ' + a.real + '일 — 편성은 되지만 예비 인력이 없습니다. 충원을 검토하세요'
+             : '근무일 ' + (-a.real) + '일 부족 — 인원 충원이 필요합니다';
+
+    var h = '<div id="wvSup" style="margin-top:12px;border:1px solid ' + bd + ';background:' + bg +
+            ';border-radius:12px;padding:14px 16px;font-size:13px;line-height:1.75">';
+    h += '<div style="font-weight:800;color:' + color + ';font-size:13.5px;margin-bottom:8px">' +
+         (ok ? '✅ ' : '⚠ ') + esc2(head) + '</div>';
+
+    if(!ok){
+      var h1 = hire(a, 1), h2 = hire(a, 2);
+      h += '<div style="background:#fff;border:1px solid ' + bd + ';border-radius:10px;padding:10px 12px;margin-bottom:9px">';
+      h += '<b style="color:' + color + '">1명 충원하면</b><br>';
+      h += '· 근무일 <b>' + h1.add + '일</b> 확보 — 실질 여유 ' + a.real + '일 → <b>' + h1.real + '일</b><br>';
+      h += '· 매장 공백과 계약 미달 휴무가 해소됩니다<br>';
+      h += '· 병가·경조사 등 긴급 결원 시 <b>당일 대체 투입</b>이 가능해집니다<br>';
+      h += '· 연속근무와 휴무 몰림이 함께 완화됩니다<br>';
+      if(h1.real < 3) h += '· 2명 충원 시 실질 여유 <b>' + h2.real + '일</b><br>';
+      h += '</div>';
+    }
+
+    h += '<div style="color:#4a4b57">직원 ' + a.heads + '명 · 가용 <b>' + a.cap + '일</b> · 필요 <b>' + a.need +
+         '일</b> · 단순 여유 ' + a.slack + '일';
+    if(a.wasteN > 0) h += ' · 사장되는 인력 <b>' + a.wasteN + '일</b> → 실질 <b>' + a.real + '일</b>';
+    h += '</div>';
+
+    if(a.waste.length || a.thin.length){
+      h += '<div style="margin-top:9px;padding-top:8px;border-top:1px dashed rgba(0,0,0,.12)"><b>왜 부족한가</b><br>';
+      a.waste.forEach(function(w){
+        h += '· <b>' + esc2(w.store) + '</b> 소속(' + esc2(w.who.join(', ')) +
+             ')이 다른 매장에 갈 수 없어 <b>' + w.days + '일</b>이 쓰이지 못합니다<br>';
+      });
+      a.thin.forEach(function(t){
+        h += '· <b>' + esc2(t.store) + '</b>에 근무 가능한 인력이 <b>' + t.short + '일</b> 모자랍니다<br>';
+      });
+      h += '</div>';
+    }
+
+    if(!ok && a.waste.length){
+      h += '<div style="margin-top:9px;padding-top:8px;border-top:1px dashed rgba(0,0,0,.12)"><b>충원 전까지 임시로 줄이는 방법</b><br>';
+      a.waste.forEach(function(w){
+        h += '· ' + esc2(w.who.join(', ')) + ' 님에게 <b>우선 배치 매장</b>을 열어주면 최대 <b>' + w.days + '일</b>을 되살릴 수 있습니다<br>';
+      });
+      h += '<span style="color:#8a8b93;font-size:12px">근본 해결은 아닙니다. 총량이 모자라면 결국 누군가 계약보다 더 일하게 됩니다.</span></div>';
+    }
+
+    if(!ok) h += '<div style="margin-top:9px;color:#8a8b93;font-size:12px">이대로 편성하면 매장이 비거나 누군가 계약보다 더 일해야 하며, 긴급 결원 시 투입할 예비 인원이 없습니다.</div>';
+    else if(warn) h += '<div style="margin-top:9px;color:#8a8b93;font-size:12px">편성 자체는 가능하지만 여유가 거의 없어, 병가·경조사가 겹치면 대체 투입이 어렵습니다.</div>';
+    h += '</div>';
+    box.insertAdjacentHTML('afterend', h);
+  };
+
+  if(typeof renderCapacity === 'function' && !renderCapacity.__wvsup){
+    var _r = renderCapacity;
+    var w = function(){ var o = _r.apply(this, arguments); try{ wvSupplyAdvice(); }catch(e){ console.warn('수급 분석 건너뜀', e); } return o; };
+    w.__wvsup = true; renderCapacity = w;
+  }
+  try{ if(typeof renderCapacity === 'function') renderCapacity(); }catch(e){}
+})();
+</script>
 </html>
