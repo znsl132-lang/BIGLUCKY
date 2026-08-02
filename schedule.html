@@ -2565,7 +2565,9 @@ var WV_W = {
   moveTop:      10, // 이동 최다자 쏠림
   move:          8  // 매장 이동 1회 (블록 경계 이동은 자연스러우므로 낮게)
 };
-var WV_ITERS = 60000;
+var WV_ITERS = 60000;   // 한 회차 반복 횟수
+var WV_RESTARTS = 3;    // 재시작 횟수 — 난수만 바꿔 여러 번 돌리고 최선을 채택
+                        // 반복을 나눠 쓰면 오히려 나빠진다. 회차마다 전체 반복을 돌려야 한다.
 var NOSTORE_S = ['순환'];
 
 function wvCtx(sc){
@@ -2659,9 +2661,35 @@ function scoreSchedule(cells, C){
 
 function wvRefine(sc, opts){
   opts = opts || {};
+  var rounds = opts.restarts || WV_RESTARTS;
+  if(rounds <= 1) return wvRefineOnce(sc, opts);
+  // 다중 재시작: 같은 출발점에서 난수만 바꿔 여러 번 돌리고 가장 좋은 결과를 남긴다.
+  var C0 = wvCtx(sc);
+  var orig = {};
+  Object.keys(sc.cells).forEach(function(k){ orig[k] = sc.cells[k].slice(); });
+  var best = null, bestScore = Infinity;
+  for(var t = 0; t < rounds; t++){
+    Object.keys(orig).forEach(function(k){ sc.cells[k] = orig[k].slice(); });
+    var o = {};
+    Object.keys(opts).forEach(function(k){ o[k] = opts[k]; });
+    o.restarts = 1; o.seedShift = t;
+    wvRefineOnce(sc, o);
+    var sv = scoreSchedule(sc.cells, C0).total;
+    if(sv < bestScore){
+      bestScore = sv; best = {};
+      Object.keys(sc.cells).forEach(function(k){ best[k] = sc.cells[k].slice(); });
+    }
+  }
+  Object.keys(best).forEach(function(k){ sc.cells[k] = best[k]; });
+  window._wvScore = scoreSchedule(sc.cells, C0);
+  return sc;
+}
+
+function wvRefineOnce(sc, opts){
+  opts = opts || {};
   var C = wvCtx(sc), cells = sc.cells, nDays = C.nDays;
   var lockedDay = opts.lockedDay || function(){ return false; };
-  var _rs = (sc.year * 100 + sc.month) | 0;
+  var _rs = ((sc.year * 100 + sc.month) + (opts.seedShift || 0) * 7919) | 0;
   var rng = function(){
     _rs = _rs + 0x6D2B79F5 | 0;
     var t = Math.imul(_rs ^ _rs >>> 15, 1 | _rs);
