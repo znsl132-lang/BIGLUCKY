@@ -527,7 +527,8 @@ try{ window.__ENH(); }catch(e){}
 (function(){
   var PWHASH = 'ce6ebbf567a8fba63b5abf8b832a32512191d9e758886c6d3e3107ccd2e0feff';
   var PAL = ['#ffe9ec','#fff3d6','#e3f2fd','#e8f5e9','#f3e5f5','#e0f7fa','#fff8e1','#efebe9','#ede7f6','#f1f8e9','#fde2ff','#e2fff3'];
-  var SPECIAL = ['전휴무','휴가','훈련','병가','출장'];
+  var SPECIAL = ['전휴무','휴가','훈련','병가','출장'];   // 근무로 세지 않는 값
+  var NOSTORE = ['순환'];                                  // 근무이지만 특정 매장에 속하지 않는 값
   var ED = null;   // { rows, orig, hi, dayIdx, nameCol, stores, undo:[] }
 
   function css(){
@@ -560,6 +561,7 @@ try{ window.__ENH(); }catch(e){}
       '#schedTable td.wvGap{box-shadow:inset 0 0 0 2px #c62828}',
       '#schedTable thead th.wvGapH,#schedTable th.wvGapH{background:#c62828 !important;color:#fff !important}',
       '#schedTable td.wvDup{outline:2px dashed #e07800;outline-offset:-2px}',
+      '#schedTable td.wvRot{background:#eef1f5 !important;color:#41506b;font-weight:700;box-shadow:inset 0 0 0 1px #b9c4d6}',
       '#wvNotice{display:inline-flex;align-items:center;gap:7px;max-width:min(48vw,540px);margin-left:12px;border:1px solid #efe3b8;background:linear-gradient(180deg,#fffdf4,#fff9e8);border-radius:999px;padding:5px 13px;font-size:12px;color:#4a4b57;cursor:pointer;vertical-align:2px;transition:.16s;box-shadow:0 1px 2px rgba(0,0,0,.03)}',
       '#wvNotice:hover{border-color:#e3d08d;box-shadow:0 4px 14px rgba(201,162,39,.16)}',
       '#wvNotice .lbl{color:#a8871a;font-weight:800;white-space:nowrap;letter-spacing:-.2px}',
@@ -632,7 +634,7 @@ try{ window.__ENH(); }catch(e){}
     for(var r = hi + 2; r < rows.length; r++)
       dayIdx.forEach(function(c){
         var v = String((rows[r] || [])[c] || '').trim().replace(/\((OP|CL)\)$/, '').trim();
-        if(v && SPECIAL.indexOf(v) < 0) st[v] = 1;
+        if(v && SPECIAL.indexOf(v) < 0 && NOSTORE.indexOf(v) < 0) st[v] = 1;
       });
     return { hi: hi, head: head, nameCol: nameCol, dayIdx: dayIdx, stores: Object.keys(st).sort() };
   }
@@ -642,7 +644,9 @@ try{ window.__ENH(); }catch(e){}
     if(!rows || !rows.length){ alert('스케줄을 먼저 불러온 뒤 수정할 수 있습니다.'); return; }
     var mt = meta(rows);
     ED = { orig: JSON.parse(JSON.stringify(rows)), rows: JSON.parse(JSON.stringify(rows)),
-           hi: mt.hi, dayIdx: mt.dayIdx, nameCol: mt.nameCol, stores: mt.stores, undo: [] };
+           hi: mt.hi, dayIdx: mt.dayIdx, nameCol: mt.nameCol, stores: mt.stores, undo: [],
+           sumStart: mt.dayIdx[mt.dayIdx.length - 1] + 1,
+           offCol: (function(){ var h = rows[mt.hi].map(function(x){ return String(x).trim(); }); return h.indexOf('휴무'); })() };
     document.body.classList.add('wvEditing');
     tagCells();
     bar(true);
@@ -675,7 +679,7 @@ try{ window.__ENH(); }catch(e){}
     var p = document.getElementById('wvPick');
     if(!p){ p = document.createElement('div'); p.id = 'wvPick'; document.body.appendChild(p);
       document.addEventListener('click', function(){ p.style.display = 'none'; }); }
-    var opts = ['(휴무)'].concat(ED.stores).concat(SPECIAL);
+    var opts = ['(휴무)'].concat(NOSTORE).concat(ED.stores).concat(SPECIAL);
     p.innerHTML = opts.map(function(o){ return '<button data-v="' + o + '">' + o + '</button>'; }).join('');
     p.onclick = function(ev){
       var b = ev.target.closest('button'); if(!b) return;
@@ -698,6 +702,7 @@ try{ window.__ENH(); }catch(e){}
     if(b === '훈련') return 'var(--train)';
     if(b === '병가') return 'var(--sick)';
     if(b === '출장') return 'var(--trip)';
+    if(NOSTORE.indexOf(b) >= 0) return '#eef1f5';
     var i = ED.stores.indexOf(b);
     return i < 0 ? '#fff' : PAL[i % PAL.length];
   }
@@ -710,7 +715,8 @@ try{ window.__ENH(); }catch(e){}
     ED.rows[r][c] = v;
     td.textContent = v;
     td.style.background = color(v);
-    td.className = 'day ' + (v === '' ? 'off' : 'store') + ' wvChg';
+    td.className = 'day ' + (v === '' ? 'off' : (NOSTORE.indexOf(v) >= 0 ? 'store wvRot' : 'store')) + ' wvChg';
+    recalcOff(r);
     if(String(ED.orig[r][c] || '') === v) td.classList.remove('wvChg');
     bar();
   }
@@ -721,7 +727,8 @@ try{ window.__ENH(); }catch(e){}
     ED.rows[u.r][u.c] = u.v;
     u.td.textContent = u.v;
     u.td.style.background = color(u.v);
-    u.td.className = 'day ' + (u.v === '' ? 'off' : 'store') + (String(ED.orig[u.r][u.c] || '') === u.v ? '' : ' wvChg');
+    u.td.className = 'day ' + (u.v === '' ? 'off' : (NOSTORE.indexOf(u.v) >= 0 ? 'store wvRot' : 'store')) + (String(ED.orig[u.r][u.c] || '') === u.v ? '' : ' wvChg');
+    recalcOff(u.r);
     bar();
   }
 
@@ -736,7 +743,7 @@ try{ window.__ENH(); }catch(e){}
       var c = ED.dayIdx[j], at = {};
       for(var r = ED.hi + 2; r < ED.rows.length; r++){
         var v = String(ED.rows[r][c] || '').trim().replace(/\((OP|CL)\)$/, '').trim();
-        if(!v || SPECIAL.indexOf(v) >= 0) continue;
+        if(!v || SPECIAL.indexOf(v) >= 0 || NOSTORE.indexOf(v) >= 0) continue;
         (at[v] = at[v] || []).push(String(ED.rows[r][ED.nameCol] || '').trim());
       }
       out.push({ j: j, day: ED.rows[ED.hi][c], at: at });
@@ -897,6 +904,30 @@ try{ window.__ENH(); }catch(e){}
     p.style.top  = (rc.bottom + h + 12 > window.innerHeight ? Math.max(8, rc.top - h - 6) : rc.bottom + 6) + 'px';
   }
 
+  /* 순환은 매장이 아니므로 팔레트 색 대신 고유 표시로 통일 */
+  function paintRot(){
+    var tbl = document.getElementById('schedTable'); if(!tbl) return;
+    [].forEach.call(tbl.querySelectorAll('td'), function(td){
+      if(NOSTORE.indexOf(String(td.textContent).trim()) < 0) return;
+      td.classList.add('wvRot');
+      td.style.background = '#eef1f5';
+    });
+  }
+
+  /* 칸을 고치면 그 사람 휴무 일수를 다시 세어 우측 집계열에 반영 */
+  function recalcOff(r){
+    if(!ED || ED.offCol == null || ED.offCol < 0) return;
+    var n = 0;
+    for(var j = 0; j < ED.dayIdx.length; j++)
+      if(String(ED.rows[r][ED.dayIdx[j]] == null ? '' : ED.rows[r][ED.dayIdx[j]]).trim() === '') n++;
+    ED.rows[r][ED.offCol] = String(n);
+    var tbl = document.getElementById('schedTable'); if(!tbl) return;
+    var trs = [].slice.call(tbl.querySelectorAll('tr'));
+    var tr = trs[1 + (r - (ED.hi + 2))]; if(!tr) return;
+    var td = tr.children[2 + ED.dayIdx.length + (ED.offCol - ED.sumStart)];
+    if(td) td.textContent = n;
+  }
+
   /* ---------- 진입 ---------- */
   function addGear(){
     if(document.getElementById('wvGear')) return;
@@ -912,7 +943,7 @@ try{ window.__ENH(); }catch(e){}
   if(typeof render === 'function' && !render.__wvadm){
     var _r = render;
     var w = function(rows){ try{ window.__wvRows = rows; }catch(e){} var o = _r.apply(this, arguments);
-      try{ addGear(); loadNotice(); }catch(e){} return o; };
+      try{ addGear(); loadNotice(); paintRot(); }catch(e){} return o; };
     w.__wvadm = true; render = w;
   }
   try{ addGear(); }catch(e){}
