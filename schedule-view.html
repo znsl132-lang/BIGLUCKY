@@ -646,9 +646,16 @@ try{ window.__ENH(); }catch(e){}
     ED = { orig: JSON.parse(JSON.stringify(rows)), rows: JSON.parse(JSON.stringify(rows)),
            hi: mt.hi, dayIdx: mt.dayIdx, nameCol: mt.nameCol, stores: mt.stores, undo: [],
            sumStart: mt.dayIdx[mt.dayIdx.length - 1] + 1,
-           offCol: (function(){ var h = rows[mt.hi].map(function(x){ return String(x).trim(); }); return h.indexOf('휴무'); })() };
+           sumCols: (function(){
+             var h = rows[mt.hi].map(function(x){ return String(x).trim(); });
+             var out = [];
+             for(var c = mt.dayIdx[mt.dayIdx.length - 1] + 1; c < h.length; c++)
+               if(h[c]) out.push({ c: c, key: h[c] });
+             return out;
+           })() };
     document.body.classList.add('wvEditing');
     tagCells();
+    for(var rr = ED.hi + 2; rr < ED.rows.length; rr++) recalcOff(rr);
     bar(true);
   }
 
@@ -914,18 +921,23 @@ try{ window.__ENH(); }catch(e){}
     });
   }
 
-  /* 칸을 고치면 그 사람 휴무 일수를 다시 세어 우측 집계열에 반영 */
+  /* 칸을 고치면 그 사람 집계열(휴무·훈련·병가 등)을 모두 다시 센다 */
   function recalcOff(r){
-    if(!ED || ED.offCol == null || ED.offCol < 0) return;
-    var n = 0;
-    for(var j = 0; j < ED.dayIdx.length; j++)
-      if(String(ED.rows[r][ED.dayIdx[j]] == null ? '' : ED.rows[r][ED.dayIdx[j]]).trim() === '') n++;
-    ED.rows[r][ED.offCol] = String(n);
-    var tbl = document.getElementById('schedTable'); if(!tbl) return;
-    var trs = [].slice.call(tbl.querySelectorAll('tr'));
-    var tr = trs[1 + (r - (ED.hi + 2))]; if(!tr) return;
-    var td = tr.children[2 + ED.dayIdx.length + (ED.offCol - ED.sumStart)];
-    if(td) td.textContent = n;
+    if(!ED || !ED.sumCols || !ED.sumCols.length) return;
+    var tbl = document.getElementById('schedTable');
+    var trs = tbl ? [].slice.call(tbl.querySelectorAll('tr')) : [];
+    var tr = trs[1 + (r - (ED.hi + 2))];
+    ED.sumCols.forEach(function(sc, k){
+      var want = sc.key.split(/[\/·,]/).map(function(x){ return x.trim(); }).filter(Boolean);
+      var n = 0;
+      for(var j = 0; j < ED.dayIdx.length; j++){
+        var v = String(ED.rows[r][ED.dayIdx[j]] == null ? '' : ED.rows[r][ED.dayIdx[j]]).trim();
+        if(sc.key === '휴무'){ if(v === '') n++; }
+        else if(want.indexOf(v) >= 0) n++;
+      }
+      ED.rows[r][sc.c] = String(n);
+      if(tr){ var td = tr.children[2 + ED.dayIdx.length + k]; if(td) td.textContent = n; }
+    });
   }
 
   /* ---------- 진입 ---------- */
