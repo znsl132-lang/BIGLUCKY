@@ -940,6 +940,39 @@ try{ window.__ENH(); }catch(e){}
     });
   }
 
+  /* 일반 화면에서도 우측 집계열(휴무·훈련·병가·휴가)을 실제 표 내용으로 다시 센다.
+     시트 값이 오래됐어도 직원이 보는 숫자는 항상 맞게 표시된다. (시트는 바뀌지 않음) */
+  function recalcSumsView(){
+    var tbl = document.getElementById('schedTable'); if(!tbl) return;
+    var trs = [].slice.call(tbl.querySelectorAll('tr')); if(trs.length < 2) return;
+    var head = [].slice.call(trs[0].children).map(function(x){ return String(x.textContent).replace(/\s+/g, ' ').trim(); });
+    var dayN = 0;
+    for(var c = 2; c < head.length; c++){ if(/^\d{1,2}\b/.test(head[c])) dayN++; else break; }
+    if(!dayN) return;
+    var sums = [];
+    for(var c2 = 2 + dayN; c2 < head.length; c2++) sums.push({ i: c2, key: head[c2] });
+    if(!sums.length) return;
+    for(var r = 1; r < trs.length; r++){
+      var tds = [].slice.call(trs[r].children);
+      if(tds.length < 2 + dayN) continue;
+      var vals = [];
+      for(var d = 0; d < dayN; d++){
+        var td = tds[2 + d];
+        vals.push(td ? String(td.textContent).replace(/(OP|CL)$/, '').trim() : '');
+      }
+      sums.forEach(function(sc){
+        var want = sc.key.split(/[\/·,\s]+/).map(function(x){ return x.trim(); }).filter(Boolean);
+        var n = 0;
+        vals.forEach(function(v){
+          if(sc.key === '휴무'){ if(v === '') n++; }
+          else if(want.indexOf(v) >= 0) n++;
+        });
+        var cell = tds[sc.i];
+        if(cell) cell.textContent = n;
+      });
+    }
+  }
+
   /* ---------- 진입 ---------- */
   function addGear(){
     if(document.getElementById('wvGear')) return;
@@ -955,7 +988,7 @@ try{ window.__ENH(); }catch(e){}
   if(typeof render === 'function' && !render.__wvadm){
     var _r = render;
     var w = function(rows){ try{ window.__wvRows = rows; }catch(e){} var o = _r.apply(this, arguments);
-      try{ addGear(); loadNotice(); paintRot(); }catch(e){} return o; };
+      try{ addGear(); loadNotice(); paintRot(); recalcSumsView(); }catch(e){} return o; };
     w.__wvadm = true; render = w;
   }
   try{ addGear(); }catch(e){}
