@@ -995,4 +995,184 @@ try{ window.__ENH(); }catch(e){}
   setTimeout(function(){ try{ loadNotice(); }catch(e){} }, 1500);
 })();
 </script>
+<script>
+/* ===== 여러 명 스케줄 한눈에 보기 (달력) ===== */
+(function(){
+  var sel = [];
+  function css(){
+    if(document.getElementById('wvMcCss')) return;
+    var s = document.createElement('style'); s.id = 'wvMcCss';
+    s.textContent = [
+      '#wvMc{border:1px solid var(--line);background:#fff;color:#4a4b57;padding:3px 9px;font-size:12px;font-weight:700;border-radius:7px;cursor:pointer;margin-right:6px}',
+      '#wvMc.on{background:#2b2d42;color:#fff;border-color:#2b2d42}',
+      'body.wvPicking #schedTable td.namecol{cursor:pointer}',
+      'body.wvPicking #schedTable td.namecol.pk{background:#fff3d6 !important;box-shadow:inset 3px 0 0 #c9a227}',
+      '#wvMcBar{position:fixed;left:0;right:0;bottom:0;background:#14151f;color:#fff;z-index:99997;padding:9px 12px;display:none;gap:8px;align-items:center;flex-wrap:wrap;box-shadow:0 -6px 24px rgba(0,0,0,.28);font-size:13px}',
+      '#wvMcBar button{padding:7px 12px;border:0;border-radius:8px;font-size:12.5px;font-weight:700;cursor:pointer;background:#2b2d42;color:#dfe0ea}',
+      '#wvMcBar button.go{background:#f2c50f;color:#14151f}',
+      '#wvMcOv{position:fixed;inset:0;background:rgba(10,12,25,.6);z-index:100004;display:none;align-items:center;justify-content:center;padding:16px}',
+      '.wvMcCard{background:#fff;border-radius:16px;width:min(980px,96vw);max-height:92vh;overflow:auto;padding:16px 18px;box-shadow:0 24px 70px rgba(0,0,0,.4)}',
+      '.wvMcHead{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}',
+      '.wvMcHead b{font-size:16px}',
+      '.wvMcTab{border:1px solid #dcdde5;background:#fff;color:#5a5b67;border-radius:8px;padding:6px 11px;font-size:12.5px;font-weight:700;cursor:pointer}',
+      '.wvMcTab.on{background:#2b2d42;color:#fff;border-color:#2b2d42}',
+      '.wvMcX{border:0;background:#f0f1f5;width:32px;height:32px;border-radius:8px;font-size:16px;cursor:pointer;color:#555}',
+      '.wvDow{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px}',
+      '.wvDow div{text-align:center;font-size:11px;color:#9a9ba6;font-weight:700}',
+      '.wvDow .sun{color:#e5484d}.wvDow .sat{color:#3b82f6}',
+      '.wvG{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}',
+      '.wvC{min-height:62px;border:1px solid #eceef3;border-radius:8px;padding:4px 3px;background:#fafbfd}',
+      '.wvC.e{background:transparent;border:none}',
+      '.wvC .d{font-size:10px;color:#8a8f9c;font-weight:700;display:block;text-align:center}',
+      '.wvC .r{font-size:10.5px;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:4px;padding:1px 3px;margin-top:2px}',
+      '.wvC .r .nm{font-weight:700;color:#2b2d42}',
+      '.wvC.sun .d{color:#e5484d}.wvC.sat .d{color:#3b82f6}',
+      '.wvP{margin-bottom:16px}',
+      '.wvP h4{margin:0 0 6px;font-size:13.5px;font-weight:800}',
+      '.wvP h4 span{font-weight:400;color:#9a9ba6;font-size:11.5px;margin-left:6px}',
+      '.wvPs{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}',
+      '@media(max-width:720px){.wvC{min-height:52px}.wvC .r{font-size:9.5px}}'
+    ].join('\n');
+    document.head.appendChild(s);
+  }
+
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>]/g, function(c){ return { '&':'&amp;','<':'&lt;','>':'&gt;' }[c]; }); }
+
+  function rowsOf(){
+    var tbl = document.getElementById('schedTable'); if(!tbl) return [];
+    return [].slice.call(tbl.querySelectorAll('tr')).slice(1).filter(function(tr){ return tr.querySelector('td.namecol'); });
+  }
+  function nameOf(tr){ var b = tr.querySelector('td.namecol b'); return b ? b.textContent.trim() : ''; }
+  function titleOf(tr){ var t = tr.querySelector('td.namecol .ttl'); return t ? t.textContent.trim() : ''; }
+
+  function daysOf(tr){
+    var out = [];
+    [].slice.call(tr.querySelectorAll('td[data-d]')).forEach(function(td){
+      var raw = String(td.textContent).trim();
+      var oc = td.querySelector('.opcl');
+      var base = raw.replace(/(OP|CL)$/, '').trim();
+      out.push({ d: +td.getAttribute('data-d'), v: base, oc: oc ? oc.textContent.trim() : '',
+                 bg: getComputedStyle(td).backgroundColor, off: base === '' });
+    });
+    return out;
+  }
+
+  function bar(show){
+    var b = document.getElementById('wvMcBar');
+    if(!b){ b = document.createElement('div'); b.id = 'wvMcBar'; document.body.appendChild(b); }
+    if(!show){ b.style.display = 'none'; return; }
+    b.innerHTML = '<b>' + sel.length + '명 선택</b><span style="color:#9a9ab0;font-size:11.5px">이름을 눌러 고르세요</span>' +
+      '<span style="flex:1"></span><button class="go" id="wvMcGo">선택 스케줄 보기</button><button id="wvMcCx">취소</button>';
+    b.style.display = 'flex';
+    b.querySelector('#wvMcGo').onclick = openCal;
+    b.querySelector('#wvMcCx').onclick = function(){ mode(false); };
+  }
+
+  function mode(on){
+    document.body.classList.toggle('wvPicking', on);
+    var btn = document.getElementById('wvMc'); if(btn) btn.classList.toggle('on', on);
+    if(!on){ sel = []; rowsOf().forEach(function(tr){ var n = tr.querySelector('td.namecol'); if(n) n.classList.remove('pk'); }); }
+    bar(on);
+  }
+
+  function openCal(){
+    if(!sel.length){ alert('먼저 이름을 눌러 직원을 선택하세요.'); return; }
+    var ov = document.getElementById('wvMcOv');
+    if(!ov){ ov = document.createElement('div'); ov.id = 'wvMcOv'; document.body.appendChild(ov);
+      ov.addEventListener('click', function(e){ if(e.target === ov) ov.style.display = 'none'; }); }
+    draw(ov, 'mix');
+    ov.style.display = 'flex';
+  }
+
+  function grid(cells, Y, M){
+    var DOW = ['일','월','화','수','목','금','토'];
+    var first = (Y && M) ? new Date(Y, M - 1, 1).getDay() : 0;
+    var h = '<div class="wvDow">' + DOW.map(function(x, i){ return '<div class="' + (i === 0 ? 'sun' : i === 6 ? 'sat' : '') + '">' + x + '</div>'; }).join('') + '</div><div class="wvG">';
+    for(var i = 0; i < first; i++) h += '<div class="wvC e"></div>';
+    cells.forEach(function(c){
+      var wd = (Y && M) ? new Date(Y, M - 1, c.d).getDay() : -1;
+      h += '<div class="wvC' + (wd === 0 ? ' sun' : wd === 6 ? ' sat' : '') + '"><span class="d">' + c.d + '</span>' + c.body + '</div>';
+    });
+    h += '</div>';
+    return h;
+  }
+
+  function draw(ov, view){
+    var mv = (document.getElementById('monthSel') || {}).value || '';
+    var p = mv.split('-'), Y = +p[0], M = +p[1];
+    var picked = sel.map(function(tr){ return { name: nameOf(tr), title: titleOf(tr), days: daysOf(tr) }; });
+    var nD = picked[0] ? picked[0].days.length : 0;
+
+    var body = '';
+    if(view === 'mix'){
+      var cells = [];
+      for(var i = 0; i < nD; i++){
+        var lines = picked.map(function(pp){
+          var c = pp.days[i]; if(!c) return '';
+          var txt = c.off ? '휴무' : esc(c.v) + (c.oc ? '<sup>' + esc(c.oc) + '</sup>' : '');
+          var st = c.off ? 'background:#f1f1f1;color:#9a9ba6' : 'background:' + c.bg;
+          return '<div class="r" style="' + st + '"><span class="nm">' + esc(pp.name) + '</span> ' + txt + '</div>';
+        }).join('');
+        cells.push({ d: picked[0].days[i] ? picked[0].days[i].d : i + 1, body: lines });
+      }
+      body = grid(cells, Y, M);
+    } else {
+      body = '<div class="wvPs">' + picked.map(function(pp){
+        var off = pp.days.filter(function(c){ return c.off; }).length;
+        var cs = pp.days.map(function(c){
+          var txt = c.off ? '휴무' : esc(c.v) + (c.oc ? '<sup>' + esc(c.oc) + '</sup>' : '');
+          var st = c.off ? 'background:#f1f1f1;color:#9a9ba6' : 'background:' + c.bg;
+          return { d: c.d, body: '<div class="r" style="' + st + ';text-align:center">' + txt + '</div>' };
+        });
+        return '<div class="wvP"><h4>' + esc(pp.name) + (pp.title ? ' <span>' + esc(pp.title) + '</span>' : '') +
+               ' <span>휴무 ' + off + '일</span></h4>' + grid(cs, Y, M) + '</div>';
+      }).join('') + '</div>';
+    }
+
+    ov.innerHTML = '<div class="wvMcCard"><div class="wvMcHead"><b>선택 직원 ' + picked.length + '명</b>' +
+      '<span style="color:#9a9ba6;font-size:12px">' + esc(mv) + ' · ' + esc(picked.map(function(x){ return x.name; }).join(', ')) + '</span>' +
+      '<span style="flex:1"></span>' +
+      '<button class="wvMcTab' + (view === 'mix' ? ' on' : '') + '" data-v="mix">한 칸에 함께</button>' +
+      '<button class="wvMcTab' + (view === 'each' ? ' on' : '') + '" data-v="each">사람별로</button>' +
+      '<button class="wvMcX" id="wvMcClose">✕</button></div>' + body + '</div>';
+    ov.querySelector('#wvMcClose').onclick = function(){ ov.style.display = 'none'; };
+    [].slice.call(ov.querySelectorAll('.wvMcTab')).forEach(function(b){
+      b.onclick = function(e){ e.stopPropagation(); draw(ov, b.getAttribute('data-v')); };
+    });
+  }
+
+  function hook(){
+    rowsOf().forEach(function(tr){
+      var n = tr.querySelector('td.namecol');
+      if(!n || n.__wvMc) return;
+      n.__wvMc = true;
+      n.addEventListener('click', function(e){
+        if(!document.body.classList.contains('wvPicking')) return;
+        e.stopPropagation(); e.preventDefault();
+        var i = sel.indexOf(tr);
+        if(i >= 0){ sel.splice(i, 1); n.classList.remove('pk'); }
+        else { sel.push(tr); n.classList.add('pk'); }
+        bar(true);
+      }, true);
+    });
+  }
+
+  function addBtn(){
+    if(document.getElementById('wvMc')) return;
+    var stamp = document.getElementById('stamp'); if(!stamp || !stamp.parentNode) return;
+    var b = document.createElement('button');
+    b.id = 'wvMc'; b.type = 'button'; b.textContent = '여러 명 보기';
+    b.onclick = function(){ mode(!document.body.classList.contains('wvPicking')); };
+    stamp.parentNode.insertBefore(b, stamp);
+  }
+
+  css();
+  if(!window.__wvMcWrapped && typeof window.render === 'function'){
+    window.__wvMcWrapped = true;
+    var _r = window.render;
+    window.render = function(){ var o = _r.apply(this, arguments); try{ addBtn(); hook(); }catch(e){} return o; };
+  }
+  setTimeout(function(){ try{ addBtn(); hook(); }catch(e){} }, 1600);
+})();
+</script>
 </html>
