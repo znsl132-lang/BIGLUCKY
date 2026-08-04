@@ -166,7 +166,7 @@
       if(!apiBase){ if(tries > 60) clearInterval(timer); return; }
       clearInterval(timer);
       if(revalidated) return; revalidated = true;
-      pull('', true).then(function(b){
+      pull('', false).then(function(b){
         var old = mem[''];
         if(old && old.csv === b.csv && old.notice === b.notice){ put(b, ''); writeLS(b); return; }
         mem = {}; inflight = {}; put(b, ''); writeLS(b);
