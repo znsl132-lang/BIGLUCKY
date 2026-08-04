@@ -83,6 +83,104 @@
   }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<script>
+/* ===== 로딩 속도 개선 =====
+   1) 시트 호출(달 목록·스케줄·공지)을 mode=all 한 번으로 합친다.
+      fetch를 가로채는 방식이라 아래쪽 코드는 한 줄도 고치지 않는다.
+      반드시 head에 두어야 첫 호출까지 잡을 수 있다.
+   2) 마지막에 본 데이터를 브라우저에 저장해 두었다가 다음 접속 때 즉시 표시하고,
+      뒤에서 조용히 갱신한 뒤 달라졌을 때만 다시 그린다. */
+(function(){
+  if(window.__wvSpeed) return; window.__wvSpeed = true;
+  var LS = 'wvBundle_v1';
+  var _f = window.fetch.bind(window);
+  var mem = {}, inflight = {}, apiBase = '', forceFresh = false, revalidated = false;
+
+  function isApi(u){ return String(u).indexOf('/macros/s/') >= 0; }
+  function base(u){ var i = String(u).indexOf('?'); return i < 0 ? String(u) : String(u).slice(0, i); }
+  function qs(u, k){
+    var i = String(u).indexOf('?'); if(i < 0) return '';
+    var parts = String(u).slice(i + 1).split('&');
+    for(var j = 0; j < parts.length; j++){
+      var p = parts[j].split('=');
+      if(decodeURIComponent(p[0]) === k) return decodeURIComponent((p[1] || '').replace(/\+/g, ' '));
+    }
+    return '';
+  }
+  function readLS(){ try{ return JSON.parse(localStorage.getItem(LS) || 'null'); }catch(e){ return null; } }
+  function writeLS(b){ try{ localStorage.setItem(LS, JSON.stringify(b)); }catch(e){} }
+  function put(b, k){ if(!b) return; mem[k || ''] = b; if(b.month) mem[b.month] = b; }
+
+  function pull(month, fresh){
+    if(!apiBase) return Promise.reject(new Error('no base'));
+    var u = apiBase + '?mode=all' + (month ? ('&month=' + encodeURIComponent(month)) : '')
+          + (fresh ? '&fresh=1' : '') + '&t=' + Date.now();
+    return _f(u, {cache:'no-store'}).then(function(r){ return r.text(); }).then(function(t){
+      var b = JSON.parse(t);
+      if(!b || typeof b.csv !== 'string') throw new Error('bad bundle');
+      return b;
+    });
+  }
+  function getAll(month){
+    var k = month || '';
+    if(!forceFresh && mem[k]) return Promise.resolve(mem[k]);
+    if(inflight[k]) return inflight[k];
+    var wasFresh = forceFresh;
+    var p = pull(month, wasFresh).then(function(b){
+      put(b, k); writeLS(b);
+      delete inflight[k]; if(wasFresh) forceFresh = false;
+      return b;
+    }, function(e){ delete inflight[k]; throw e; });
+    inflight[k] = p; return p;
+  }
+  function reply(text){
+    return new Response(text, {status:200, headers:{'Content-Type':'text/plain; charset=utf-8'}});
+  }
+
+  window.fetch = function(input, init){
+    var url = (typeof input === 'string') ? input : ((input && input.url) || '');
+    if(!isApi(url)) return _f(input, init);
+    if(!apiBase) apiBase = base(url);
+    var method = ((init && init.method) || (input && input.method) || 'GET').toUpperCase();
+    if(method !== 'GET'){
+      mem = {}; inflight = {}; forceFresh = true;
+      try{ localStorage.removeItem(LS); }catch(e){}
+      return _f(input, init);
+    }
+    var mode = qs(url, 'mode'), month = qs(url, 'month');
+    if(mode === 'revs' || mode === 'diag' || mode === 'all') return _f(input, init);
+    return getAll(month).then(function(b){
+      if(mode === 'list')   return reply(JSON.stringify(b.months || []));
+      if(mode === 'notice') return reply(String(b.notice == null ? '' : b.notice));
+      return reply(String(b.csv == null ? '' : b.csv));
+    })['catch'](function(){ return _f(input, init); });
+  };
+
+  /* 저장해 둔 데이터가 있으면 그것으로 즉시 그리고, 뒤에서 최신본을 받아 비교한다 */
+  var cached = readLS();
+  if(cached && cached.csv){
+    put(cached, '');
+    var tries = 0;
+    var timer = setInterval(function(){
+      tries++;
+      if(!apiBase){ if(tries > 60) clearInterval(timer); return; }
+      clearInterval(timer);
+      if(revalidated) return; revalidated = true;
+      pull('', true).then(function(b){
+        var old = mem[''];
+        if(old && old.csv === b.csv && old.notice === b.notice){ put(b, ''); writeLS(b); return; }
+        mem = {}; inflight = {}; put(b, ''); writeLS(b);
+        var sel = document.getElementById('monthSel');
+        var keep = sel ? sel.value : '';
+        try{
+          if(keep && keep !== b.month && typeof loadMonth === 'function') loadMonth(keep);
+          else if(typeof load === 'function') load();
+        }catch(e){}
+      })['catch'](function(){});
+    }, 100);
+  }
+})();
+</script>
 </head>
 <body>
 <div class="wrap">
@@ -1175,101 +1273,5 @@ try{ window.__ENH(); }catch(e){}
   setTimeout(function(){ try{ addBtn(); hook(); }catch(e){} }, 1600);
 })();
 </script>
-<script>
-/* ===== 로딩 속도 개선 =====
-   1) 시트 호출(달 목록·스케줄·공지)을 mode=all 한 번으로 합친다.
-      기존 fetch를 가로채는 방식이라 위쪽 코드는 한 줄도 고치지 않는다.
-   2) 마지막에 본 데이터를 브라우저에 저장해 두었다가 다음 접속 때 즉시 표시하고,
-      뒤에서 조용히 갱신한 뒤 달라졌을 때만 다시 그린다. */
-(function(){
-  if(window.__wvSpeed) return; window.__wvSpeed = true;
-  var LS = 'wvBundle_v1';
-  var _f = window.fetch.bind(window);
-  var mem = {}, inflight = {}, apiBase = '', forceFresh = false, revalidated = false;
 
-  function isApi(u){ return String(u).indexOf('/macros/s/') >= 0; }
-  function base(u){ var i = String(u).indexOf('?'); return i < 0 ? String(u) : String(u).slice(0, i); }
-  function qs(u, k){
-    var i = String(u).indexOf('?'); if(i < 0) return '';
-    var parts = String(u).slice(i + 1).split('&');
-    for(var j = 0; j < parts.length; j++){
-      var p = parts[j].split('=');
-      if(decodeURIComponent(p[0]) === k) return decodeURIComponent((p[1] || '').replace(/\+/g, ' '));
-    }
-    return '';
-  }
-  function readLS(){ try{ return JSON.parse(localStorage.getItem(LS) || 'null'); }catch(e){ return null; } }
-  function writeLS(b){ try{ localStorage.setItem(LS, JSON.stringify(b)); }catch(e){} }
-  function put(b, k){ if(!b) return; mem[k || ''] = b; if(b.month) mem[b.month] = b; }
-
-  function pull(month, fresh){
-    if(!apiBase) return Promise.reject(new Error('no base'));
-    var u = apiBase + '?mode=all' + (month ? ('&month=' + encodeURIComponent(month)) : '')
-          + (fresh ? '&fresh=1' : '') + '&t=' + Date.now();
-    return _f(u, {cache:'no-store'}).then(function(r){ return r.text(); }).then(function(t){
-      var b = JSON.parse(t);
-      if(!b || typeof b.csv !== 'string') throw new Error('bad bundle');
-      return b;
-    });
-  }
-  function getAll(month){
-    var k = month || '';
-    if(!forceFresh && mem[k]) return Promise.resolve(mem[k]);
-    if(inflight[k]) return inflight[k];
-    var wasFresh = forceFresh;
-    var p = pull(month, wasFresh).then(function(b){
-      put(b, k); if(!k) writeLS(b);
-      delete inflight[k]; if(wasFresh) forceFresh = false;
-      return b;
-    }, function(e){ delete inflight[k]; throw e; });
-    inflight[k] = p; return p;
-  }
-  function reply(text){
-    return new Response(text, {status:200, headers:{'Content-Type':'text/plain; charset=utf-8'}});
-  }
-
-  window.fetch = function(input, init){
-    var url = (typeof input === 'string') ? input : ((input && input.url) || '');
-    if(!isApi(url)) return _f(input, init);
-    if(!apiBase) apiBase = base(url);
-    var method = ((init && init.method) || (input && input.method) || 'GET').toUpperCase();
-    if(method !== 'GET'){
-      mem = {}; inflight = {}; forceFresh = true;
-      try{ localStorage.removeItem(LS); }catch(e){}
-      return _f(input, init);
-    }
-    var mode = qs(url, 'mode'), month = qs(url, 'month');
-    if(mode === 'revs' || mode === 'diag' || mode === 'all') return _f(input, init);
-    return getAll(month).then(function(b){
-      if(mode === 'list')   return reply(JSON.stringify(b.months || []));
-      if(mode === 'notice') return reply(String(b.notice == null ? '' : b.notice));
-      return reply(String(b.csv == null ? '' : b.csv));
-    })['catch'](function(){ return _f(input, init); });
-  };
-
-  /* 저장해 둔 데이터가 있으면 그것으로 즉시 그리고, 뒤에서 최신본을 받아 비교한다 */
-  var cached = readLS();
-  if(cached && cached.csv){
-    put(cached, '');
-    var tries = 0;
-    var timer = setInterval(function(){
-      tries++;
-      if(!apiBase){ if(tries > 40) clearInterval(timer); return; }
-      clearInterval(timer);
-      if(revalidated) return; revalidated = true;
-      pull('', true).then(function(b){
-        var old = mem[''];
-        if(old && old.csv === b.csv && old.notice === b.notice){ put(b, ''); writeLS(b); return; }
-        mem = {}; inflight = {}; put(b, ''); writeLS(b);
-        var sel = document.getElementById('monthSel');
-        var keep = sel ? sel.value : '';
-        try{
-          if(keep && keep !== b.month && typeof loadMonth === 'function') loadMonth(keep);
-          else if(typeof load === 'function') load();
-        }catch(e){}
-      })['catch'](function(){});
-    }, 100);
-  }
-})();
-</script>
 </html>
