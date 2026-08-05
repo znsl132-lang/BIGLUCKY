@@ -64,8 +64,8 @@ var SPEC = [
   {k:'move',       n:'매장 이동',         dir:'low'},
   {k:'dupe',       n:'중복 편성',         dir:'low'}
 ];
-var MARK = {ok:'정상', good:'좋아짐', warn:'소폭 악화', bad:'악화'};
-var CLS  = {ok:'mute', good:'good', warn:'warn', bad:'bad'};
+var MARK = {ok:'정상', good:'좋아짐', warn:'소폭 악화', bad:'악화', none:'—', hardOnly:'0이어야 함'};
+var CLS  = {ok:'mute', good:'good', warn:'warn', bad:'bad', none:'mute', hardOnly:'warn'};
 var META = null, LAST = null;
 
 var RUNNER = "(function(){\n  function post(m){ try{ parent.postMessage(m, '*'); }catch(e){} }\n  window.addEventListener('message', function(ev){\n    var d = ev.data || {};\n    if(d.wv !== 'run') return;\n    var mk = d.month, seeds = d.seeds;\n    var out = [], i = 0;\n    function step(){\n      if(i >= seeds.length){ post({wv:'done', rows:out}); return; }\n      try{\n        var p = mk.split('-').map(Number), y = p[0], m = p[1];\n        var nDays = new Date(y, m, 0).getDate();\n        var reqs = (S.reqs && S.reqs[mk]) ? S.reqs[mk] : [];\n        /* \\uc2e4\\uc81c generate() \\uc640 \\ub3d9\\uc77c: 24\\ud68c \\uc2dc\\ub3c4\\ud574 \\uacbd\\uace0\\uac00 \\uac00\\uc7a5 \\uc801\\uc740 \\uac83\\uc744 \\uace0\\ub978\\ub2e4 */\n        var base = seeds[i] * 24, bestCells = null, bestWarns = null;\n        for(var t = 0; t < 24; t++){\n          var r = genOnce(y, m, nDays, reqs, mk, base + t, null);\n          if(!r || !r.cells) throw new Error('\\uc0dd\\uc131 \\uc2e4\\ud328');\n          if(!bestWarns || r.warns.length < bestWarns.length){ bestCells = r.cells; bestWarns = r.warns; }\n          if(bestWarns.length === 0) break;\n        }\n        var sc = { year:y, month:m, nDays:nDays, cells:bestCells };\n        if(typeof wvRefine === 'function') wvRefine(sc, {});\n        var C = wvCtx(sc), s = scoreSchedule(sc.cells, C), dd = s.det || {};\n        var tot = 0, met = 0, prot = C.prot || {};\n        Object.keys(prot).forEach(function(nm){\n          Object.keys(prot[nm]).forEach(function(di){\n            tot++; var row = sc.cells[nm];\n            if(row && !C.isW(row[+di])) met++;\n          });\n        });\n        out.push({ gap:dd.gap||0, over6:dd.over6||0, dupe:dd.dupe||0, runCurve:dd.runCurve||0,\n          tight:dd.tight||0, restSpread:dd.restSpread||0, move:dd.move||0,\n          reqPct: tot ? (met*100/tot) : 100, _reqTot:tot, _total:s.total||0 });\n      }catch(e){ post({wv:'err', msg:String(e && e.message || e)}); return; }\n      i++; post({wv:'prog', i:i, n:seeds.length});\n      setTimeout(step, 20);\n    }\n    setTimeout(step, 20);\n  });\n  function ready(){\n    if(typeof genOnce !== 'function' || typeof scoreSchedule !== 'function' || typeof S === 'undefined'){\n      setTimeout(ready, 300); return;\n    }\n    var el = document.getElementById('monthKey');\n    post({ wv:'ready', emps:(S.emps||[]).length, stores:(S.stores||[]).length,\n           month:(el && el.value) ? el.value : '', opt:(typeof wvRefine === 'function') });\n  }\n  ready();\n})();\n";
@@ -76,8 +76,8 @@ function r1(x){ return Math.round(x*10)/10; }
 function readBase(){ try{ return JSON.parse(localStorage.getItem(BKEY)||'null'); }catch(e){ return null; } }
 
 function judge(sp, now, base){
+  if(base == null) return (sp.hard && now > 0.05) ? 'hardOnly' : 'none';
   if(sp.hard && now > 0.05) return 'bad';
-  if(base == null) return 'ok';
   var tol = sp.pct ? 0.5 : Math.max(0.5, Math.abs(base)*0.05);
   var d = now - base;
   if(sp.dir === 'low'){
@@ -107,13 +107,13 @@ function baseLine(){
 
 function draw(now){
   var base = readBase();
-  var bad = 0, warn = 0;
+  var bad = 0, warn = 0, hardBad = 0;
   var h = '<table><tr><th>지표</th><th>기준선</th><th>이번</th><th>판정</th></tr>';
   SPEC.forEach(function(sp){
     var bv = (base && base[sp.k] != null) ? base[sp.k] : null;
     var nv = now[sp.k];
     var j = judge(sp, nv, bv);
-    if(j === 'bad') bad++; if(j === 'warn') warn++;
+    if(j === 'bad') bad++; if(j === 'warn') warn++; if(j === 'hardOnly') hardBad++;
     h += '<tr><td>' + esc(sp.n) + '</td>'
        + '<td class="mute">' + (bv == null ? '—' : r1(bv) + (sp.pct?'%':'')) + '</td>'
        + '<td><b>' + r1(nv) + (sp.pct?'%':'') + '</b></td>'
@@ -123,9 +123,10 @@ function draw(now){
      + '<td class="mute">' + (base ? r1(base._total) : '—') + '</td>'
      + '<td><b>' + r1(now._total) + '</b></td><td></td></tr></table>';
   h += '<div class="msg">휴무 요청 ' + (now._reqTot||0) + '건 기준 · 시드 6개 평균<br>'
-     + (bad ? '<b class="bad">악화 ' + bad + '건 — 방금 바꾼 내용은 되돌리는 게 안전합니다.</b>'
+     + (!base ? (hardBad ? '<b class="warn">0이어야 할 지표가 ' + hardBad + '건 있습니다. 알고리즘이 아니라 설정(인원·휴무 일수·우선 배치) 문제일 가능성이 큽니다.</b>' : '<b class="good">0이어야 할 지표는 모두 정상입니다.</b>') + ' 기준선이 없어 비교는 하지 않았습니다.'
+        : (bad ? '<b class="bad">악화 ' + bad + '건 — 방금 바꾼 내용은 되돌리는 게 안전합니다.</b>'
             : (warn ? '<b class="warn">소폭 악화 ' + warn + '건 — 확인이 필요합니다.</b>'
-                    : '<b class="good">악화된 항목이 없습니다.</b>')) + '</div>';
+                    : '<b class="good">악화된 항목이 없습니다.</b>'))) + '</div>';
   $('res').innerHTML = h;
   $('resCard').style.display = '';
   $('save').disabled = false;
