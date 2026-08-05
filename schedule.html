@@ -3509,4 +3509,149 @@ var WV_LNS_ITERS = 15000;
   wvRefine = wrapped;
 })();
 </script>
+<script>
+/* ===== 설정 시트 공유 (직원·매장) =====
+   열 때 시트에서 자동으로 불러오고, [설정 저장] 을 눌러야 시트에 올라간다.
+   시트 형식이 이상하면 적용하지 않고 경고만 띄운다. */
+(function(){
+  if(window.__wvCfg) return; window.__wvCfg = true;
+  var URL_ = (typeof SHEET_WEBAPP_URL !== 'undefined' && SHEET_WEBAPP_URL) ? SHEET_WEBAPP_URL : '';
+  var TOKEN = (typeof SHEET_TOKEN !== 'undefined' && SHEET_TOKEN) ? SHEET_TOKEN : 'wevape2026';
+  var dirty = false, lastAt = '';
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'})[c]; }); }
+  function css(){
+    if(document.getElementById('wvCfgCss')) return;
+    var st = document.createElement('style'); st.id = 'wvCfgCss';
+    st.textContent = '#wvCfgBar{display:inline-flex;align-items:center;gap:8px;margin-left:12px;font-size:12.5px;vertical-align:middle}'
+      + '#wvCfgBar button{font-size:12.5px;padding:5px 11px;border-radius:8px;border:1px solid #c9ced8;background:#f7f8fa;cursor:pointer}'
+      + '#wvCfgBar button.on{background:#2b2d42;color:#fff;border-color:#2b2d42}'
+      + '#wvCfgBar button:disabled{opacity:.5;cursor:default}'
+      + '#wvCfgMsg{color:#8a8b93} #wvCfgMsg.dirty{color:#a86400;font-weight:700} #wvCfgMsg.bad{color:#c5221f;font-weight:700} #wvCfgMsg.good{color:#137333}';
+    document.head.appendChild(st);
+  }
+  function msg(t, cls){
+    var m = document.getElementById('wvCfgMsg');
+    if(m){ m.className = cls || ''; m.innerHTML = t; }
+  }
+  function markDirty(){
+    dirty = true;
+    msg('● 시트에 저장 안 됨', 'dirty');
+    var b = document.getElementById('wvCfgSave'); if(b) b.className = 'on';
+  }
+  function mount(){
+    css();
+    if(document.getElementById('wvCfgBar')) return true;
+    var host = null;
+    var hs = document.querySelectorAll('h1,h2,h3,h4,b,strong,div,span,label');
+    for(var i = 0; i < hs.length; i++){
+      var tx = (hs[i].textContent || '').trim();
+      if(tx === '직원 목록' && hs[i].children.length === 0){ host = hs[i]; break; }
+    }
+    if(!host) return false;
+    var bar = document.createElement('span'); bar.id = 'wvCfgBar';
+    bar.innerHTML = '<button id="wvCfgSave">설정 저장</button>'
+      + '<button id="wvCfgLoad">시트에서 불러오기</button>'
+      + '<span id="wvCfgMsg">확인 중…</span>';
+    host.parentNode.insertBefore(bar, host.nextSibling);
+    document.getElementById('wvCfgSave').onclick = cfgSave;
+    document.getElementById('wvCfgLoad').onclick = function(){ load(true); };
+    return true;
+  }
+  function collect(){
+    return {
+      stores: (S.stores || []).map(function(x){ return { n:x.n, need:x.need }; }),
+      emps: (S.emps || []).map(function(e){
+        return { name:e.name, title:e.title || '', home:e.home || '',
+          offN:(e.offN == null ? 10 : e.offN), role:e.role || '',
+          type:e.type || '정규직', pref:(e.pref || []), ban:(e.ban || []) };
+      })
+    };
+  }
+  function apply(j){
+    S.stores = j.stores.map(function(x){ return { n:x.n, need:x.need }; });
+    S.emps = j.emps.map(function(e){
+      var o = { name:e.name, title:e.title || '', home:e.home || '',
+        offN:(e.offN == null ? 10 : e.offN), role:e.role || '', type:e.type || '정규직' };
+      if((e.pref || []).length) o.pref = e.pref.slice();
+      if((e.ban || []).length) o.ban = e.ban.slice();
+      return o;
+    });
+    try{ if(typeof renderStores === 'function') renderStores(); }catch(e){}
+    try{ if(typeof renderEmps === 'function') renderEmps(); }catch(e){}
+    try{ if(typeof window.save === 'function') window.save(); }catch(e){}
+  }
+  function load(manual){
+    if(!URL_){ msg('시트 주소가 없습니다', 'bad'); return; }
+    msg('불러오는 중…');
+    fetch(URL_ + '?mode=cfg&t=' + Date.now(), {cache:'no-store'})
+      .then(function(r){ return r.text(); })
+      .then(function(t){
+        var j = null;
+        try{ j = JSON.parse(t); }catch(e){}
+        if(!j){ msg('시트 응답을 읽지 못했습니다 · 기존 설정 유지', 'bad'); return; }
+        if(!j.ok){
+          if(j.reason === 'no-sheet'){ msg('시트에 저장된 설정이 없습니다 · [설정 저장]을 먼저 눌러 주세요', 'dirty'); return; }
+          msg('시트 설정에 문제가 있습니다: ' + esc(j.reason) + ' · 기존 설정 유지', 'bad'); return;
+        }
+        if(!j.stores || !j.stores.length || !j.emps || !j.emps.length){
+          msg('시트 설정이 비어 있습니다 · 기존 설정 유지', 'bad'); return;
+        }
+        var before = JSON.stringify(collect());
+        apply(j);
+        var changed = (before !== JSON.stringify(collect()));
+        lastAt = String(j.at || '');
+        dirty = false;
+        var b = document.getElementById('wvCfgSave'); if(b) b.className = '';
+        msg('시트에서 불러옴 · 직원 ' + j.emps.length + '명 · 매장 ' + j.stores.length + '곳'
+          + (changed ? ' <b style="color:#137333">(설정이 갱신되었습니다)</b>' : ''), 'good');
+      })
+      ['catch'](function(e){ msg('시트 연결 실패 · 기존 설정 유지', 'bad'); });
+  }
+  function cfgSave(){
+    if(!URL_){ msg('시트 주소가 없습니다', 'bad'); return; }
+    var c = collect();
+    if(!c.stores.length || !c.emps.length){ msg('빈 설정은 저장하지 않습니다', 'bad'); return; }
+    var btn = document.getElementById('wvCfgSave');
+    if(btn){ btn.disabled = true; btn.textContent = '저장 중…'; }
+    msg('저장 중…');
+    fetch(URL_, { method:'POST', body: JSON.stringify({
+        action:'cfg', token:TOKEN, who:'', stores:c.stores, emps:c.emps }) })
+      .then(function(r){ return r.text(); })
+      .then(function(t){
+        var j = null; try{ j = JSON.parse(t); }catch(e){}
+        if(btn){ btn.disabled = false; btn.textContent = '설정 저장'; btn.className = ''; }
+        if(j && j.ok){
+          dirty = false; lastAt = j.at || '';
+          msg('시트에 저장했습니다 · ' + esc(j.at || '') + ' · 직원 ' + j.emps + '명 · 매장 ' + j.stores + '곳', 'good');
+        }else{
+          msg('저장 실패: ' + esc((j && j.reason) || t.slice(0, 60)), 'bad');
+        }
+      })
+      ['catch'](function(e){
+        if(btn){ btn.disabled = false; btn.textContent = '설정 저장'; }
+        msg('저장 실패 · 인터넷 연결을 확인해 주세요', 'bad');
+      });
+  }
+  function watch(){
+    document.addEventListener('change', function(ev){
+      var t = ev.target;
+      if(!t || !t.closest) return;
+      if(document.getElementById('wvCfgBar') && (t.tagName === 'SELECT' || t.tagName === 'INPUT')) markDirty();
+    }, true);
+    document.addEventListener('click', function(ev){
+      var t = ev.target;
+      if(!t || !t.textContent) return;
+      var tx = t.textContent.trim();
+      if(tx === '삭제' || tx === '추가' || tx === '적용') setTimeout(markDirty, 50);
+    }, true);
+  }
+  function boot(){
+    if(typeof S === 'undefined' || !S.emps){ setTimeout(boot, 400); return; }
+    if(!mount()){ setTimeout(boot, 500); return; }
+    watch();
+    load(false);
+  }
+  setTimeout(boot, 900);
+})();
+</script>
 </html>
