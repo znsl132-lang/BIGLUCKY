@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>스케줄 생성기 자가진단</title>
+<style>
+  body{margin:0;background:#f5f6f8;color:#22232b;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic","Apple SD Gothic Neo",sans-serif}
+  .wrap{max-width:620px;margin:0 auto;padding:22px 14px 60px}
+  h1{font-size:19px;margin:0 0 3px;font-weight:800;letter-spacing:-.3px}
+  .sub{font-size:12px;color:#8a8b93;margin-bottom:16px;line-height:1.6}
+  .card{background:#fff;border:1px solid #e2e2e6;border-radius:14px;padding:15px 16px;margin-bottom:12px}
+  label{font-size:12.5px;color:#5b6b7a;margin-right:6px}
+  input[type=month]{font-size:13px;padding:5px 8px;border:1px solid #c9ced8;border-radius:8px}
+  button{font-size:13px;padding:7px 13px;border-radius:9px;border:1px solid #c9ced8;
+    background:#f7f8fa;cursor:pointer;margin-right:6px;margin-top:9px}
+  button.pri{background:#2b2d42;color:#fff;border-color:#2b2d42}
+  button:disabled{opacity:.5;cursor:default}
+  table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px}
+  th,td{border-bottom:1px solid #eceef3;padding:7px 4px;text-align:right}
+  th:first-child,td:first-child{text-align:left}
+  th{color:#8a8b93;font-weight:600;font-size:11.5px}
+  .msg{font-size:12.5px;line-height:1.6;margin-top:10px}
+  .warn{color:#a86400} .bad{color:#c5221f} .good{color:#137333} .mute{color:#8a8b93}
+  iframe{position:absolute;width:1200px;height:800px;left:-9999px;top:0;border:0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>스케줄 생성기 자가진단</h1>
+  <div class="sub">지금 설정 그대로 시드 6개로 스케줄을 만들어 품질 지표를 재고, 저장해 둔 기준선과 비교합니다.<br>
+    실제 스케줄은 만들지도 저장하지도 않습니다. 30초쯤 걸립니다.</div>
+
+  <div class="card">
+    <label for="mk">진단할 달</label>
+    <input type="month" id="mk">
+    <div>
+      <button class="pri" id="run" disabled>진단 실행</button>
+      <button id="save" disabled>이 결과를 기준선으로 저장</button>
+      <button id="clear">기준선 지우기</button>
+    </div>
+    <div class="msg mute" id="stat">생성기를 불러오는 중…</div>
+  </div>
+
+  <div class="card" id="resCard" style="display:none">
+    <div id="res"></div>
+  </div>
+</div>
+
+<iframe id="fr" src="schedule.html?opt=1"></iframe>
+
+<script>
+var BKEY = 'wvTestBase_v1';
+var SEEDS = [0,1,2,3,4,5];
+var SPEC = [
+  {k:'gap',        n:'공백 매장',         dir:'low',  hard:true},
+  {k:'over6',      n:'6일 초과 연속근무',  dir:'low',  hard:true},
+  {k:'reqPct',     n:'휴무 요청 반영률',   dir:'high', pct:true},
+  {k:'runCurve',   n:'연속근무 부담',      dir:'low'},
+  {k:'tight',      n:'5-1-5 패턴',        dir:'low'},
+  {k:'restSpread', n:'휴무 간격 편차',     dir:'low'},
+  {k:'move',       n:'매장 이동',         dir:'low'},
+  {k:'dupe',       n:'중복 편성',         dir:'low'}
+];
+var MARK = {ok:'정상', good:'좋아짐', warn:'소폭 악화', bad:'악화'};
+var CLS  = {ok:'mute', good:'good', warn:'warn', bad:'bad'};
+var META = null, LAST = null;
+
+var RUNNER = "(function(){\n  function post(m){ try{ parent.postMessage(m, '*'); }catch(e){} }\n  window.addEventListener('message', function(ev){\n    var d = ev.data || {};\n    if(d.wv !== 'run') return;\n    var mk = d.month, seeds = d.seeds;\n    var out = [], i = 0;\n    function step(){\n      if(i >= seeds.length){ post({wv:'done', rows:out}); return; }\n      try{\n        var p = mk.split('-').map(Number), y = p[0], m = p[1];\n        var nDays = new Date(y, m, 0).getDate();\n        var reqs = (S.reqs && S.reqs[mk]) ? S.reqs[mk] : [];\n        var r = genOnce(y, m, nDays, reqs, mk, seeds[i], null);\n        if(!r || !r.cells) throw new Error('\uc0dd\uc131 \uc2e4\ud328');\n        var sc = { year:y, month:m, nDays:nDays, cells:r.cells };\n        if(typeof wvRefine === 'function') wvRefine(sc, {});\n        var C = wvCtx(sc), s = scoreSchedule(sc.cells, C), dd = s.det || {};\n        var tot = 0, met = 0, prot = C.prot || {};\n        Object.keys(prot).forEach(function(nm){\n          Object.keys(prot[nm]).forEach(function(di){\n            tot++; var row = sc.cells[nm];\n            if(row && !C.isW(row[+di])) met++;\n          });\n        });\n        out.push({ gap:dd.gap||0, over6:dd.over6||0, dupe:dd.dupe||0, runCurve:dd.runCurve||0,\n          tight:dd.tight||0, restSpread:dd.restSpread||0, move:dd.move||0,\n          reqPct: tot ? (met*100/tot) : 100, _reqTot:tot, _total:s.total||0 });\n      }catch(e){ post({wv:'err', msg:String(e && e.message || e)}); return; }\n      i++; post({wv:'prog', i:i, n:seeds.length});\n      setTimeout(step, 20);\n    }\n    setTimeout(step, 20);\n  });\n  function ready(){\n    if(typeof genOnce !== 'function' || typeof scoreSchedule !== 'function' || typeof S === 'undefined'){\n      setTimeout(ready, 300); return;\n    }\n    var el = document.getElementById('monthKey');\n    post({ wv:'ready', emps:(S.emps||[]).length, stores:(S.stores||[]).length,\n           month:(el && el.value) ? el.value : '', opt:(typeof wvRefine === 'function') });\n  }\n  ready();\n})();\n";
+
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>]/g,function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;'})[c]; }); }
+function r1(x){ return Math.round(x*10)/10; }
+function readBase(){ try{ return JSON.parse(localStorage.getItem(BKEY)||'null'); }catch(e){ return null; } }
+
+function judge(sp, now, base){
+  if(sp.hard && now > 0.05) return 'bad';
+  if(base == null) return 'ok';
+  var tol = sp.pct ? 0.5 : Math.max(0.5, Math.abs(base)*0.05);
+  var d = now - base;
+  if(sp.dir === 'low'){
+    if(d > tol*2) return 'bad'; if(d > tol) return 'warn'; if(d < -tol) return 'good';
+  }else{
+    if(d < -tol*2) return 'bad'; if(d < -tol) return 'warn'; if(d > tol) return 'good';
+  }
+  return 'ok';
+}
+
+function avg(L){
+  var o = {};
+  SPEC.forEach(function(sp){ var v=0; L.forEach(function(x){ v+=x[sp.k]; }); o[sp.k]=v/L.length; });
+  o._reqTot = L[0]._reqTot;
+  var t=0; L.forEach(function(x){ t+=x._total; }); o._total = t/L.length;
+  return o;
+}
+
+function baseLine(){
+  var b = readBase();
+  if(!b) return '<span class="warn">기준선이 없습니다. 지금 버전이 정상이라면 진단 후 기준선으로 저장하세요.</span>';
+  var same = META && b.emps === META.emps && b.stores === META.stores;
+  return '<span class="' + (same ? 'mute' : 'bad') + '">기준선: ' + esc(b.at) + ' · ' + esc(b.month)
+    + ' · 직원 ' + b.emps + '명 · 매장 ' + b.stores + '곳'
+    + (same ? '' : '<br>인원 구성이 달라졌습니다. 기준선을 다시 잡아야 비교가 의미 있습니다.') + '</span>';
+}
+
+function draw(now){
+  var base = readBase();
+  var bad = 0, warn = 0;
+  var h = '<table><tr><th>지표</th><th>기준선</th><th>이번</th><th>판정</th></tr>';
+  SPEC.forEach(function(sp){
+    var bv = (base && base[sp.k] != null) ? base[sp.k] : null;
+    var nv = now[sp.k];
+    var j = judge(sp, nv, bv);
+    if(j === 'bad') bad++; if(j === 'warn') warn++;
+    h += '<tr><td>' + esc(sp.n) + '</td>'
+       + '<td class="mute">' + (bv == null ? '—' : r1(bv) + (sp.pct?'%':'')) + '</td>'
+       + '<td><b>' + r1(nv) + (sp.pct?'%':'') + '</b></td>'
+       + '<td class="' + CLS[j] + '">' + MARK[j] + '</td></tr>';
+  });
+  h += '<tr><td>총점 <span class="mute">(낮을수록 좋음)</span></td>'
+     + '<td class="mute">' + (base ? r1(base._total) : '—') + '</td>'
+     + '<td><b>' + r1(now._total) + '</b></td><td></td></tr></table>';
+  h += '<div class="msg">휴무 요청 ' + (now._reqTot||0) + '건 기준 · 시드 6개 평균<br>'
+     + (bad ? '<b class="bad">악화 ' + bad + '건 — 방금 바꾼 내용은 되돌리는 게 안전합니다.</b>'
+            : (warn ? '<b class="warn">소폭 악화 ' + warn + '건 — 확인이 필요합니다.</b>'
+                    : '<b class="good">악화된 항목이 없습니다.</b>')) + '</div>';
+  $('res').innerHTML = h;
+  $('resCard').style.display = '';
+  $('save').disabled = false;
+}
+
+window.addEventListener('message', function(ev){
+  var d = ev.data || {};
+  if(d.wv === 'ready'){
+    META = d;
+    if(d.month) $('mk').value = d.month;
+    else { var t = new Date(); $('mk').value = t.getFullYear() + '-' + String(t.getMonth()+1).padStart(2,'0'); }
+    $('run').disabled = false;
+    $('stat').innerHTML = '생성기 연결됨 · 직원 ' + d.emps + '명 · 매장 ' + d.stores + '곳'
+      + (d.opt ? '' : '<br><b class="bad">최적화 엔진이 꺼져 있습니다.</b>')
+      + '<br>' + baseLine();
+  }
+  else if(d.wv === 'prog'){ $('run').textContent = '실행 중… ' + d.i + '/' + d.n; }
+  else if(d.wv === 'done'){
+    $('run').disabled = false; $('run').textContent = '진단 실행';
+    LAST = avg(d.rows);
+    draw(LAST);
+  }
+  else if(d.wv === 'err'){
+    $('run').disabled = false; $('run').textContent = '진단 실행';
+    $('stat').innerHTML = '<b class="bad">오류: ' + esc(d.msg) + '</b>';
+  }
+});
+
+$('fr').addEventListener('load', function(){
+  try{
+    var doc = $('fr').contentDocument;
+    var s = doc.createElement('script');
+    s.textContent = RUNNER;
+    doc.body.appendChild(s);
+  }catch(e){
+    $('stat').innerHTML = '<b class="bad">생성기를 불러오지 못했습니다: ' + esc(e.message) + '</b>';
+  }
+});
+
+$('run').onclick = function(){
+  var mk = $('mk').value;
+  if(!mk){ alert('달을 먼저 고르세요.'); return; }
+  $('run').disabled = true; $('run').textContent = '실행 중…';
+  $('fr').contentWindow.postMessage({wv:'run', month:mk, seeds:SEEDS}, '*');
+};
+
+$('save').onclick = function(){
+  if(!LAST) return;
+  var D = new Date();
+  var b = { at: D.getFullYear() + '-' + String(D.getMonth()+1).padStart(2,'0') + '-' + String(D.getDate()).padStart(2,'0'),
+            month: $('mk').value, emps: META ? META.emps : 0, stores: META ? META.stores : 0 };
+  SPEC.forEach(function(sp){ b[sp.k] = LAST[sp.k]; });
+  b._total = LAST._total;
+  try{ localStorage.setItem(BKEY, JSON.stringify(b)); }catch(e){}
+  $('stat').innerHTML = '기준선을 저장했습니다.<br>' + baseLine();
+  draw(LAST);
+};
+
+$('clear').onclick = function(){
+  if(!confirm('기준선을 지울까요?')) return;
+  try{ localStorage.removeItem(BKEY); }catch(e){}
+  $('stat').innerHTML = baseLine();
+  if(LAST) draw(LAST);
+};
+</script>
+</body>
+</html>
