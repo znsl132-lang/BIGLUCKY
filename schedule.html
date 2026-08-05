@@ -3654,4 +3654,131 @@ var WV_LNS_ITERS = 15000;
   setTimeout(boot, 900);
 })();
 </script>
+<script>
+/* ===== 직급별 휴무 조정 — 끄려면 WV_RANK = 0 =====
+   그 달의 가용 근무일이 필요 근무일보다 모자라거나 남으면
+   정해진 직급 순서대로 1일씩 돌아가며 목표 휴무를 조정한다.
+   부족 → 차감 : 팀장 2명 → 오명록 → 홍다운 → 신재현
+   잉여 → 부여 : 신재현 → 팀장 2명 → 오명록 → 홍다운 */
+var WV_RANK = 1;
+var WV_RANK_CUT  = [['장현진','김형진'], ['오명록'], ['홍다운'], ['신재현']];
+var WV_RANK_GIVE = [['신재현'], ['장현진','김형진'], ['오명록'], ['홍다운']];
+var WV_RANK_FLOOR = 6;
+var WV_RANK_MAXADD = 5;
+function wvRankInit(){
+  if(location.search.indexOf('opt=1') < 0) return;
+  if(window.__wvRank) return;
+  if(typeof offTarget !== 'function'){ setTimeout(wvRankInit, 400); return; }
+  window.__wvRank = true;
+  var _o = offTarget;
+  var cache = {};
+  function sig(){
+    var t = 0;
+    (S.emps || []).forEach(function(e){ t += (e.offN == null ? 10 : e.offN); });
+    var n = 0;
+    (S.stores || []).forEach(function(s){ n += (s.need || 0); });
+    return (S.emps || []).length + '/' + (S.stores || []).length + '/' + t + '/' + n;
+  }
+  function calc(mk){
+    var key = mk + '|' + sig();
+    if(cache[key]) return cache[key];
+    var p = String(mk).split('-'), y = +p[0], m = +p[1];
+    if(!y || !m) return null;
+    var nDays = new Date(y, m, 0).getDate();
+    var holN = ((S.hols && S.hols[mk]) || []).length;
+    var work = nDays - holN;
+    var acts = (S.emps || []).filter(function(e){ return e.role !== '교육'; });
+    if(!acts.length) return null;
+    var needPerDay = 0;
+    (S.stores || []).forEach(function(s){ needPerDay += (s.need || 0); });
+    var needTotal = needPerDay * work;
+    var cap = 0;
+    acts.forEach(function(e){ cap += (work - _o(e)); });
+    var diff = cap - needTotal;
+    var byName = {};
+    acts.forEach(function(e){ byName[e.name] = e; });
+    var adj = {};
+    function run(order, sign, n){
+      var guard = 0;
+      while(n > 0 && guard < 400){
+        var moved = false;
+        for(var g = 0; g < order.length && n > 0; g++){
+          for(var k = 0; k < order[g].length && n > 0; k++){
+            var nm = order[g][k], e = byName[nm];
+            if(!e) continue;
+            var cur = _o(e) + (adj[nm] || 0);
+            if(sign < 0 && cur - 1 < WV_RANK_FLOOR) continue;
+            if(sign > 0 && (adj[nm] || 0) + 1 > WV_RANK_MAXADD) continue;
+            adj[nm] = (adj[nm] || 0) + sign;
+            n--; moved = true;
+          }
+        }
+        if(!moved) break;
+        guard++;
+      }
+      return n;
+    }
+    var left = 0;
+    if(diff < 0) left = run(WV_RANK_CUT, -1, -diff);
+    else if(diff > 0) left = run(WV_RANK_GIVE, 1, diff);
+    var out = { month:mk, diff:diff, adj:adj, left:left, work:work, need:needTotal, cap:cap };
+    cache[key] = out;
+    window._wvRankInfo = out;
+    return out;
+  }
+  offTarget = function(e){
+    var b = _o(e);
+    if(!WV_RANK) return b;
+    var mk = window.__wvRankMonth || (typeof monthKey === 'function' ? monthKey() : '');
+    if(!mk) return b;
+    var c = null;
+    try{ c = calc(mk); }catch(err){ return b; }
+    if(!c) return b;
+    return Math.max(0, b + (c.adj[e.name] || 0));
+  };
+  function line(){
+    var mk = (typeof monthKey === 'function' ? monthKey() : '');
+    if(!mk) return '';
+    var c = null;
+    try{ c = calc(mk); }catch(err){ return ''; }
+    if(!c) return '';
+    if(c.diff === 0) return '<span style="color:#137333">직급별 휴무 조정 없음 · 가용과 필요가 정확히 맞습니다</span>';
+    var names = Object.keys(c.adj);
+    if(!names.length) return '<span style="color:#c5221f">' + (c.diff < 0 ? '근무일 ' + (-c.diff) + '일 부족' : '휴무 ' + c.diff + '일 잉여') + ' · 조정 대상이 없습니다</span>';
+    var txt = names.map(function(n){ var v = c.adj[n]; return n + ' ' + (v > 0 ? '+' + v : v); }).join(' · ');
+    var head = (c.diff < 0)
+      ? '<b style="color:#a86400">근무일 ' + (-c.diff) + '일 부족</b> → 휴무 차감 '
+      : '<b style="color:#137333">휴무 ' + c.diff + '일 잉여</b> → 휴무 부여 ';
+    var tail = c.left ? ' <b style="color:#c5221f">(' + c.left + '일 배분 못 함 — 충원 필요)</b>' : '';
+    return head + txt + tail;
+  }
+  function mount(){
+    var host = null;
+    var hs = document.querySelectorAll('h1,h2,h3,h4,b,strong,div,span,label');
+    for(var i = 0; i < hs.length; i++){
+      if((hs[i].textContent || '').trim() === '직원 목록' && hs[i].children.length === 0){ host = hs[i]; break; }
+    }
+    if(!host) return false;
+    var el = document.getElementById('wvRankMsg');
+    if(!el){
+      el = document.createElement('div');
+      el.id = 'wvRankMsg';
+      el.style.cssText = 'margin:6px 0 2px;font-size:12.5px;color:#5b6b7a;line-height:1.6';
+      var anchor = document.getElementById('wvCfgBar') || host;
+      anchor.parentNode.insertBefore(el, anchor.nextSibling);
+    }
+    el.innerHTML = line();
+    return true;
+  }
+  function boot(){
+    if(typeof S === 'undefined' || !S.emps){ setTimeout(boot, 400); return; }
+    if(!mount()){ setTimeout(boot, 600); return; }
+    var sel = document.getElementById('monthKey');
+    if(sel && !sel.__wvRankHook){ sel.__wvRankHook = true; sel.addEventListener('change', function(){ setTimeout(mount, 60); }); }
+    document.addEventListener('change', function(){ setTimeout(mount, 120); }, true);
+  }
+  setTimeout(boot, 1400);
+}
+wvRankInit();
+</script>
 </html>
