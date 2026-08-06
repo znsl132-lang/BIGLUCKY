@@ -1522,7 +1522,11 @@ try{ window.__ENH(); }catch(e){}
       + '<div class="wvA-bar"><button class="pri" id="wvAeDone">확인</button></div>'));
     document.getElementById('wvAeDone').onclick = close;
   }
+  function isAdmin(){
+    return !!window.__wvPw || document.body.classList.contains('wvEditing');
+  }
   function start(){
+    if(!isAdmin()){ alert('관리자 모드에서만 사용할 수 있습니다.\n\n오른쪽 위 설정 아이콘 → 관리자 모드로 들어간 뒤 다시 눌러 주세요.'); return; }
     if(!URL_){ alert('시트 주소가 없습니다'); return; }
     paint(shell('불러오는 중', '직원 추가', '<p class="wvA-d">현재 직원·매장 설정을 불러오는 중입니다…</p>'));
     fetch(URL_ + '?mode=cfg&t=' + Date.now(), {cache:'no-store'})
@@ -1548,7 +1552,8 @@ try{ window.__ENH(); }catch(e){}
       });
   }
   function mountBtn(){
-    if(document.getElementById('wvAeBtn')) return;
+    var ex = document.getElementById('wvAeBtn');
+    if(ex){ ex.style.display = isAdmin() ? '' : 'none'; return; }
     var bar = null, cands = document.querySelectorAll('button');
     for(var i = 0; i < cands.length; i++){
       var tx = (cands[i].textContent || '').trim();
@@ -1559,6 +1564,7 @@ try{ window.__ENH(); }catch(e){}
     b.id = 'wvAeBtn'; b.textContent = '직원 추가';
     b.style.cssText = 'font-size:12px;padding:5px 10px;border-radius:8px;border:1px solid ' + NAVY
       + ';background:' + NAVY + ';color:#fff;cursor:pointer;margin-left:6px;font-weight:700';
+    b.style.display = isAdmin() ? '' : 'none';
     b.onclick = start;
     bar.appendChild(b);
   }
