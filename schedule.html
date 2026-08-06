@@ -3781,4 +3781,197 @@ function wvRankInit(){
 }
 wvRankInit();
 </script>
+<script>
+/* ===== 설정 점검 — 끄려면 WV_CHECK = 0 =====
+   생성하기 전에 설정끼리 모순되는 곳을 찾아 알린다. 생성 결과는 건드리지 않는다. */
+var WV_CHECK = 1;
+function wvChkInit(){
+  if(window.__wvChk) return;
+  if(typeof S === 'undefined' || !S.emps){ setTimeout(wvChkInit, 400); return; }
+  window.__wvChk = true;
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>]/g, function(c){
+    return ({'&':'&amp;','<':'&lt;','>':'&gt;'})[c]; }); }
+  function css(){
+    if(document.getElementById('wvChkCss')) return;
+    var st = document.createElement('style'); st.id = 'wvChkCss';
+    st.textContent = [
+      '#wvChkBar{margin:8px 0 4px;font-size:12.5px;line-height:1.6}',
+      '#wvChkHead{display:inline-flex;align-items:center;gap:8px;cursor:pointer;user-select:none;',
+      ' padding:5px 11px;border-radius:9px;border:1px solid #d7dbe3;background:#f7f8fa}',
+      '#wvChkHead b{font-weight:700}',
+      '#wvChkHead .ar{font-size:10px;opacity:.6}',
+      '#wvChkBody{display:none;margin-top:8px;border:1px solid #e2e6ee;border-radius:10px;overflow:hidden}',
+      '#wvChkBody .it{display:flex;gap:9px;padding:9px 12px;border-bottom:1px solid #eef1f6;font-size:12.5px;line-height:1.6}',
+      '#wvChkBody .it:last-child{border-bottom:none}',
+      '#wvChkBody .it .tag{flex:none;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:20px;height:19px;line-height:15px}',
+      '#wvChkBody .it.bad .tag{background:#fdecea;color:#c5221f;border:1px solid #f3c3bf}',
+      '#wvChkBody .it.warn .tag{background:#fff6e5;color:#a86400;border:1px solid #f0dcb4}',
+      '#wvChkBody .it.info .tag{background:#eef1f6;color:#5b6b7a;border:1px solid #dfe4ec}',
+      '#wvChkBody .it .tx b{color:#22232b}',
+      '#wvChkBody .it .tx .why{color:#8a8b93;font-size:11.5px;display:block;margin-top:2px}'
+    ].join('');
+    document.head.appendChild(st);
+  }
+  function mk(){ return (typeof monthKey === 'function' ? monthKey() : ''); }
+  function run(){
+    var out = [], sts = (S.stores || []).map(function(s){ return s.n; });
+    var emps = (S.emps || []);
+    var acts = emps.filter(function(e){ return e.role !== '교육'; });
+    function push(lv, t, why){ out.push({ lv:lv, t:t, why:why || '' }); }
+    emps.forEach(function(e){
+      var both = (e.pref || []).filter(function(x){ return (e.ban || []).indexOf(x) >= 0; });
+      if(both.length) push('bad', esc(e.name) + ' — 우선 배치와 편성 제외에 <b>' + esc(both.join(', ')) + '</b>이(가) 같이 있습니다',
+        '편성 제외가 먼저 검사되므로 우선 배치가 무시됩니다');
+    });
+    emps.forEach(function(e){
+      var bad = [];
+      if(e.home && e.home !== '순환' && sts.indexOf(e.home) < 0) bad.push('소속 ' + e.home);
+      (e.pref || []).forEach(function(x){ if(sts.indexOf(x) < 0) bad.push('우선 배치 ' + x); });
+      (e.ban  || []).forEach(function(x){ if(sts.indexOf(x) < 0) bad.push('편성 제외 ' + x); });
+      if(bad.length) push('bad', esc(e.name) + ' — 매장 목록에 없는 이름: <b>' + esc(bad.join(' · ')) + '</b>',
+        '오타가 있으면 그 설정은 조용히 무시됩니다');
+    });
+    function canGo(e, st){
+      if((e.ban || []).indexOf(st) >= 0) return false;
+      if(e.home === '순환') return true;
+      return e.home === st || (e.pref || []).indexOf(st) >= 0;
+    }
+    sts.forEach(function(st){
+      var n = acts.filter(function(e){ return canGo(e, st); }).length;
+      if(n === 0) push('bad', '<b>' + esc(st) + '</b> — 이 매장에 갈 수 있는 직원이 없습니다', '한 달 내내 공백이 됩니다');
+      else if(n === 1) push('warn', '<b>' + esc(st) + '</b> — 갈 수 있는 직원이 1명뿐입니다',
+        '그 사람이 쉬는 날은 반드시 공백이 됩니다');
+    });
+    var m = mk();
+    if(m){
+      var p = m.split('-'), y = +p[0], mo = +p[1];
+      if(y && mo){
+        var nD = new Date(y, mo, 0).getDate();
+        var holN = ((S.hols && S.hols[m]) || []).length;
+        var work = nD - holN;
+        var need = 0; (S.stores || []).forEach(function(s){ need += (s.need || 0); });
+        var needT = need * work;
+        var cap = 0; acts.forEach(function(e){ cap += (work - (typeof offTarget === 'function' ? offTarget(e) : (e.offN == null ? 10 : e.offN))); });
+        var d = cap - needT;
+        if(d < 0) push('bad', esc(m) + ' — 근무일이 <b>' + (-d) + '일 모자랍니다</b> (필요 ' + needT + '일 · 가용 ' + cap + '일)',
+          '1명 충원하면 약 ' + (work - 10) + '일이 확보됩니다');
+        else if(d <= 2) push('warn', esc(m) + ' — 여유가 <b>' + d + '일</b>뿐입니다 (필요 ' + needT + '일 · 가용 ' + cap + '일)',
+          '병가나 급한 일이 생기면 바로 공백이 됩니다');
+        else push('info', esc(m) + ' — 여유 ' + d + '일 (필요 ' + needT + '일 · 가용 ' + cap + '일)');
+        var reqs = (S.reqs && S.reqs[m]) ? S.reqs[m] : [];
+        var byDay = {};
+        reqs.forEach(function(r){ if(r && r.day){ byDay[r.day] = (byDay[r.day] || 0) + 1; } });
+        Object.keys(byDay).forEach(function(dd){
+          var free = acts.length - byDay[dd];
+          if(free < need) push('warn', m.split('-')[1] + '월 ' + dd + '일 — 휴무 요청 ' + byDay[dd] + '건, 남는 인원 ' + free + '명 (필요 ' + need + '명)',
+            '일부 요청은 반영되지 않습니다');
+        });
+      }
+    }
+    var roleMap = {};
+    emps.forEach(function(e){
+      if(e.role === '오픈' || e.role === '마감'){
+        var k = e.home + '/' + e.role;
+        (roleMap[k] = roleMap[k] || []).push(e.name);
+        if(e.home === '순환') push('warn', esc(e.name) + ' — 역할이 <b>' + esc(e.role) + '</b>인데 소속이 순환입니다',
+          '역할은 소속 매장에서만 고정됩니다');
+      }
+    });
+    Object.keys(roleMap).forEach(function(k){
+      if(roleMap[k].length > 1){
+        var q = k.split('/');
+        push('warn', esc(q[0]) + ' <b>' + esc(q[1]) + '</b> 역할이 ' + roleMap[k].length + '명입니다 (' + esc(roleMap[k].join(', ')) + ')',
+          '한 명만 라벨을 받고 나머지는 풀근무로 들어갑니다');
+      }
+    });
+    emps.forEach(function(e){
+      if(e.home !== '순환' && (e.ban || []).length && !(e.pref || []).length)
+        push('info', esc(e.name) + ' — 고정 직원인데 편성 제외가 ' + e.ban.length + '곳 걸려 있습니다',
+          '이미 소속 매장 전용이라 효과가 없습니다. 비워두어도 됩니다');
+    });
+    emps.forEach(function(e){
+      if(e.home !== '순환') return;
+      var n = sts.filter(function(st){ return canGo(e, st); }).length;
+      if(n <= 2) push('warn', esc(e.name) + ' — 갈 수 있는 매장이 <b>' + n + '곳</b>뿐입니다',
+        '순환 직원의 범위가 좁으면 빈 자리를 못 메웁니다');
+    });
+    (S.stores || []).forEach(function(s){
+      var own = acts.filter(function(e){ return e.home === s.n; }).length;
+      if(own > (s.need || 1)) push('info', esc(s.n) + ' — 소속 ' + own + '명, 필요 ' + (s.need || 1) + '명',
+        '겹치는 날은 인력이 낭비됩니다. 우선 배치를 주면 다른 매장을 도울 수 있습니다');
+    });
+    return out;
+  }
+  function paint(){
+    css();
+    var bar = document.getElementById('wvChkBar');
+    if(!bar){
+      var host = null, hs = document.querySelectorAll('h1,h2,h3,h4,b,strong,div,span,label');
+      for(var i = 0; i < hs.length; i++){
+        if((hs[i].textContent || '').trim() === '직원 목록' && hs[i].children.length === 0){ host = hs[i]; break; }
+      }
+      if(!host) return false;
+      bar = document.createElement('div'); bar.id = 'wvChkBar';
+      bar.innerHTML = '<span id="wvChkHead"></span><div id="wvChkBody"></div>';
+      var anchor = document.getElementById('wvRankMsg') || document.getElementById('wvCfgBar') || host;
+      anchor.parentNode.insertBefore(bar, anchor.nextSibling);
+      document.getElementById('wvChkHead').onclick = function(){
+        var b = document.getElementById('wvChkBody');
+        b.style.display = (b.style.display === 'block') ? 'none' : 'block';
+        var ar = document.querySelector('#wvChkHead .ar'); if(ar) ar.textContent = (b.style.display === 'block') ? '▲' : '▼';
+      };
+    }
+    var list = run();
+    window._wvChk = list;
+    var bad = list.filter(function(x){ return x.lv === 'bad'; }).length;
+    var warn = list.filter(function(x){ return x.lv === 'warn'; }).length;
+    var head = document.getElementById('wvChkHead');
+    var txt, col, bg, bd;
+    if(bad){ txt = '반드시 고쳐야 할 것 <b>' + bad + '건</b>' + (warn ? ' · 확인 ' + warn + '건' : ''); col = '#c5221f'; bg = '#fdecea'; bd = '#f3c3bf'; }
+    else if(warn){ txt = '확인 <b>' + warn + '건</b>'; col = '#a86400'; bg = '#fff6e5'; bd = '#f0dcb4'; }
+    else { txt = '문제 없음'; col = '#137333'; bg = '#f1f8f3'; bd = '#c8e3d0'; }
+    head.style.color = col; head.style.background = bg; head.style.borderColor = bd;
+    head.innerHTML = '설정 점검 &nbsp;' + txt + ' <span class="ar">▼</span>';
+    var body = document.getElementById('wvChkBody');
+    body.innerHTML = list.length
+      ? list.map(function(x){
+          var lab = x.lv === 'bad' ? '고쳐야 함' : (x.lv === 'warn' ? '확인' : '참고');
+          return '<div class="it ' + x.lv + '"><span class="tag">' + lab + '</span>'
+            + '<span class="tx">' + x.t + (x.why ? '<span class="why">' + esc(x.why) + '</span>' : '') + '</span></div>';
+        }).join('')
+      : '<div class="it info"><span class="tag">참고</span><span class="tx">확인할 항목이 없습니다</span></div>';
+    return true;
+  }
+  function hookGen(){
+    if(typeof generate !== 'function' || generate.__wvChk) return;
+    var _g = generate;
+    var w = function(){
+      if(WV_CHECK){
+        var list = run();
+        var bad = list.filter(function(x){ return x.lv === 'bad'; });
+        if(bad.length){
+          var msg = '설정에 문제가 있습니다\n\n'
+            + bad.slice(0, 6).map(function(x){ return '· ' + x.t.replace(/<[^>]+>/g, ''); }).join('\n')
+            + (bad.length > 6 ? '\n· 외 ' + (bad.length - 6) + '건' : '')
+            + '\n\n이대로 생성하면 공백이나 잘못된 배치가 생길 수 있습니다.\n그래도 생성할까요?';
+          if(!confirm(msg)) return;
+        }
+      }
+      return _g.apply(this, arguments);
+    };
+    w.__wvChk = true;
+    generate = w;
+  }
+  function boot(){
+    if(!paint()){ setTimeout(boot, 600); return; }
+    hookGen();
+    document.addEventListener('change', function(){ setTimeout(paint, 150); }, true);
+    var sel = document.getElementById('monthKey');
+    if(sel && !sel.__wvChkHook){ sel.__wvChkHook = true; sel.addEventListener('change', function(){ setTimeout(paint, 100); }); }
+    setInterval(hookGen, 2000);
+  }
+  setTimeout(boot, 1800);
+}
+wvChkInit();
+</script>
 </html>
