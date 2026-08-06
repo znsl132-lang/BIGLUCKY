@@ -1274,4 +1274,296 @@ try{ window.__ENH(); }catch(e){}
 })();
 </script>
 
+<script>
+/* ===== 직원 추가 (뷰어) =====
+   1) 기입 방식 → 2) 정보 입력 → 3) (교육생) 동행 팀장 → 반영하기
+   → 생성기(구글시트 설정 탭) 반영 여부 확인 → 이번 달 표에도 행 추가 */
+(function(){
+  if(window.__wvAddEmp) return; window.__wvAddEmp = true;
+  var URL_ = (typeof WEBAPP_URL !== 'undefined' && WEBAPP_URL) ? WEBAPP_URL : '';
+  var NAVY = '#2b2d42', GOLD = '#c9a227';
+  var TITLES = ['주임','매니저','팀장','실장','교육생'];
+  var WORKT  = ['풀타임','파트'];
+  var cfg = null, F = null;
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){
+    return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]; }); }
+  function css(){
+    if(document.getElementById('wvAeCss')) return;
+    var st = document.createElement('style'); st.id = 'wvAeCss';
+    st.textContent = [
+      '#wvAeOv{position:fixed;inset:0;background:rgba(10,12,25,.55);z-index:10060;display:none;align-items:center;justify-content:center;padding:16px}',
+      '.wvA{background:#fff;border-radius:16px;width:min(520px,95vw);max-height:90vh;overflow:auto;box-shadow:0 24px 70px rgba(0,0,0,.35)}',
+      '.wvA-top{background:' + NAVY + ';color:#fff;padding:14px 18px;display:flex;align-items:center;justify-content:space-between}',
+      '.wvA-top b{font-size:16px;letter-spacing:-.3px}',
+      '.wvA-top .step{font-size:11.5px;opacity:.75}',
+      '.wvA-x{border:none;background:rgba(255,255,255,.15);color:#fff;width:30px;height:30px;border-radius:50%;font-size:15px;cursor:pointer}',
+      '.wvA-b{padding:18px}',
+      '.wvA-q{font-size:14px;font-weight:700;margin:0 0 4px}',
+      '.wvA-d{font-size:12px;color:#8a8b93;margin:0 0 14px;line-height:1.6}',
+      '.wvA-pick{display:grid;gap:10px}',
+      '.wvA-pick button{text-align:left;padding:14px 16px;border:1px solid #d7dbe3;border-radius:12px;background:#fff;cursor:pointer;font-size:13.5px;line-height:1.5}',
+      '.wvA-pick button:hover{border-color:' + GOLD + ';background:#fffdf5}',
+      '.wvA-pick button b{display:block;font-size:14px;margin-bottom:3px}',
+      '.wvA-pick button span{color:#8a8b93;font-size:12px}',
+      '.wvA-f{display:grid;grid-template-columns:92px 1fr;gap:10px 12px;align-items:center}',
+      '.wvA-f label{font-size:12.5px;color:#5b6b7a;font-weight:600}',
+      '.wvA-f input,.wvA-f select{width:100%;font-size:13.5px;padding:8px 10px;border:1px solid #d7dbe3;border-radius:9px;background:#fff}',
+      '.wvA-f input:focus,.wvA-f select:focus{outline:none;border-color:' + NAVY + '}',
+      '.wvA-bar{display:flex;gap:8px;margin-top:18px}',
+      '.wvA-bar button{flex:1;font-size:13.5px;padding:11px;border-radius:10px;border:1px solid #c9ced8;background:#f7f8fa;cursor:pointer}',
+      '.wvA-bar button.pri{background:' + NAVY + ';color:#fff;border-color:' + NAVY + ';font-weight:700}',
+      '.wvA-bar button:disabled{opacity:.5;cursor:default}',
+      '.wvA-err{color:#c5221f;font-size:12.5px;margin-top:10px;min-height:17px;font-weight:600}',
+      '.wvA-ok{background:#f4f8f5;border:1px solid #cfe6d6;border-radius:10px;padding:12px 14px;font-size:13px;line-height:1.7;color:#2b4f38}'
+    ].join('');
+    document.head.appendChild(st);
+  }
+  function ov(){
+    css();
+    var o = document.getElementById('wvAeOv');
+    if(!o){
+      o = document.createElement('div'); o.id = 'wvAeOv';
+      o.addEventListener('click', function(e){ if(e.target === o) o.style.display = 'none'; });
+      document.body.appendChild(o);
+    }
+    o.style.display = 'flex';
+    return o;
+  }
+  function close(){ var o = document.getElementById('wvAeOv'); if(o) o.style.display = 'none'; }
+  function shell(step, title, inner){
+    return '<div class="wvA"><div class="wvA-top"><div><b>' + esc(title) + '</b>'
+      + '<div class="step">' + esc(step) + '</div></div>'
+      + '<button class="wvA-x" id="wvAeX">✕</button></div>'
+      + '<div class="wvA-b">' + inner + '</div></div>';
+  }
+  function paint(html){
+    var o = ov(); o.innerHTML = html;
+    var x = document.getElementById('wvAeX'); if(x) x.onclick = close;
+  }
+  function storeNames(){ return (cfg && cfg.stores) ? cfg.stores.map(function(s){ return s.n; }) : []; }
+  function leaders(){
+    return (cfg && cfg.emps ? cfg.emps : []).filter(function(e){ return e.title === '팀장'; });
+  }
+  function step1(){
+    paint(shell('1 / 3 · 기입 방식', '직원 추가',
+      '<p class="wvA-q">어떻게 입력할까요?</p>'
+      + '<p class="wvA-d">자동 기입을 고르면 직책에 맞는 휴무 일수를 미리 채워 드립니다.</p>'
+      + '<div class="wvA-pick">'
+      + '<button id="wvAeAuto"><b>자동 기입</b><span>직책·근무형태에 맞는 기본값을 채운 뒤 확인만 하면 됩니다</span></button>'
+      + '<button id="wvAeMan"><b>수동 기입</b><span>모든 항목을 직접 입력합니다</span></button>'
+      + '</div>'));
+    document.getElementById('wvAeAuto').onclick = function(){ step2(true); };
+    document.getElementById('wvAeMan').onclick  = function(){ step2(false); };
+  }
+  function step2(auto){
+    var sts = storeNames();
+    var homeOpts = ['순환'].concat(sts).map(function(n){ return '<option>' + esc(n) + '</option>'; }).join('');
+    var titOpts  = TITLES.map(function(n){ return '<option' + (n === '주임' ? ' selected' : '') + '>' + esc(n) + '</option>'; }).join('');
+    var wOpts    = WORKT.map(function(n){ return '<option>' + esc(n) + '</option>'; }).join('');
+    paint(shell('2 / 3 · 정보 입력', '직원 추가',
+      '<div class="wvA-f">'
+      + '<label>성명</label><input id="wvAeName" placeholder="예: 김위베" autocomplete="off">'
+      + '<label>직책</label><select id="wvAeTitle">' + titOpts + '</select>'
+      + '<label>소속</label><select id="wvAeHome">' + homeOpts + '</select>'
+      + '<label>근무형태</label><select id="wvAeWork">' + wOpts + '</select>'
+      + '<label>월 휴무</label><input id="wvAeOff" type="number" min="0" max="20" value="10">'
+      + '</div>'
+      + '<div class="wvA-err" id="wvAeErr"></div>'
+      + '<div class="wvA-bar"><button id="wvAeBack">이전</button><button class="pri" id="wvAeNext">다음</button></div>'));
+    var t = document.getElementById('wvAeTitle'), off = document.getElementById('wvAeOff'), w = document.getElementById('wvAeWork');
+    function autofill(){
+      if(!auto) return;
+      var v = t.value;
+      off.value = (v === '교육생') ? 8 : (w.value === '파트' ? 12 : 10);
+    }
+    t.onchange = autofill; w.onchange = autofill; autofill();
+    document.getElementById('wvAeBack').onclick = step1;
+    document.getElementById('wvAeNext').onclick = function(){
+      var nm = (document.getElementById('wvAeName').value || '').trim();
+      var er = document.getElementById('wvAeErr');
+      if(!nm){ er.textContent = '성명을 입력해 주세요'; return; }
+      if((cfg.emps || []).some(function(e){ return e.name === nm; })){ er.textContent = '이미 있는 이름입니다'; return; }
+      var o = parseInt(off.value, 10);
+      if(!(o >= 0 && o <= 20)){ er.textContent = '월 휴무는 0~20 사이로 입력해 주세요'; return; }
+      F = { name:nm, title:t.value, home:document.getElementById('wvAeHome').value,
+            work:w.value, offN:o, mate:'' };
+      if(t.value === '교육생') step3(); else confirmSheet();
+    };
+  }
+  function step3(){
+    var ls = leaders();
+    var btns = ls.map(function(e, i){
+      return '<button data-n="' + esc(e.name) + '"><b>' + esc(e.name) + ' 팀장</b>'
+        + '<span>이 사람의 이번 달 근무를 그대로 따라갑니다</span></button>';
+    }).join('');
+    paint(shell('3 / 3 · 교육 동행', '직원 추가',
+      '<p class="wvA-q">어느 사람과 스케줄을 맞출까요?</p>'
+      + '<p class="wvA-d">' + esc(F.name) + ' 님은 <b>휴무 ' + F.offN + '일</b>, 팀장은 10일입니다.<br>'
+      + '팀장이 쉬는 날 중 <b>' + Math.max(0, 10 - F.offN) + '일</b>은 다른 팀장 근무지에 자동으로 붙입니다.<br>'
+      + '복사한 뒤 관리자 모드에서 자유롭게 고칠 수 있습니다.</p>'
+      + '<div class="wvA-pick">' + btns
+      + '<button data-n=""><b>수동 입력</b><span>빈 칸으로 추가하고 직접 채워 넣습니다</span></button>'
+      + '</div>'));
+    var o = document.getElementById('wvAeOv');
+    o.querySelectorAll('.wvA-pick button').forEach(function(b){
+      b.onclick = function(){ F.mate = b.getAttribute('data-n') || ''; confirmSheet(); };
+    });
+  }
+  function confirmSheet(){
+    paint(shell('마지막 확인', '직원 추가',
+      '<p class="wvA-q">스케줄 생성기에도 반영하시겠습니까?</p>'
+      + '<p class="wvA-d">네를 고르면 구글시트 <b>설정</b> 탭에 저장되어,<br>'
+      + '다음에 스케줄 생성기를 열 때 이 직원이 자동으로 들어갑니다.</p>'
+      + '<div class="wvA-f" style="grid-template-columns:92px 1fr;font-size:13px">'
+      + '<label>성명</label><div>' + esc(F.name) + '</div>'
+      + '<label>직책</label><div>' + esc(F.title) + '</div>'
+      + '<label>소속</label><div>' + esc(F.home) + '</div>'
+      + '<label>근무형태</label><div>' + esc(F.work) + '</div>'
+      + '<label>월 휴무</label><div>' + F.offN + '일</div>'
+      + (F.mate ? '<label>교육 동행</label><div>' + esc(F.mate) + ' 팀장</div>' : '')
+      + '</div>'
+      + '<div class="wvA-err" id="wvAeErr"></div>'
+      + '<div class="wvA-bar"><button id="wvAeNo">아니오</button><button class="pri" id="wvAeYes">네, 반영합니다</button></div>'));
+    document.getElementById('wvAeNo').onclick  = function(){ addRow(false); };
+    document.getElementById('wvAeYes').onclick = function(){ saveSheet(); };
+  }
+  function saveSheet(){
+    var btn = document.getElementById('wvAeYes');
+    var er = document.getElementById('wvAeErr');
+    btn.disabled = true; btn.textContent = '저장 중…';
+    var e = { name:F.name, title:F.title, home:F.home,
+      role: (F.title === '교육생') ? '교육' : (F.work === '파트' ? '파트' : '풀타임'),
+      offN: F.offN, type: (F.work === '파트' ? '파트타임' : '정규직'), pref:[], ban:[] };
+    var emps = (cfg.emps || []).slice(); emps.push(e);
+    fetch(URL_, { method:'POST', body: JSON.stringify({
+        action:'cfg', token:'wevape2026', who:'뷰어', stores:cfg.stores, emps:emps }) })
+      .then(function(r){ return r.text(); })
+      .then(function(t){
+        var j = null; try{ j = JSON.parse(t); }catch(x){}
+        btn.disabled = false; btn.textContent = '네, 반영합니다';
+        if(j && j.ok){ cfg.emps = emps; addRow(true); }
+        else { er.textContent = '저장 실패: ' + ((j && j.reason) || '응답 오류'); }
+      })
+      ['catch'](function(){ btn.disabled = false; btn.textContent = '네, 반영합니다'; er.textContent = '저장 실패 · 인터넷 연결을 확인해 주세요'; });
+  }
+  function addRow(saved){
+    var R = window.__wvRows;
+    var done = false, copied = 0;
+    window.__wvAeFill = 0; window.__wvAeShort = 0; window.__wvAeOff = 0;
+    if(R && R.length > 3){
+      var head = R[1].map(function(x){ return String(x).trim(); });
+      var nameCol = head.indexOf('성명'); if(nameCol < 0) nameCol = 1;
+      var W = head.length;
+      var dayIdx = [];
+      for(var c = 0; c < W; c++) if(/^\d{1,2}$/.test(head[c])) dayIdx.push(c);
+      var row = [];
+      for(var i = 0; i < W; i++) row.push('');
+      row[0] = R[3] ? R[3][0] : '위베이프';
+      row[nameCol] = F.name;
+      row[nameCol + 1] = F.title;
+      row[nameCol + 2] = F.home;
+      var filled = 0, short = 0;
+      function findRow(nm){
+        for(var r = 3; r < R.length; r++) if(String(R[r][nameCol]).trim() === nm) return R[r];
+        return null;
+      }
+      function cellOf(rw, c){
+        return String((rw && rw[c]) || '').replace(/\((OP|CL)\)$/, '').trim();
+      }
+      if(F.mate){
+        var mr = findRow(F.mate);
+        if(mr){
+          for(var k = 0; k < dayIdx.length; k++){
+            var v = cellOf(mr, dayIdx[k]);
+            if(v === '전휴무' || v === '휴가' || v === '병가' || v === '훈련' || v === '출장') v = '';
+            row[dayIdx[k]] = v; if(v) copied++;
+          }
+          var offNow = 0;
+          for(var q = 0; q < dayIdx.length; q++) if(!row[dayIdx[q]]) offNow++;
+          var needFill = offNow - F.offN;
+          if(needFill > 0){
+            var others = leaders().filter(function(x){ return x.name !== F.mate; }).map(function(x){ return findRow(x.name); }).filter(Boolean);
+            for(var q2 = 0; q2 < dayIdx.length && needFill > 0; q2++){
+              if(row[dayIdx[q2]]) continue;
+              for(var oi = 0; oi < others.length; oi++){
+                var ov2 = cellOf(others[oi], dayIdx[q2]);
+                if(ov2 && ov2 !== '전휴무' && ov2 !== '휴가' && ov2 !== '병가' && ov2 !== '훈련' && ov2 !== '출장'){
+                  row[dayIdx[q2]] = ov2; needFill--; filled++; break;
+                }
+              }
+            }
+            short = needFill;
+          }
+        }
+      }
+      var off = 0;
+      for(var k2 = 0; k2 < dayIdx.length; k2++) if(!String(row[dayIdx[k2]]).trim()) off++;
+      var sumStart = dayIdx.length ? dayIdx[dayIdx.length - 1] + 1 : W - 3;
+      if(sumStart < W) row[sumStart] = String(off);
+      for(var s2 = sumStart + 1; s2 < W; s2++) row[s2] = '0';
+      window.__wvAeFill = filled; window.__wvAeShort = short; window.__wvAeOff = off;
+      R.push(row);
+      try{ render(R); }catch(x){}
+      done = true;
+    }
+    paint(shell('완료', '직원 추가',
+      '<div class="wvA-ok"><b>' + esc(F.name) + '</b> 님을 추가했습니다.<br><br>'
+      + (saved ? '· 구글시트 <b>설정</b> 탭에 저장했습니다 — 생성기를 열면 자동 반영됩니다<br>'
+               : '· 생성기에는 <b>반영하지 않았습니다</b> — 나중에 필요하면 다시 추가하세요<br>')
+      + (done ? ('· 이번 달 스케줄 표 <b>맨 아래</b>에 행을 넣었습니다'
+                 + (copied ? ' (' + esc(F.mate) + ' 팀장 근무 ' + copied + '일 복사' + (window.__wvAeFill ? ' · 다른 팀장 근무 ' + window.__wvAeFill + '일 추가' : '') + ')' : ' (빈 칸)') + '<br>'
+                 + '· 휴무 <b>' + window.__wvAeOff + '일</b> (목표 ' + F.offN + '일)<br>'
+                 + (window.__wvAeShort ? '· <b style="color:#a86400">' + window.__wvAeShort + '일은 채우지 못했습니다 — 직접 입력해 주세요</b><br>' : ''))
+              : '· 이번 달 표에는 넣지 못했습니다 (스케줄을 먼저 불러오세요)<br>')
+      + '</div>'
+      + '<p class="wvA-d" style="margin-top:12px">이번 달 표는 아직 <b>화면에만</b> 있습니다.<br>'
+      + '오른쪽 위 <b>설정 아이콘 → 관리자 모드</b>로 들어가 내용을 확인한 뒤 <b>저장</b>을 눌러야<br>'
+      + '구글시트에 <b>(수정N)</b> 탭으로 기록됩니다.</p>'
+      + '<div class="wvA-bar"><button class="pri" id="wvAeDone">확인</button></div>'));
+    document.getElementById('wvAeDone').onclick = close;
+  }
+  function start(){
+    if(!URL_){ alert('시트 주소가 없습니다'); return; }
+    paint(shell('불러오는 중', '직원 추가', '<p class="wvA-d">현재 직원·매장 설정을 불러오는 중입니다…</p>'));
+    fetch(URL_ + '?mode=cfg&t=' + Date.now(), {cache:'no-store'})
+      .then(function(r){ return r.text(); })
+      .then(function(t){
+        var j = null; try{ j = JSON.parse(t); }catch(x){}
+        if(!j || !j.ok){
+          paint(shell('오류', '직원 추가',
+            '<p class="wvA-d" style="color:#c5221f">시트 설정을 읽지 못했습니다: '
+            + esc((j && j.reason) || '응답 오류') + '</p>'
+            + '<div class="wvA-bar"><button class="pri" id="wvAeDone">닫기</button></div>'));
+          document.getElementById('wvAeDone').onclick = close;
+          return;
+        }
+        cfg = { stores:j.stores || [], emps:j.emps || [] };
+        step1();
+      })
+      ['catch'](function(){
+        paint(shell('오류', '직원 추가',
+          '<p class="wvA-d" style="color:#c5221f">시트에 연결하지 못했습니다</p>'
+          + '<div class="wvA-bar"><button class="pri" id="wvAeDone">닫기</button></div>'));
+        document.getElementById('wvAeDone').onclick = close;
+      });
+  }
+  function mountBtn(){
+    if(document.getElementById('wvAeBtn')) return;
+    var bar = null, cands = document.querySelectorAll('button');
+    for(var i = 0; i < cands.length; i++){
+      var tx = (cands[i].textContent || '').trim();
+      if(tx === '엑셀 저장' || tx === '여러 명 보기'){ bar = cands[i].parentNode; break; }
+    }
+    if(!bar) return;
+    var b = document.createElement('button');
+    b.id = 'wvAeBtn'; b.textContent = '직원 추가';
+    b.style.cssText = 'font-size:12px;padding:5px 10px;border-radius:8px;border:1px solid ' + NAVY
+      + ';background:' + NAVY + ';color:#fff;cursor:pointer;margin-left:6px;font-weight:700';
+    b.onclick = start;
+    bar.appendChild(b);
+  }
+  function loop(){ mountBtn(); setTimeout(loop, 1500); }
+  setTimeout(loop, 1600);
+})();
+</script>
 </html>
