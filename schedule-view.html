@@ -148,7 +148,7 @@
       return _f(input, init);
     }
     var mode = qs(url, 'mode'), month = qs(url, 'month');
-    if(mode === 'revs' || mode === 'diag' || mode === 'all') return _f(input, init);
+    if(mode === 'revs' || mode === 'diag' || mode === 'all' || mode === 'cfg') return _f(input, init);
     return getAll(month).then(function(b){
       if(mode === 'list')   return reply(JSON.stringify(b.months || []));
       if(mode === 'notice') return reply(String(b.notice == null ? '' : b.notice));
