@@ -3891,6 +3891,7 @@ function wvChkInit(){
     });
     emps.forEach(function(e){
       if(e.home !== '순환') return;
+      if(e.role === '교육') return;   /* 교육생은 팀장을 따라다니므로 범위가 좁은 게 정상 */
       var n = sts.filter(function(st){ return canGo(e, st); }).length;
       if(n <= 2) push('warn', esc(e.name) + ' — 갈 수 있는 매장이 <b>' + n + '곳</b>뿐입니다',
         '순환 직원의 범위가 좁으면 빈 자리를 못 메웁니다');
