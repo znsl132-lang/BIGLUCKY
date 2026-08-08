@@ -1,22 +1,22 @@
 {
-  "updatedAt": "2026-08-08 18:03",
+  "updatedAt": "2026-08-08 18:35",
   "branches": {
     "구월 로데오점": {
       "naver": 2420,
       "kakao": 19,
-      "daangn": 16,
+      "daangn": 0,
       "tmap": null
     },
     "구월 길병원점": {
       "naver": 1319,
       "kakao": 18,
-      "daangn": 2,
+      "daangn": 0,
       "tmap": null
     },
     "부천 상동점": {
       "naver": 1371,
       "kakao": 10,
-      "daangn": 5,
+      "daangn": 0,
       "tmap": null
     },
     "부천 신중동점": {
@@ -28,13 +28,13 @@
     "인천 검단점": {
       "naver": 93,
       "kakao": 1,
-      "daangn": 1,
+      "daangn": 0,
       "tmap": null
     },
     "인천 계산점": {
       "naver": 904,
       "kakao": 1,
-      "daangn": 3,
+      "daangn": 0,
       "tmap": null
     },
     "인천 공항점": {
@@ -46,13 +46,13 @@
     "인천 논현점": {
       "naver": 1035,
       "kakao": 27,
-      "daangn": 12,
+      "daangn": 0,
       "tmap": null
     },
     "인천 연수점": {
       "naver": 1193,
       "kakao": 70,
-      "daangn": 1,
+      "daangn": 0,
       "tmap": null
     }
   },
@@ -1293,19 +1293,19 @@
       "구월 로데오점": {
         "naver": 2420,
         "kakao": 19,
-        "daangn": 16,
+        "daangn": 0,
         "tmap": null
       },
       "구월 길병원점": {
         "naver": 1319,
         "kakao": 18,
-        "daangn": 2,
+        "daangn": 0,
         "tmap": null
       },
       "부천 상동점": {
         "naver": 1371,
         "kakao": 10,
-        "daangn": 5,
+        "daangn": 0,
         "tmap": null
       },
       "부천 신중동점": {
@@ -1317,13 +1317,13 @@
       "인천 검단점": {
         "naver": 93,
         "kakao": 1,
-        "daangn": 1,
+        "daangn": 0,
         "tmap": null
       },
       "인천 계산점": {
         "naver": 904,
         "kakao": 1,
-        "daangn": 3,
+        "daangn": 0,
         "tmap": null
       },
       "인천 공항점": {
@@ -1335,13 +1335,13 @@
       "인천 논현점": {
         "naver": 1035,
         "kakao": 27,
-        "daangn": 12,
+        "daangn": 0,
         "tmap": null
       },
       "인천 연수점": {
         "naver": 1193,
         "kakao": 70,
-        "daangn": 1,
+        "daangn": 0,
         "tmap": null
       }
     }
