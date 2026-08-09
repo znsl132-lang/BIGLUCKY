@@ -2095,6 +2095,7 @@ try{ window.__ENH(); }catch(e){}
 
     m.R.push(row);
     try{ render(m.R); if(window.__wvSyncEdit) window.__wvSyncEdit(m.R); }catch(x){}
+    if(window.__wvAutoPT) try{ window.__wvAutoPT(m.R.length - 1); }catch(x){}
 
     var synced = !!(window.__wvSyncEdit && document.body.classList.contains('wvEditing'));
     paint(shell('완료',
@@ -2296,6 +2297,7 @@ try{ window.__ENH(); }catch(e){}
     if(m.sum['휴무'] != null) row[m.sum['휴무']] = String(offN);
     recount();
     try{ render(R); if(window.__wvSyncEdit) window.__wvSyncEdit(R); }catch(x){}
+    if(window.__wvAutoPT) try{ window.__wvAutoPT(rowIdx); }catch(x){}
     setTimeout(paint, 60);
 
     draw(shell('완료',
@@ -2347,9 +2349,16 @@ try{ window.__ENH(); }catch(e){}
     var st = document.createElement('style'); st.id = 'wvPxCss';
     st.textContent = '#wvPick button.wvPxBtn{background:#23262e !important;color:#fff !important;'
       + 'font-weight:700 !important;border-color:#23262e !important;}'
-      + '#wvPick button.wvPxBtn:hover{background:#3a3f4c !important;}';
+      + '#wvPick button.wvPxBtn:hover{background:#3a3f4c !important;}'
+      + '#wvPick button.wvPtBtn{background:#e8f5ef !important;color:#1f7a5a !important;font-weight:700 !important;border-color:#bfe0d2 !important;}';
     document.head.appendChild(st);
   }
+
+  var lastTd = null;
+  document.addEventListener('click', function(e){
+    var td = e.target && e.target.closest ? e.target.closest('td[data-r]') : null;
+    if(td) lastTd = td;
+  }, true);
 
   function tick(){
     var p = document.getElementById('wvPick');
@@ -2360,10 +2369,105 @@ try{ window.__ENH(); }catch(e){}
       b.setAttribute('data-v', MARK);
       b.textContent = '제외 (합계 제외)';
       p.appendChild(b);
+
+      /* 이 사람 근무 전체에 PT 표시 켜고 끄기 */
+      if(window.__wvSetPT && lastTd){
+        var rIdx = parseInt(lastTd.getAttribute('data-r'), 10);
+        var cur = String(lastTd.textContent || '');
+        var on = cur.indexOf('PT') < 0;
+        var t2 = document.createElement('button');
+        t2.className = 'wvPtBtn';
+        t2.textContent = on ? '이 사람 전체 PT 표시' : '이 사람 PT 표시 해제';
+        t2.onclick = function(ev){
+          ev.preventDefault(); ev.stopPropagation();
+          window.__wvSetPT(rIdx, on);
+          p.style.display = 'none';
+        };
+        p.appendChild(t2);
+      }
     }
     setTimeout(tick, 200);
   }
   setTimeout(tick, 1500);
+})();
+</script>
+<script>
+/* ===== PT 표시 =====
+   값은 '로데오(PT)' 형태로 넣고, 화면에는 OP·CL처럼 작은 윗첨자로 보여준다.
+   교육생 행은 추가할 때 자동으로 전부 붙는다. */
+(function(){
+  if(window.__wvPT) return; window.__wvPT = true;
+  var TAG = '(PT)';
+
+  function rowsNow(){ var r = window.__wvActiveRows ? window.__wvActiveRows() : null;
+    return (r && r.length) ? r : window.__wvRows; }
+
+  function css(){
+    if(document.getElementById('wvPtCss')) return;
+    var st = document.createElement('style'); st.id = 'wvPtCss';
+    st.textContent = '.opcl.pt{color:#1f7a5a;font-weight:800}';
+    document.head.appendChild(st);
+  }
+
+  function paint(){
+    css();
+    var tds = document.querySelectorAll('table td');
+    for(var i = 0; i < tds.length; i++){
+      var td = tds[i];
+      if(td.querySelector('.opcl.pt')) continue;
+      var v = String(td.textContent || '').trim();
+      if(v.length > 4 && v.slice(-4) === TAG){
+        td.innerHTML = td.innerHTML.replace(/\(PT\)\s*$/, '<span class="opcl pt">PT</span>');
+      }
+    }
+  }
+
+  function meta(){
+    var R = rowsNow(); var h = R[1] || []; var day = [];
+    for(var c = 0; c < h.length; c++) if(/^\d{1,2}$/.test(String(h[c]).trim())) day.push(c);
+    return { R:R, day:day, name:1, title:2 };
+  }
+  function isBlock(v){
+    v = String(v || '').trim();
+    if(!v || v === '제외') return true;
+    return /전휴무|휴가|병가|훈련|출장|휴무/.test(v);
+  }
+
+  window.__wvSetPT = function(rowIdx, on){
+    var m = meta(), row = m.R[rowIdx];
+    if(!row) return 0;
+    var n = 0;
+    for(var d = 0; d < m.day.length; d++){
+      var c = m.day[d], v = String(row[c] || '').trim();
+      if(isBlock(v)) continue;
+      var has = v.slice(-4) === TAG;
+      if(on && !has && !/\((OP|CL)\)$/.test(v)){ row[c] = v + TAG; n++; }
+      else if(!on && has){ row[c] = v.slice(0, -4); n++; }
+    }
+    if(n){
+      try{ render(m.R); if(window.__wvSyncEdit) window.__wvSyncEdit(m.R); }catch(x){}
+      setTimeout(paint, 60);
+    }
+    return n;
+  };
+
+  window.__wvSetPTByName = function(name, on){
+    var m = meta();
+    for(var r = 3; r < m.R.length; r++)
+      if(String(m.R[r][m.name] || '').trim() === name) return window.__wvSetPT(r, on);
+    return 0;
+  };
+
+  window.__wvAutoPT = function(rowIdx){
+    var m = meta(), row = m.R[rowIdx];
+    if(!row) return 0;
+    var t = String(row[m.title] || '');
+    if(t.indexOf('교육') < 0) return 0;
+    return window.__wvSetPT(rowIdx, true);
+  };
+
+  function loop(){ paint(); setTimeout(loop, 1200); }
+  setTimeout(loop, 2200);
 })();
 </script>
 </html>
