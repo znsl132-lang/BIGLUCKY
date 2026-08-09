@@ -2350,7 +2350,8 @@ try{ window.__ENH(); }catch(e){}
     st.textContent = '#wvPick button.wvPxBtn{background:#23262e !important;color:#fff !important;'
       + 'font-weight:700 !important;border-color:#23262e !important;}'
       + '#wvPick button.wvPxBtn:hover{background:#3a3f4c !important;}'
-      + '#wvPick button.wvPtBtn{background:#e8f5ef !important;color:#1f7a5a !important;font-weight:700 !important;border-color:#bfe0d2 !important;}';
+      + '#wvPick button.wvPtBtn{background:#e8f5ef !important;color:#1f7a5a !important;font-weight:700 !important;border-color:#bfe0d2 !important;}'
+      + '#wvPick button.wvSwBtn{background:#fff6e5 !important;color:#8a6100 !important;font-weight:700 !important;border-color:#f0dcae !important;}';
     document.head.appendChild(st);
   }
 
@@ -2384,6 +2385,19 @@ try{ window.__ENH(); }catch(e){}
           p.style.display = 'none';
         };
         p.appendChild(t2);
+
+        /* 달 중간 풀타임 전환 */
+        if(window.__wvAskSwitch && !on){
+          var t3 = document.createElement('button');
+          t3.className = 'wvSwBtn';
+          t3.textContent = '풀타임 전환일 설정';
+          t3.onclick = function(ev){
+            ev.preventDefault(); ev.stopPropagation();
+            p.style.display = 'none';
+            window.__wvAskSwitch(rIdx);
+          };
+          p.appendChild(t3);
+        }
       }
     }
     setTimeout(tick, 200);
@@ -2468,6 +2482,168 @@ try{ window.__ENH(); }catch(e){}
 
   function loop(){ paint(); setTimeout(loop, 1200); }
   setTimeout(loop, 2200);
+})();
+</script>
+<script>
+/* ===== 풀타임 전환일 =====
+   달 중간에 교육생이 풀타임으로 바뀌는 경우.
+   전환일 앞은 PT 유지, 뒤는 PT 해제 + 구간별 휴무 목표를 다시 잡는다. */
+(function(){
+  if(window.__wvSwitch) return; window.__wvSwitch = true;
+  var TAG = '(PT)', MARK = '제외';
+
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){
+    return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]; }); }
+  function rowsNow(){ var r = window.__wvActiveRows ? window.__wvActiveRows() : null;
+    return (r && r.length) ? r : window.__wvRows; }
+  function meta(){
+    var R = rowsNow(); var h = R[1] || []; var day = [], sum = {};
+    for(var c = 0; c < h.length; c++){
+      var k = String(h[c]).trim();
+      if(/^\d{1,2}$/.test(k)) day.push(c);
+      if(k === '휴무') sum.off = c;
+    }
+    return { R:R, day:day, sum:sum, name:1, title:2, home:3 };
+  }
+  function isBlock(v){
+    v = String(v || '').trim();
+    if(!v || v === MARK) return true;
+    return /전휴무|휴가|병가|훈련|출장|휴무/.test(v);
+  }
+
+  function ov(){
+    var o = document.getElementById('wvAeOv');
+    if(!o){ o = document.createElement('div'); o.id = 'wvAeOv';
+      o.addEventListener('click', function(e){ if(e.target === o) o.style.display='none'; });
+      document.body.appendChild(o); }
+    if(window.__wvWizCss) window.__wvWizCss();
+    o.style.display = 'flex'; return o;
+  }
+  function close(){ var o = document.getElementById('wvAeOv'); if(o) o.style.display = 'none'; }
+  function draw(step, inner){
+    var o = ov();
+    o.innerHTML = '<div class="wvA"><div class="wvA-top"><div><b>풀타임 전환</b>'
+      + '<div class="step">' + esc(step) + '</div></div>'
+      + '<button class="wvA-x" id="wvSwX">✕</button></div>'
+      + '<div class="wvA-b">' + inner + '</div></div>';
+    document.getElementById('wvSwX').onclick = close;
+  }
+
+  window.__wvAskSwitch = function(rowIdx){
+    var m = meta(), row = m.R[rowIdx];
+    if(!row) return;
+    var who = String(row[m.name] || '').trim();
+    var total = m.day.length;
+    /* 제외가 아닌 실제 대상 날짜 수 */
+    var live = 0;
+    for(var d = 0; d < total; d++) if(String(row[m.day[d]]).trim() !== MARK) live++;
+    draw('구간 나누기',
+      '<p class="wvA-q">' + esc(who) + ' 님은 며칠부터 풀타임인가요?</p>'
+      + '<p class="wvA-d">그 날부터 <b>PT 표시를 떼고</b> 휴무 목표를 다시 잡습니다.<br>'
+      + '앞 구간은 교육생(PT)으로 그대로 둡니다.</p>'
+      + '<div class="wvA-f">'
+      + '<label>전환일</label><input id="wvSwDay" type="number" min="1" max="' + total + '" value="1">'
+      + '<label>교육생 휴무</label><input id="wvSwA" type="number" min="0" max="20" value="8">'
+      + '<label>풀타임 휴무</label><input id="wvSwB" type="number" min="0" max="20" value="10">'
+      + '</div>'
+      + '<p class="wvA-d" id="wvSwHint" style="margin-top:12px"></p>'
+      + '<div class="wvA-err" id="wvSwErr"></div>'
+      + '<div class="wvA-bar"><button id="wvSwNo">취소</button>'
+      + '<button class="pri" id="wvSwOk">적용</button></div>');
+    var g = function(id){ return document.getElementById(id); };
+    function upd(){
+      var s = parseInt(g('wvSwDay').value, 10) || 1;
+      var a = parseInt(g('wvSwA').value, 10), b = parseInt(g('wvSwB').value, 10);
+      var pre = 0, post = 0;
+      for(var d = 0; d < total; d++){
+        if(String(row[m.day[d]]).trim() === MARK) continue;
+        if(d + 1 < s) pre++; else post++;
+      }
+      var ta = Math.round(a * pre / total), tb = Math.round(b * post / total);
+      g('wvSwHint').innerHTML = '교육생 구간 ' + pre + '일 · 휴무 <b>' + ta + '일</b><br>'
+        + '풀타임 구간 ' + post + '일 · 휴무 <b>' + tb + '일</b><br>'
+        + '합계 휴무 <b>' + (ta + tb) + '일</b>' + (live !== total ? ' (제외 ' + (total - live) + '일 빼고 계산)' : '');
+    }
+    ['wvSwDay','wvSwA','wvSwB'].forEach(function(id){ g(id).oninput = upd; });
+    upd();
+    g('wvSwNo').onclick = close;
+    g('wvSwOk').onclick = function(){
+      var s = parseInt(g('wvSwDay').value, 10) || 1;
+      if(s < 1 || s > total){ g('wvSwErr').textContent = '1~' + total + ' 사이로 입력해 주세요'; return; }
+      apply(rowIdx, s, parseInt(g('wvSwA').value, 10), parseInt(g('wvSwB').value, 10), who);
+    };
+  };
+
+  /* 한 구간의 휴무를 목표에 맞춘다 */
+  function balance(R, rowIdx, cols, target, m){
+    var row = R[rowIdx], work = [], off = [], i;
+    for(i = 0; i < cols.length; i++){
+      var v = String(row[cols[i]] || '').trim();
+      if(v === MARK) continue;
+      (v ? work : off).push(cols[i]);
+    }
+    var gap = off.length - target;
+    if(gap > 0){
+      var filled = 0;
+      for(i = 0; i < off.length && filled < gap; i++){
+        var cc = off[i], pick = '';
+        for(var r2 = 3; r2 < R.length && !pick; r2++){
+          if(r2 === rowIdx) continue;
+          var vv = String(R[r2][cc] || '').trim();
+          if(vv && !isBlock(vv)) pick = vv.replace(/\((OP|CL|PT)\)$/, '');
+        }
+        if(!pick && row[m.home] && row[m.home] !== '순환') pick = row[m.home];
+        if(pick){ row[cc] = pick; filled++; }
+      }
+    } else if(gap < 0){
+      var cut = -gap, step = Math.max(1, Math.floor(work.length / cut));
+      for(i = 0; i < cut && i * step < work.length; i++) row[work[i * step]] = '';
+    }
+  }
+
+  function apply(rowIdx, start, offA, offB, who){
+    var m = meta(), R = m.R, row = R[rowIdx], total = m.day.length;
+    var pre = [], post = [], d, c;
+    for(d = 0; d < total; d++){
+      c = m.day[d];
+      if(String(row[c]).trim() === MARK) continue;
+      (d + 1 < start ? pre : post).push(c);
+    }
+    var ta = Math.round(offA * pre.length / total);
+    var tb = Math.round(offB * post.length / total);
+    balance(R, rowIdx, pre, ta, m);
+    balance(R, rowIdx, post, tb, m);
+    /* 앞 구간 PT 붙이고, 뒤 구간 PT 뗀다 */
+    var i, v;
+    for(i = 0; i < pre.length; i++){
+      v = String(row[pre[i]] || '').trim();
+      if(!isBlock(v) && v.slice(-4) !== TAG && !/\((OP|CL)\)$/.test(v)) row[pre[i]] = v + TAG;
+    }
+    for(i = 0; i < post.length; i++){
+      v = String(row[post[i]] || '').trim();
+      if(v.slice(-4) === TAG) row[post[i]] = v.slice(0, -4);
+    }
+    /* 휴무 칸 다시 세기 (제외 제외) */
+    var offN = 0, workN = 0;
+    for(d = 0; d < total; d++){
+      v = String(row[m.day[d]] || '').trim();
+      if(v === MARK) continue;
+      (v ? workN++ : offN++);
+    }
+    if(m.sum.off != null) row[m.sum.off] = String(offN);
+    try{ render(R); if(window.__wvSyncEdit) window.__wvSyncEdit(R); }catch(x){}
+
+    draw('완료',
+      '<div class="wvA-ok"><b>' + esc(who) + '</b> — ' + start + '일부터 풀타임<br><br>'
+      + '· 1~' + (start - 1) + '일 교육생 <b>PT 유지</b> · 휴무 ' + ta + '일<br>'
+      + '· ' + start + '일부터 <b>PT 해제</b> · 휴무 ' + tb + '일<br>'
+      + '· 이번 달 근무 ' + workN + '일 · 휴무 ' + offN + '일'
+      + '</div>'
+      + '<p class="wvA-d" style="margin-top:12px">시트 설정(직책·근무형태·월 휴무)은 <b>직원 수정</b>에서 따로 바꿔 주세요.<br>'
+      + '이 화면은 이번 달 표만 고칩니다.</p>'
+      + '<div class="wvA-bar"><button class="pri" id="wvSwDone">확인</button></div>');
+    document.getElementById('wvSwDone').onclick = close;
+  }
 })();
 </script>
 </html>
