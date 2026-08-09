@@ -2059,22 +2059,28 @@ try{ window.__ENH(); }catch(e){}
         c = m.day[d];
         (row[c] ? work : off).push(c);
       }
-      var needOff = off.length - goal;
-      if(needOff < 0) needOff = needOff;
-      if(needOff > 0){
-        var step = Math.max(1, Math.floor(work.length / needOff));
-        for(var k = 0; k < needOff && k * step < work.length; k++) row[work[k * step]] = '';
-      } else if(needOff < 0){
-        var add = -needOff, filled = 0;
-        for(var k2 = 0; k2 < off.length && filled < add; k2++){
-          var cc2 = off[k2], v2 = '';
-          if(target.home && target.home !== '순환') v2 = target.home;
-          else for(var r3 = 3; r3 < m.R.length && !v2; r3++){
-            var v3 = String(m.R[r3][cc2] || '').trim();
-            if(v3 && !isOff(v3)) v2 = v3;
+      var gap = off.length - goal;   /* 양수 = 휴무가 많다 → 근무를 채운다 */
+      if(gap > 0){
+        var filled = 0;
+        for(var k = 0; k < off.length && filled < gap; k++){
+          var cc = off[k], v2 = '';
+          /* ① 다른 팀장이 그날 나가는 매장 ② 아무나 나가는 매장 ③ 본인 소속 */
+          for(var r2 = 3; r2 < m.R.length && !v2; r2++){
+            if(String(m.R[r2][m.title] || '').indexOf('팀장') < 0) continue;
+            var vt = String(m.R[r2][cc] || '').trim();
+            if(vt && !isOff(vt)) v2 = vt;
           }
-          if(v2){ row[cc2] = v2; filled++; }
+          for(var r3 = 3; r3 < m.R.length && !v2; r3++){
+            var vv2 = String(m.R[r3][cc] || '').trim();
+            if(vv2 && !isOff(vv2)) v2 = vv2;
+          }
+          if(!v2 && target.home && target.home !== '순환') v2 = target.home;
+          if(v2){ row[cc] = v2; filled++; }
         }
+      } else if(gap < 0){
+        var cut = -gap;
+        var step = Math.max(1, Math.floor(work.length / cut));
+        for(var k2 = 0; k2 < cut && k2 * step < work.length; k2++) row[work[k2 * step]] = '';
       }
     }
 
