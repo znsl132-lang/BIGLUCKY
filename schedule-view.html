@@ -1581,6 +1581,7 @@ try{ window.__ENH(); }catch(e){}
   var URL_ = (typeof WEBAPP_URL !== 'undefined' && WEBAPP_URL) ? WEBAPP_URL : '';
   var TOKEN = (typeof SHEET_TOKEN !== 'undefined' && SHEET_TOKEN) ? SHEET_TOKEN : 'wevape2026';
   var NAVY = '#2b2d42';
+  var GOLD = '#c9a227';
   var TITLES = ['주임','매니저','팀장','실장','교육생'];
   var WORKT  = ['풀타임','파트'];
   var cfg = null, orig = null, F = null;
@@ -1589,11 +1590,43 @@ try{ window.__ENH(); }catch(e){}
     return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]; }); }
   function isAdmin(){ return !!window.__wvPw || document.body.classList.contains('wvEditing'); }
 
+  function css(){
+    if(document.getElementById('wvAeCss') || document.getElementById('wvEeCss')) return;
+    var st = document.createElement('style'); st.id = 'wvEeCss';
+    st.textContent = [
+      '#wvAeOv{position:fixed;inset:0;background:rgba(10,12,25,.55);z-index:10060;display:none;align-items:center;justify-content:center;padding:16px}',
+      '.wvA{background:#fff;border-radius:16px;width:min(520px,95vw);max-height:90vh;overflow:auto;box-shadow:0 24px 70px rgba(0,0,0,.35)}',
+      '.wvA-top{background:' + NAVY + ';color:#fff;padding:14px 18px;display:flex;align-items:center;justify-content:space-between}',
+      '.wvA-top b{font-size:16px;letter-spacing:-.3px}',
+      '.wvA-top .step{font-size:11.5px;opacity:.75}',
+      '.wvA-x{border:none;background:rgba(255,255,255,.15);color:#fff;width:30px;height:30px;border-radius:50%;font-size:15px;cursor:pointer}',
+      '.wvA-b{padding:18px}',
+      '.wvA-q{font-size:14px;font-weight:700;margin:0 0 4px}',
+      '.wvA-d{font-size:12px;color:#8a8b93;margin:0 0 14px;line-height:1.6}',
+      '.wvA-pick{display:grid;gap:10px}',
+      '.wvA-pick button{text-align:left;padding:14px 16px;border:1px solid #d7dbe3;border-radius:12px;background:#fff;cursor:pointer;font-size:13.5px;line-height:1.5}',
+      '.wvA-pick button:hover{border-color:' + GOLD + ';background:#fffdf5}',
+      '.wvA-pick button b{display:block;font-size:14px;margin-bottom:3px}',
+      '.wvA-pick button span{color:#8a8b93;font-size:12px}',
+      '.wvA-f{display:grid;grid-template-columns:92px 1fr;gap:10px 12px;align-items:center}',
+      '.wvA-f label{font-size:12.5px;color:#5b6b7a;font-weight:600}',
+      '.wvA-f input,.wvA-f select{width:100%;font-size:13.5px;padding:8px 10px;border:1px solid #d7dbe3;border-radius:9px;background:#fff}',
+      '.wvA-f input:focus,.wvA-f select:focus{outline:none;border-color:' + NAVY + '}',
+      '.wvA-bar{display:flex;gap:8px;margin-top:18px}',
+      '.wvA-bar button{flex:1;font-size:13.5px;padding:11px;border-radius:10px;border:1px solid #c9ced8;background:#f7f8fa;cursor:pointer}',
+      '.wvA-bar button.pri{background:' + NAVY + ';color:#fff;border-color:' + NAVY + ';font-weight:700}',
+      '.wvA-bar button:disabled{opacity:.5;cursor:default}',
+      '.wvA-err{color:#c5221f;font-size:12.5px;margin-top:10px;min-height:17px;font-weight:600}',
+      '.wvA-ok{background:#f4f8f5;border:1px solid #cfe6d6;border-radius:10px;padding:12px 14px;font-size:13px;line-height:1.7;color:#2b4f38}'
+    ].join('');
+    document.head.appendChild(st);
+  }
   function ov(){
     var o = document.getElementById('wvAeOv');
     if(!o){ o = document.createElement('div'); o.id = 'wvAeOv';
       o.addEventListener('click', function(e){ if(e.target === o) o.style.display='none'; });
       document.body.appendChild(o); }
+    css();
     o.style.display = 'flex'; return o;
   }
   function close(){ var o = document.getElementById('wvAeOv'); if(o) o.style.display = 'none'; }
