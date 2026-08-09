@@ -2351,7 +2351,8 @@ try{ window.__ENH(); }catch(e){}
       + 'font-weight:700 !important;border-color:#23262e !important;}'
       + '#wvPick button.wvPxBtn:hover{background:#3a3f4c !important;}'
       + '#wvPick button.wvPtBtn{background:#e8f5ef !important;color:#1f7a5a !important;font-weight:700 !important;border-color:#bfe0d2 !important;}'
-      + '#wvPick button.wvSwBtn{background:#fff6e5 !important;color:#8a6100 !important;font-weight:700 !important;border-color:#f0dcae !important;}';
+      + '#wvPick button.wvSwBtn{background:#fff6e5 !important;color:#8a6100 !important;font-weight:700 !important;border-color:#f0dcae !important;}'
+      + '#wvPick button.wvDayBtn{background:#eef3ff !important;color:#22409a !important;font-weight:800 !important;border-color:#c3d0f5 !important;}';
     document.head.appendChild(st);
   }
 
@@ -2374,8 +2375,23 @@ try{ window.__ENH(); }catch(e){}
       /* 이 사람 근무 전체에 PT 표시 켜고 끄기 */
       if(window.__wvSetPT && lastTd){
         var rIdx = parseInt(lastTd.getAttribute('data-r'), 10);
+        var cIdx = parseInt(lastTd.getAttribute('data-c'), 10);
         var cur = String(lastTd.textContent || '');
         var on = cur.indexOf('PT') < 0;
+
+        /* ① 이 날 하루만 바꾸기 */
+        if(window.__wvPTCell && cur.trim() && cur.trim() !== MARK){
+          var cellPT = cur.indexOf('PT') >= 0;
+          var t1 = document.createElement('button');
+          t1.className = 'wvDayBtn';
+          t1.textContent = cellPT ? '이 날만 풀타임 (PT 떼기)' : '이 날만 PT';
+          t1.onclick = function(ev){
+            ev.preventDefault(); ev.stopPropagation();
+            window.__wvPTCell(rIdx, cIdx, !cellPT);
+            p.style.display = 'none';
+          };
+          p.appendChild(t1);
+        }
         var t2 = document.createElement('button');
         t2.className = 'wvPtBtn';
         t2.textContent = on ? '이 사람 전체 PT 표시' : '이 사람 PT 표시 해제';
@@ -2463,6 +2479,21 @@ try{ window.__ENH(); }catch(e){}
       setTimeout(paint, 60);
     }
     return n;
+  };
+
+  /* 한 칸만 켜고 끄기 */
+  window.__wvPTCell = function(r, c, on){
+    var m = meta(), row = m.R[r];
+    if(!row) return false;
+    var v2 = String(row[c] || '').trim();
+    if(isBlock(v2)) return false;
+    var has = v2.slice(-4) === TAG;
+    if(on && !has){ if(/\((OP|CL)\)$/.test(v2)) return false; row[c] = v2 + TAG; }
+    else if(!on && has){ row[c] = v2.slice(0, -4); }
+    else return false;
+    try{ render(m.R); if(window.__wvSyncEdit) window.__wvSyncEdit(m.R); }catch(x){}
+    setTimeout(paint, 60);
+    return true;
   };
 
   window.__wvSetPTByName = function(name, on){
