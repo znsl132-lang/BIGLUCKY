@@ -774,6 +774,25 @@ try{ window.__ENH(); }catch(e){}
     }
   }
 
+  /* 직원 추가·수정 블록이 표를 다시 그린 뒤 편집 상태를 되살리기 위한 다리 */
+  window.__wvActiveRows = function(){
+    return (document.body.classList.contains('wvEditing') && ED) ? ED.rows : window.__wvRows;
+  };
+  window.__wvSyncEdit = function(rows){
+    if(!document.body.classList.contains('wvEditing') || !ED) return false;
+    var w = (ED.rows[0] || []).length;
+    while(ED.orig.length < rows.length){
+      var blank = [];
+      for(var i = 0; i < w; i++) blank.push('');
+      blank[ED.nameCol] = (rows[ED.orig.length] || [])[ED.nameCol] || '';
+      ED.orig.push(blank);
+    }
+    ED.rows = JSON.parse(JSON.stringify(rows));
+    tagCells();
+    try{ bar(true); }catch(x){}
+    return true;
+  };
+
   function onCell(e){
     if(!document.body.classList.contains('wvEditing')) return;
     e.stopPropagation();
@@ -1447,7 +1466,7 @@ try{ window.__ENH(); }catch(e){}
       ['catch'](function(){ btn.disabled = false; btn.textContent = '네, 반영합니다'; er.textContent = '저장 실패 · 인터넷 연결을 확인해 주세요'; });
   }
   function addRow(saved){
-    var R = window.__wvRows;
+    var R = (window.__wvActiveRows ? window.__wvActiveRows() : window.__wvRows);
     var done = false, copied = 0;
     window.__wvAeFill = 0; window.__wvAeShort = 0; window.__wvAeOff = 0;
     if(R && R.length > 3){
@@ -1503,7 +1522,7 @@ try{ window.__ENH(); }catch(e){}
       for(var s2 = sumStart + 1; s2 < W; s2++) row[s2] = '0';
       window.__wvAeFill = filled; window.__wvAeShort = short; window.__wvAeOff = off;
       R.push(row);
-      try{ render(R); }catch(x){}
+      try{ render(R); if(window.__wvSyncEdit) window.__wvSyncEdit(R); }catch(x){}
       done = true;
     }
     paint(shell('완료', '직원 추가',
@@ -1760,7 +1779,7 @@ try{ window.__ENH(); }catch(e){}
   }
 
   function applyRows(){
-    var R = window.__wvRows, changed = false;
+    var R = (window.__wvActiveRows ? window.__wvActiveRows() : window.__wvRows), changed = false;
     if(R && R.length > 3){
       var head = R[1].map(function(x){ return String(x).trim(); });
       var nc = head.indexOf('성명'); if(nc < 0) nc = 1;
@@ -1772,7 +1791,7 @@ try{ window.__ENH(); }catch(e){}
           changed = true; break;
         }
       }
-      if(changed){ try{ render(R); }catch(x){} }
+      if(changed){ try{ render(R); if(window.__wvSyncEdit) window.__wvSyncEdit(R); }catch(x){} }
     }
     if(!changed){ finish(false, '이번 달 표에 해당 직원이 없어 표는 그대로입니다'); return; }
     saveRev();
