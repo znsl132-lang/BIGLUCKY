@@ -1868,4 +1868,252 @@ try{ window.__ENH(); }catch(e){}
 })();
 </script>
 
+
+<script>
+/* ===== 직원 추가 갈래 (신규 / 기존) =====
+   기존 [직원 추가] 버튼을 눌렀을 때 먼저 갈래를 묻고,
+   신규는 원래 마법사로, 기존은 시트 명단에서 골라 이번 달 표에 넣는다. */
+(function(){
+  if(window.__wvAddPick) return; window.__wvAddPick = true;
+  var URL_ = (typeof WEBAPP_URL !== 'undefined' && WEBAPP_URL) ? WEBAPP_URL : '';
+  var NAVY = '#2b2d42';
+  var origHandler = null;
+  var cfg = null, target = null;
+
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){
+    return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]; }); }
+  function isAdmin(){ return !!window.__wvPw || document.body.classList.contains('wvEditing'); }
+  function rowsNow(){ return window.__wvActiveRows ? window.__wvActiveRows() : window.__wvRows; }
+
+  function ov(){
+    var o = document.getElementById('wvAeOv');
+    if(!o){ o = document.createElement('div'); o.id = 'wvAeOv';
+      o.addEventListener('click', function(e){ if(e.target === o) o.style.display='none'; });
+      document.body.appendChild(o); }
+    o.style.display = 'flex'; return o;
+  }
+  function close(){ var o = document.getElementById('wvAeOv'); if(o) o.style.display = 'none'; }
+  function shell(step, inner){
+    return '<div class="wvA"><div class="wvA-top"><div><b>직원 추가</b>'
+      + '<div class="step">' + esc(step) + '</div></div>'
+      + '<button class="wvA-x" id="wvApX">✕</button></div>'
+      + '<div class="wvA-b">' + inner + '</div></div>';
+  }
+  function paint(html){ var o = ov(); o.innerHTML = html;
+    var x = document.getElementById('wvApX'); if(x) x.onclick = close; }
+  function opt(id, title, desc){
+    return '<button id="' + id + '"><b>' + esc(title) + '</b><span>' + esc(desc) + '</span></button>';
+  }
+
+  function meta(){
+    var R = rowsNow();
+    var h = R[1] || [];
+    var day = [];
+    for(var c = 0; c < h.length; c++) if(/^\d{1,2}$/.test(String(h[c]).trim())) day.push(c);
+    var sum = {};
+    for(var c2 = 0; c2 < h.length; c2++){
+      var k = String(h[c2]).trim();
+      if(k === '휴무' || k === '훈련' || k === '병가') sum[k] = c2;
+    }
+    return { R:R, day:day, sum:sum, name:1, title:2, home:3, co:0, w:h.length };
+  }
+  function namesInTable(){
+    var m = meta(), out = [];
+    for(var r = 3; r < m.R.length; r++){
+      var n = String(m.R[r][m.name] || '').trim();
+      if(n) out.push(n);
+    }
+    return out;
+  }
+  var OFFWORD = ['전휴무','휴가','병가','훈련','출장','휴무'];
+  function isOff(v){
+    v = String(v || '').trim();
+    if(!v) return true;
+    for(var i = 0; i < OFFWORD.length; i++) if(v.indexOf(OFFWORD[i]) >= 0) return true;
+    return false;
+  }
+
+  function chooser(){
+    if(!isAdmin()){ alert('관리자 모드에서만 사용할 수 있습니다.'); return; }
+    paint(shell('1 / 2 · 어떤 직원인가요',
+      '<p class="wvA-q">누구를 넣을까요?</p>'
+      + '<p class="wvA-d">이번 달 표에 빠져 있는 사람을 넣습니다.</p>'
+      + '<div class="wvA-pick">'
+      + opt('wvApNew', '신규 직원 추가', '아직 시트에 없는 사람입니다. 정보를 새로 입력합니다')
+      + opt('wvApOld', '기존 직원 추가', '시트에 이미 있는 사람을 이번 달 표에만 넣습니다')
+      + '</div>'));
+    document.getElementById('wvApNew').onclick = function(){
+      close();
+      setTimeout(function(){ if(origHandler) origHandler.call(document.getElementById('wvAeBtn')); }, 80);
+    };
+    document.getElementById('wvApOld').onclick = loadCfg;
+  }
+
+  function loadCfg(){
+    paint(shell('불러오는 중', '<p class="wvA-d">시트에서 직원 명단을 불러오는 중입니다…</p>'));
+    fetch(URL_ + '?mode=cfg&t=' + Date.now(), {cache:'no-store'})
+      .then(function(r){ return r.text(); })
+      .then(function(t){
+        var j = null; try{ j = JSON.parse(t); }catch(x){}
+        if(!j || !j.ok) return err('시트 설정을 읽지 못했습니다: ' + ((j && j.reason) || '응답 오류'));
+        cfg = j;
+        var have = namesInTable();
+        var left = (j.emps || []).filter(function(e){ return have.indexOf(e.name) < 0; });
+        if(!left.length) return err('시트의 직원이 이번 달 표에 모두 들어 있습니다.');
+        paint(shell('2 / 2 · 직원 선택',
+          '<p class="wvA-q">누구를 넣을까요?</p>'
+          + '<p class="wvA-d">이번 달 표에 아직 없는 사람만 나옵니다 (' + left.length + '명).</p>'
+          + '<div class="wvA-pick" style="max-height:52vh;overflow:auto">'
+          + left.map(function(e, i){
+              return '<button data-i="' + i + '"><b>' + esc(e.name) + '</b><span>'
+                + esc(e.title + ' · ' + e.home + ' · 휴무 ' + (e.offN == null ? 10 : e.offN) + '일')
+                + '</span></button>';
+            }).join('')
+          + '</div>'));
+        document.getElementById('wvAeOv').querySelectorAll('.wvA-pick button').forEach(function(b){
+          b.onclick = function(){ target = left[+b.getAttribute('data-i')]; howFill(); };
+        });
+      })
+      ['catch'](function(){ err('시트에 연결하지 못했습니다'); });
+  }
+
+  function err(msg){
+    paint(shell('오류', '<p class="wvA-d" style="color:#c5221f">' + esc(msg) + '</p>'
+      + '<div class="wvA-bar"><button class="pri" id="wvApDone">닫기</button></div>'));
+    document.getElementById('wvApDone').onclick = close;
+  }
+
+  function howFill(){
+    paint(shell('스케줄 채우기',
+      '<p class="wvA-q">' + esc(target.name) + ' 님의 근무를 어떻게 채울까요?</p>'
+      + '<p class="wvA-d">어느 쪽이든 추가한 뒤 칸을 눌러 바꿀 수 있습니다.</p>'
+      + '<div class="wvA-pick">'
+      + opt('wvApAuto', '소속 매장으로 자동', esc(target.home) + ' 기준으로 채우고 휴무 ' + (target.offN == null ? 10 : target.offN) + '일을 맞춥니다')
+      + opt('wvApCopy', '다른 직원 근무 따라가기', '표에 있는 사람을 골라 그 근무를 복사합니다')
+      + opt('wvApBlank', '빈 칸으로 추가', '전부 휴무 상태로 넣고 직접 채웁니다')
+      + '</div>'));
+    document.getElementById('wvApAuto').onclick = function(){ build('auto', null); };
+    document.getElementById('wvApBlank').onclick = function(){ build('blank', null); };
+    document.getElementById('wvApCopy').onclick = pickMate;
+  }
+
+  function pickMate(){
+    var m = meta(), list = [];
+    for(var r = 3; r < m.R.length; r++){
+      var n = String(m.R[r][m.name] || '').trim();
+      if(n) list.push({ r:r, n:n, t:m.R[r][m.title], h:m.R[r][m.home] });
+    }
+    paint(shell('따라갈 직원',
+      '<p class="wvA-q">누구 근무를 따라갈까요?</p>'
+      + '<div class="wvA-pick" style="max-height:52vh;overflow:auto">'
+      + list.map(function(x, i){
+          return '<button data-i="' + i + '"><b>' + esc(x.n) + '</b><span>'
+            + esc((x.t || '') + ' · ' + (x.h || '')) + '</span></button>';
+        }).join('')
+      + '</div>'));
+    document.getElementById('wvAeOv').querySelectorAll('.wvA-pick button').forEach(function(b){
+      b.onclick = function(){ build('copy', list[+b.getAttribute('data-i')].r); };
+    });
+  }
+
+  function build(mode, mateRow){
+    var m = meta();
+    var goal = (target.offN == null ? 10 : target.offN);
+    var row = [];
+    for(var i = 0; i < m.w; i++) row.push('');
+    row[m.co] = m.R[3] ? m.R[3][m.co] : '위베이프';
+    row[m.name] = target.name;
+    row[m.title] = target.title;
+    row[m.home] = target.home;
+
+    var d, c, note = '';
+    if(mode === 'copy'){
+      for(d = 0; d < m.day.length; d++){
+        c = m.day[d];
+        var v = String(m.R[mateRow][c] || '').trim();
+        row[c] = isOff(v) ? '' : v;
+      }
+      note = '근무 복사 ' + m.day.filter(function(cc){ return row[cc]; }).length + '일';
+    } else if(mode === 'auto'){
+      var base = (target.home && target.home !== '순환') ? target.home : null;
+      for(d = 0; d < m.day.length; d++){
+        c = m.day[d];
+        if(base) row[c] = base;
+        else {
+          var pick = '';
+          for(var r2 = 3; r2 < m.R.length && !pick; r2++){
+            var vv = String(m.R[r2][c] || '').trim();
+            if(vv && !isOff(vv)) pick = vv;
+          }
+          row[c] = pick;
+        }
+      }
+      note = (base ? base : '순환') + ' 기준으로 채움';
+    } else {
+      note = '빈 칸으로 추가';
+    }
+
+    if(mode !== 'blank'){
+      var work = [], off = [];
+      for(d = 0; d < m.day.length; d++){
+        c = m.day[d];
+        (row[c] ? work : off).push(c);
+      }
+      var needOff = off.length - goal;
+      if(needOff < 0) needOff = needOff;
+      if(needOff > 0){
+        var step = Math.max(1, Math.floor(work.length / needOff));
+        for(var k = 0; k < needOff && k * step < work.length; k++) row[work[k * step]] = '';
+      } else if(needOff < 0){
+        var add = -needOff, filled = 0;
+        for(var k2 = 0; k2 < off.length && filled < add; k2++){
+          var cc2 = off[k2], v2 = '';
+          if(target.home && target.home !== '순환') v2 = target.home;
+          else for(var r3 = 3; r3 < m.R.length && !v2; r3++){
+            var v3 = String(m.R[r3][cc2] || '').trim();
+            if(v3 && !isOff(v3)) v2 = v3;
+          }
+          if(v2){ row[cc2] = v2; filled++; }
+        }
+      }
+    }
+
+    var offN = 0;
+    for(d = 0; d < m.day.length; d++) if(!row[m.day[d]]) offN++;
+    if(m.sum['휴무'] != null) row[m.sum['휴무']] = String(offN);
+    if(m.sum['훈련'] != null) row[m.sum['훈련']] = '0';
+    if(m.sum['병가'] != null) row[m.sum['병가']] = '0';
+
+    m.R.push(row);
+    try{ render(m.R); if(window.__wvSyncEdit) window.__wvSyncEdit(m.R); }catch(x){}
+
+    var synced = !!(window.__wvSyncEdit && document.body.classList.contains('wvEditing'));
+    paint(shell('완료',
+      '<div class="wvA-ok"><b>' + esc(target.name) + '</b> 님을 이번 달 표에 넣었습니다.<br><br>'
+      + '· ' + esc(note) + '<br>'
+      + '· 휴무 ' + offN + '일 (목표 ' + goal + '일)' + (offN === goal ? '' : ' — 칸을 눌러 맞춰 주세요') + '<br>'
+      + '· 시트 설정은 건드리지 않았습니다 (이미 등록된 직원)'
+      + '</div>'
+      + '<p class="wvA-d" style="margin-top:12px">'
+      + (synced
+          ? '아래 <b>저장</b>을 눌러야 구글시트에 (수정N) 탭으로 기록됩니다.'
+          : '오른쪽 위 설정 아이콘 → <b>관리자 모드</b>로 들어가 <b>저장</b>을 눌러야 구글시트에 남습니다.')
+      + '</p>'
+      + '<div class="wvA-bar"><button class="pri" id="wvApDone">확인</button></div>'));
+    document.getElementById('wvApDone').onclick = close;
+  }
+
+  function hook(){
+    var b = document.getElementById('wvAeBtn');
+    if(b && !b.__wvPicked){
+      origHandler = b.onclick;
+      b.onclick = function(){ chooser(); };
+      b.__wvPicked = true;
+    }
+    setTimeout(hook, 1500);
+  }
+  setTimeout(hook, 2500);
+})();
+</script>
+
 </html>
