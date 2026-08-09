@@ -2325,9 +2325,45 @@ try{ window.__ENH(); }catch(e){}
     })();
   };
 
-  function loop(){ paint(); setTimeout(loop, 1200); }
+  function loop(){
+    paint();
+    try{ if(recount() > 0){ var R = rowsNow(); render(R); if(window.__wvSyncEdit) window.__wvSyncEdit(R); setTimeout(paint, 60); } }catch(x){}
+    setTimeout(loop, 1200);
+  }
   setTimeout(loop, 2000);
 })();
 </script>
 
+<script>
+/* ===== 칸 선택 메뉴에 '제외' 넣기 =====
+   관리자 편집 모드에서 날짜 칸을 누르면 나오는 목록 맨 끝에
+   검정 '제외'를 붙인다. 값은 기존 처리기가 그대로 넣는다. */
+(function(){
+  if(window.__wvPickExcl) return; window.__wvPickExcl = true;
+  var MARK = '제외';
+
+  function css(){
+    if(document.getElementById('wvPxCss')) return;
+    var st = document.createElement('style'); st.id = 'wvPxCss';
+    st.textContent = '#wvPick button.wvPxBtn{background:#23262e !important;color:#fff !important;'
+      + 'font-weight:700 !important;border-color:#23262e !important;}'
+      + '#wvPick button.wvPxBtn:hover{background:#3a3f4c !important;}';
+    document.head.appendChild(st);
+  }
+
+  function tick(){
+    var p = document.getElementById('wvPick');
+    if(p && p.style.display === 'block' && !p.querySelector('.wvPxBtn')){
+      css();
+      var b = document.createElement('button');
+      b.className = 'wvPxBtn';
+      b.setAttribute('data-v', MARK);
+      b.textContent = '제외 (합계 제외)';
+      p.appendChild(b);
+    }
+    setTimeout(tick, 200);
+  }
+  setTimeout(tick, 1500);
+})();
+</script>
 </html>
