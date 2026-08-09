@@ -432,7 +432,6 @@ window.__ENH=function(){
     ].join('\n');
     document.head.appendChild(st);
   }
-  window.__wvWizCss = css;
   if(!document.getElementById('wvBar')){ var b=document.createElement('div'); b.id='wvBar'; document.body.appendChild(b); }
   if(!document.getElementById('wvModal')){ var m=document.createElement('div'); m.id='wvModal'; m.addEventListener('click',function(e){ if(e.target===m) window.__wvClose(); }); document.body.appendChild(m); }
   var tbl=document.getElementById('schedTable'); if(!tbl) return;
@@ -1641,6 +1640,7 @@ try{ window.__ENH(); }catch(e){}
     ].join('');
     document.head.appendChild(st);
   }
+  window.__wvWizCss = css;
   function ov(){
     var o = document.getElementById('wvAeOv');
     if(!o){ o = document.createElement('div'); o.id = 'wvAeOv';
