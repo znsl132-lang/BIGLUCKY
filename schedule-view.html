@@ -776,10 +776,10 @@ try{ window.__ENH(); }catch(e){}
 
   /* 직원 추가·수정 블록이 표를 다시 그린 뒤 편집 상태를 되살리기 위한 다리 */
   window.__wvActiveRows = function(){
-    return (document.body.classList.contains('wvEditing') && ED) ? ED.rows : window.__wvRows;
+    return (document.body.classList.contains('wvEditing') && ED && ED.rows) ? ED.rows : window.__wvRows;
   };
   window.__wvSyncEdit = function(rows){
-    if(!document.body.classList.contains('wvEditing') || !ED) return false;
+    if(!document.body.classList.contains('wvEditing') || !ED || !ED.rows || !ED.orig) return false;
     var w = (ED.rows[0] || []).length;
     while(ED.orig.length < rows.length){
       var blank = [];
@@ -1883,7 +1883,7 @@ try{ window.__ENH(); }catch(e){}
   function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){
     return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]; }); }
   function isAdmin(){ return !!window.__wvPw || document.body.classList.contains('wvEditing'); }
-  function rowsNow(){ return window.__wvActiveRows ? window.__wvActiveRows() : window.__wvRows; }
+  function rowsNow(){ var r = window.__wvActiveRows ? window.__wvActiveRows() : null; return (r && r.length) ? r : window.__wvRows; }
 
   function ov(){
     var o = document.getElementById('wvAeOv');
