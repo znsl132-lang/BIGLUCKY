@@ -112,6 +112,8 @@
   .stats th{color:var(--sub);font-weight:600;font-size:10.5px}
   .stats td.keep{color:var(--text);font-weight:800}
   .stats td.zero{color:#d1d5db}
+  /* 미집계가 0 이 아니면 사유 없이 사라진 글이 있다는 뜻 — 바로 보이게 */
+  .stats td.bad{color:var(--hot);font-weight:800;background:#fff1f1}
 
   /* 시행 예정 — 언제부터 뭐가 바뀌는지 */
   .cal{background:#111;color:#fff;border-radius:var(--radius);padding:14px 16px;
@@ -584,29 +586,43 @@ function drawStats(){
   const st = DATA.stats;
   if(!st || !Object.keys(st).length){ $("statsBox").hidden = true; return; }
   $("statsBox").hidden = false;
-  const cols = ["수집","기간밖","날짜불명","스팸","차단도메인","차단어","소재불일치","제목불일치","카페불일치","중복","매체상한","최종"];
-  const label = {store:"우리 매장",watch:"판매 감시",reg:"규제·단속",vape:"업계·시장",
-                 nonic:"무니코틴",community:"커뮤니티",brand:"경쟁사·브랜드"};
+  const drops = ["기간밖","날짜불명","스팸","차단도메인","차단어","광고","정치",
+                 "소재불일치","제목불일치","카페불일치","중복","재등장","매체상한","표시상한"];
+  const cols = ["수집", ...drops, "미집계", "최종"];
+  // '미집계' = 수집에서 탈락 사유 합계와 최종을 뺀 나머지.
+  // 0 이어야 정상이다. 숫자가 남으면 어딘가에서 사유 없이 버려지고 있다는 뜻이라
+  // 필터를 고쳐도 맞게 고쳤는지 확인할 수 없게 된다.
+  const 미집계 = r => (r["수집"]||0) - drops.reduce((a,c)=>a+(r[c]||0),0) - (r["최종"]||0);
+
   const rows = (DATA.groups||[]).map(g=>{
     const r = st[g.id]; if(!r) return "";
     return `<tr><td>${esc(g.label)}</td>` + cols.map(c=>{
-      const v = r[c] ?? 0;
-      const cls = c==="최종" ? "keep" : (v===0 ? "zero" : "");
+      const v = c==="미집계" ? 미집계(r) : (r[c] ?? 0);
+      const cls = c==="최종" ? "keep"
+                : c==="미집계" ? (v!==0 ? "bad" : "zero")
+                : (v===0 ? "zero" : "");
       return `<td class="${cls}">${v.toLocaleString()}</td>`;
     }).join("") + "</tr>";
   }).join("");
+
   const tot = {};
-  cols.forEach(c=> tot[c] = Object.values(st).reduce((a,r)=>a+(r[c]||0),0));
+  cols.forEach(c=> tot[c] = Object.values(st).reduce(
+    (a,r)=> a + (c==="미집계" ? 미집계(r) : (r[c]||0)), 0));
   $("statsTable").innerHTML = `<table>
     <thead><tr><th>탭</th>${cols.map(c=>`<th>${c}</th>`).join("")}</tr></thead>
     <tbody>${rows}
       <tr style="border-top:2px solid var(--line)"><td>합계</td>${
-        cols.map(c=>`<td class="${c==="최종"?"keep":""}">${tot[c].toLocaleString()}</td>`).join("")}</tr>
+        cols.map(c=>`<td class="${c==="최종"?"keep":c==="미집계"&&tot[c]!==0?"bad":""}">${
+          tot[c].toLocaleString()}</td>`).join("")}</tr>
     </tbody></table>
-    <div style="font-size:11px;color:var(--sub);margin-top:8px">
+    <div style="font-size:12px;color:var(--sub);margin-top:8px;line-height:1.7">
       수집 ${tot["수집"].toLocaleString()}건 중 ${tot["최종"].toLocaleString()}건 통과
       (통과율 ${(tot["최종"]/Math.max(tot["수집"],1)*100).toFixed(1)}%) ·
-      API 호출 ${DATA.apiCalls||0}회 · 매장 ${DATA.storeCount||0}개 지점
+      API 호출 ${DATA.apiCalls||0}회 · 매장 ${DATA.storeCount||0}개 지점<br>
+      ${tot["미집계"]===0
+        ? `<span style="color:var(--up);font-weight:600">미집계 0 — 모든 탈락 건에 사유가 기록됩니다.</span>`
+        : `<span style="color:var(--hot);font-weight:700">⚠ 미집계 ${tot["미집계"].toLocaleString()}건 —
+           사유 없이 사라진 글이 있습니다. 0건 탭이 생겨도 원인을 짚을 수 없습니다.</span>`}
     </div>`;
 }
 
