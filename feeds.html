@@ -514,6 +514,12 @@ function renderLaws(){
     ${sub?`<span style="font-weight:500;color:var(--sub);font-size:12px"> · ${sub}</span>`:""}</div>`;
   let h = "";
 
+  if(LAWS.staleSince)
+    h += `<div class="empty" style="text-align:left;border:1px solid var(--hot);border-radius:10px;
+      padding:12px 14px;color:var(--hot);font-weight:600">
+      ⚠ 이번 조회가 실패해 이전 자료를 보여주고 있습니다. 마지막으로 성공한 시각은
+      ${esc(LAWS.staleSince)} 입니다. 그 이후 개정분은 빠져 있을 수 있습니다.</div>`;
+
   if(LAWS.ocIsTest)
     h += `<div class="empty" style="text-align:left;border-color:var(--yellow)">
       ⚠ 법제처 공용 test 계정으로 조회 중입니다. 조회가 끊길 수 있으니 전용 ID(LAW_OC)를 등록하세요.</div>`;
