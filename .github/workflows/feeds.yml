@@ -31,6 +31,12 @@ jobs:
           NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
         run: python collect_feeds.py
 
+      - name: 법령·법안 수집 (법제처 · 국회)
+        env:
+          LAW_OC: ${{ secrets.LAW_OC }}
+          ASSEMBLY_KEY: ${{ secrets.ASSEMBLY_KEY }}
+        run: python collect_laws.py
+
       - name: 카톡 알림 (설정 없으면 자동 건너뜀)
         continue-on-error: true
         env:
@@ -43,7 +49,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add feeds.json
+          git add feeds.json laws.json
           if git diff --staged --quiet; then
             echo "변경 없음"
           else
