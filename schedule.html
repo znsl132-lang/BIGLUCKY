@@ -738,7 +738,7 @@ function genOnce(y,m,nDays,reqs,mk,seed,preset){
     const pmk=pm.getFullYear()+'-'+String(pm.getMonth()+1).padStart(2,'0');
     const pc=S.lastSched&&S.lastSched[pmk];
     if(!pc) return;
-    const restP=v=>v===''||v==='전휴무'||v==='휴가'||v==='병가';
+    const restP=v=>v===''||v==='전휴무'||v==='휴가'||v==='병가'||v==='제외';
     S.emps.forEach(e=>{
       const a=pc[e.name]; if(!a) return;
       let c=0;
@@ -877,7 +877,7 @@ function genOnce(y,m,nDays,reqs,mk,seed,preset){
     for(let k=0;k<nDays;k++){
       const v=cells[e.name][k];
       if(!v||v===OFF||['휴가','병가','훈련','출장','전휴무'].includes(v)) continue;
-      if(v.replace(/\((OP|CL)\)$/,'')===e.home) home++; else away++;
+      if(v.replace(/\((OP|CL|PT)\)$/,'')===e.home) home++; else away++;
     }
     return away<home;
   };
@@ -2120,7 +2120,7 @@ function importXlsx(){
       const c0=4; // 소속/성명/직책/구분 다음부터 날짜
       const cells={}; const unknown=[]; const badVals=new Set();
       const knownStores=new Set(S.stores.map(s2=>s2.n));
-      const knownAbs=['휴가','병가','훈련','출장','전휴무'];
+      const knownAbs=['휴가','병가','훈련','출장','전휴무','제외'];
       for(let r=3;r<aoa.length;r++){
         const row=aoa[r]; if(!row||!String(row[1]||'').trim()) continue;
         const name=String(row[1]).trim();
@@ -3974,5 +3974,121 @@ function wvChkInit(){
   setTimeout(boot, 1800);
 }
 wvChkInit();
+</script>
+<script>
+/* ===== 뷰어 값 호환 + 매장 캘린더 =====
+   ① 셀 값 '매장(PT)' 는 매장 색 + PT 배지로, '제외' 는 검정으로 그린다.
+   ② 매장명을 더블클릭하면 그 매장의 한 달 근무 인력을 달력으로 본다. */
+(function(){
+  if(window.__wvGenCompat) return; window.__wvGenCompat = true;
+  var MARK = '제외';
+
+  function css(){
+    if(document.getElementById('wvGcCss')) return;
+    var st = document.createElement('style'); st.id = 'wvGcCss';
+    st.textContent = [
+      '#schedTable td.wvXc{background:#23262e !important;color:transparent !important;}',
+      '#schedTable td.wvXc *{color:transparent !important}',
+      '#schedTable .opcl.pt{color:#1f7a5a;font-weight:800}',
+      '.sc-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}',
+      '.sc-h{font-size:11px;color:#8a8b93;text-align:center;font-weight:700}',
+      '.sc-c{min-height:62px;border:1px solid #e3e6ee;border-radius:8px;padding:4px 5px;font-size:11px;line-height:1.45;background:#fff}',
+      '.sc-c.sun{background:#fff6f6}.sc-c.sat{background:#f5f9ff}',
+      '.sc-c.short{border-color:#e06a6a;background:#fff2f2}',
+      '.sc-c.empty{background:#fafbfc;border-style:dashed}',
+      '.sc-d{font-weight:800;color:#2b2d42;display:block;margin-bottom:2px}',
+      '.sc-n{display:block;color:#3b4252}',
+      '.sc-cnt{float:right;font-size:10px;font-weight:800;color:#8a8b93}',
+      '.sc-c.short .sc-cnt{color:#c5221f}'
+    ].join('');
+    document.head.appendChild(st);
+  }
+
+  /* ── ① 표시 보정 ── */
+  function base(v){ return String(v || '').replace(/\((OP|CL|PT)\)$/, ''); }
+  function paint(){
+    css();
+    var tds = document.querySelectorAll('#schedTable td[data-d]');
+    for(var i = 0; i < tds.length; i++){
+      var td = tds[i], txt = String(td.textContent || '').trim();
+      if(txt === MARK){
+        if(!td.classList.contains('wvXc')){ td.classList.add('wvXc'); td.style.background = '#23262e'; }
+        continue;
+      }
+      if(td.classList.contains('wvXc')){ td.classList.remove('wvXc'); td.style.background = ''; }
+      if(txt.length > 4 && txt.slice(-4) === '(PT)' && !td.querySelector('.opcl.pt')){
+        var b = base(txt);
+        td.innerHTML = b + '<span class="opcl pt">PT</span>';
+        try{ td.style.background = storeColor(b); }catch(x){}
+      }
+    }
+  }
+
+  /* ── ② 매장 캘린더 ── */
+  window.showStoreCal = function(store){
+    if(typeof sched === 'undefined' || !sched){ alert('먼저 스케줄을 생성하세요.'); return; }
+    css();
+    var Y = sched.year, M = sched.month, nD = sched.nDays, cells = sched.cells;
+    var need = 0;
+    try{ (S.stores || []).forEach(function(s){ if(s.n === store) need = +s.need || 0; }); }catch(x){}
+    var first = new Date(Y, M - 1, 1).getDay();
+    var html = '<div class="sc-grid">'
+      + ['일','월','화','수','목','금','토'].map(function(w){ return '<div class="sc-h">' + w + '</div>'; }).join('');
+    for(var i = 0; i < first; i++) html += '<div class="sc-c empty"></div>';
+    var totalShort = 0, totalMan = 0;
+    for(var d = 0; d < nD; d++){
+      var who = [];
+      for(var nm in cells){
+        var v2 = String((cells[nm] || [])[d] || '').trim();
+        if(base(v2) !== store) continue;
+        var tail = '';
+        if(/\(OP\)$/.test(v2)) tail = ' OP';
+        else if(/\(CL\)$/.test(v2)) tail = ' CL';
+        else if(/\(PT\)$/.test(v2)) tail = ' PT';
+        who.push(nm + tail);
+      }
+      totalMan += who.length;
+      var short = need && who.length < need;
+      if(short) totalShort++;
+      var dow = new Date(Y, M - 1, d + 1).getDay();
+      html += '<div class="sc-c' + (short ? ' short' : '') + (dow === 0 ? ' sun' : dow === 6 ? ' sat' : '') + '">'
+        + '<span class="sc-d">' + (d + 1) + '<span class="sc-cnt">' + who.length + (need ? '/' + need : '') + '</span></span>'
+        + who.map(function(x){ return '<span class="sc-n">' + x + '</span>'; }).join('')
+        + '</div>';
+    }
+    html += '</div>';
+    var modal = document.getElementById('empModal');
+    modal.innerHTML = '<div class="ec-card" onclick="event.stopPropagation()">'
+      + '<div class="ec-head"><div class="ec-name"><b>' + store + '</b>'
+      + (need ? ' <span class="ec-ttl">하루 ' + need + '명</span>' : '') + '</div>'
+      + '<div class="ec-sub">' + Y + '년 ' + M + '월 · 연인원 ' + totalMan + '명'
+      + (totalShort ? ' · <b style="color:#c5221f">부족 ' + totalShort + '일</b>' : ' · 공백 없음') + '</div></div>'
+      + html + '</div>';
+    modal.style.display = 'flex';
+  };
+
+  /* 더블클릭 연결: 표의 매장 칸 · ① 탭 매장명 입력칸 */
+  document.addEventListener('dblclick', function(e){
+    var t = e.target;
+    if(!t) return;
+    var inp = t.closest ? t.closest('input') : null;
+    if(inp && inp.value && inp.closest('#storeList, #storeBox, table')){
+      var nm0 = String(inp.value).trim();
+      var isStore = false;
+      try{ (S.stores || []).forEach(function(s){ if(s.n === nm0) isStore = true; }); }catch(x){}
+      if(isStore){ e.preventDefault(); window.showStoreCal(nm0); return; }
+    }
+    var td = t.closest ? t.closest('#schedTable td[data-d]') : null;
+    if(td){
+      var b = base(String(td.textContent || '').trim());
+      var ok = false;
+      try{ (S.stores || []).forEach(function(s){ if(s.n === b) ok = true; }); }catch(x){}
+      if(ok){ e.preventDefault(); window.showStoreCal(b); }
+    }
+  }, true);
+
+  function loop(){ try{ paint(); }catch(x){} setTimeout(loop, 1200); }
+  setTimeout(loop, 2000);
+})();
 </script>
 </html>
