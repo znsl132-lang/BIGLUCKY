@@ -113,6 +113,14 @@ const REPO="znsl132-lang/BIGLUCKY", BRANCH="main", FILE="countries.json";
 const URLS=[`https://raw.githubusercontent.com/${REPO}/${BRANCH}/${FILE}`, FILE];
 const esc = s => String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
+// 한국인이 실제로 많이 가는 순서. 같은 등급 안에서 이 순서가 먼저 온다.
+// 손님이 묻는 건 태국·일본·베트남이지 감비아가 아니다.
+const HOT=["일본","베트남","태국","필리핀","중국","대만","홍콩","싱가포르","마카오",
+  "말레이시아","인도네시아","미국","괌·사이판","호주","뉴질랜드","캐나다","인도","몰디브",
+  "튀르키예","아랍에미리트","카타르","프랑스","이탈리아","스페인","영국","독일","스위스",
+  "체코","오스트리아","네덜란드","멕시코","브라질"];
+const hotRank = n => { const i=HOT.indexOf(n); return i<0 ? 999 : i; };
+
 let DATA=null, filter="all", term="";
 
 async function boot(){
@@ -166,7 +174,9 @@ function draw(){
     if(filter!=="all" && c.level!==filter) return false;
     if(!term) return true;
     return (c.name+" "+c.en+" "+c.region).toLowerCase().includes(term);
-  }).sort((a,b)=> (rank[a.level]-rank[b.level]) || a.name.localeCompare(b.name,"ko"));
+  }).sort((a,b)=> (rank[a.level]-rank[b.level])
+               || (hotRank(a.name)-hotRank(b.name))
+               || a.name.localeCompare(b.name,"ko"));
 
   document.getElementById("count").textContent =
     term ? `"${term}" 검색 결과 ${cs.length}개국` : `${cs.length}개국`;
