@@ -8,12 +8,17 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
 <style>
 :root{
-  --y:#FFC41E; --ink:#111; --sub:#666; --line:#e5e5e5; --bg:#fafafa;
+  --y:#FFC41E; --ink:#111; --line:#e5e5e5; --bg:#fafafa;
+  /* 본문 회색. #666 은 13px 이하에서 흐려서 한 단계 진하게 */
+  --sub:#4b5563; --dim:#6b7280;
   --ban:#d92d20; --risk:#e07000; --cond:#b58900; --ok:#0b8a3e; --unk:#8a8a8a;
+  /* 한 줄 42자 제한. 한글은 35~45자를 넘으면 다음 줄을 놓친다 */
+  --read:42em;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:Pretendard,-apple-system,BlinkMacSystemFont,"Malgun Gothic",sans-serif;
-     background:var(--bg);color:var(--ink);line-height:1.6;-webkit-text-size-adjust:100%}
+     background:var(--bg);color:var(--ink);line-height:1.75;-webkit-text-size-adjust:100%;
+     word-break:keep-all;overflow-wrap:break-word}
 .wrap{max-width:1000px;margin:0 auto;padding:0 16px 60px}
 
 header{background:var(--ink);color:#fff;padding:18px 0;margin-bottom:20px}
@@ -25,9 +30,10 @@ header .wrap{padding-bottom:0}
 
 .notice{background:#fff8e1;border:1px solid var(--y);border-left:4px solid var(--y);
         border-radius:8px;padding:14px 16px;margin-bottom:18px}
-.notice h3{font-size:14px;margin-bottom:8px}
-.notice ol{margin:0;padding-left:18px;font-size:13px;color:#444}
-.notice li{margin-bottom:4px}
+.notice h3{font-size:15px;margin-bottom:10px}
+.notice ol{margin:0;padding-left:20px;font-size:14px;color:#3a3a3a}
+.notice li{margin-bottom:8px;line-height:1.8;max-width:var(--read);padding-left:3px}
+.notice li:last-child{margin-bottom:0}
 
 .tools{position:sticky;top:0;z-index:10;background:var(--bg);padding:12px 0;border-bottom:1px solid var(--line);margin-bottom:16px}
 #q{width:100%;padding:13px 15px;font-size:16px;font-family:inherit;
@@ -53,12 +59,14 @@ header .wrap{padding-bottom:0}
 .lv{margin-left:auto;font-size:12px;font-weight:700;padding:3px 10px;border-radius:6px;color:#fff}
 .lv.ban{background:var(--ban)} .lv.risk{background:var(--risk)}
 .lv.cond{background:var(--cond)} .lv.ok{background:var(--ok)} .lv.unknown{background:var(--unk)}
-.pen{font-size:13px;color:#333;margin-top:7px}
-.kv{display:flex;gap:14px;flex-wrap:wrap;margin-top:7px;font-size:12px}
+.pen{font-size:14.5px;color:#2b2b2b;margin-top:9px;line-height:1.7;max-width:var(--read)}
+.kv{display:flex;gap:16px;flex-wrap:wrap;margin-top:9px;font-size:13px;row-gap:5px}
 .kv span{color:var(--sub)}
-.kv b{color:var(--ink);font-weight:600}
-.nt{font-size:13px;color:#444;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
-.src{margin-top:8px;font-size:11px;color:var(--sub);display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.kv b{color:var(--ink);font-weight:700}
+.nt{font-size:14px;color:#3a3a3a;margin-top:11px;padding-top:10px;line-height:1.8;
+    max-width:var(--read);border-top:1px dashed var(--line)}
+.src{margin-top:11px;font-size:12px;color:var(--dim);display:flex;gap:7px;flex-wrap:wrap;
+     align-items:center;row-gap:5px}
 .src a{color:#0645ad;text-decoration:none;border:1px solid var(--line);padding:1px 7px;border-radius:4px}
 .src a:hover{background:#f0f0f0}
 
@@ -67,11 +75,39 @@ header .wrap{padding-bottom:0}
 .srcbox{margin-top:34px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:18px}
 .srcbox h3{font-size:15px;margin-bottom:4px}
 .srcbox>p{font-size:12px;color:var(--sub);margin-bottom:14px}
-.srcbox li{list-style:none;padding:10px 0;border-top:1px solid var(--line);font-size:13px}
+.srcbox li{list-style:none;padding:12px 0;border-top:1px solid var(--line);font-size:14px}
 .srcbox li a{color:#0645ad;font-weight:600;text-decoration:none;word-break:break-all}
-.srcbox li p{font-size:12px;color:var(--sub);margin-top:3px}
-footer{margin-top:22px;font-size:11px;color:#999;line-height:1.8}
-@media(max-width:600px){.lv{margin-left:0}.ct h2{font-size:16px}}
+.srcbox li p{font-size:13px;color:var(--sub);margin-top:4px;line-height:1.7;max-width:var(--read)}
+footer{margin-top:22px;font-size:12px;color:#8a8a8a;line-height:1.9;max-width:var(--read)}
+
+/* ── 화면 폭 대응. 손님 앞에서 폰으로 꺼내 보는 화면이라 폰이 1순위다 ── */
+@media(max-width:600px){
+  :root{ --read:100%; }
+  .wrap{padding:0 13px 48px}
+  header{padding:14px 0;margin-bottom:16px}
+  .logo em{margin-left:0;width:100%;margin-top:3px}
+  .notice{padding:13px 14px}
+  .notice ol{padding-left:19px;font-size:13.5px}
+
+  /* 검색창은 폰에서 제일 중요한 요소다. 크게 두고 위에 붙여둔다 */
+  #q{padding:14px;font-size:16px}   /* 16px 미만이면 iOS 가 화면을 확대한다 */
+  .tools{padding:10px 0}
+  .chips{gap:5px;overflow-x:auto;flex-wrap:nowrap;margin:10px -13px 0;padding:0 13px 4px;
+         scrollbar-width:none}
+  .chips::-webkit-scrollbar{display:none}
+  .chip{padding:7px 12px;font-size:12.5px}
+
+  .card{padding:13px 14px}
+  /* 등급 배지를 오른쪽 끝에 두면 국가명이 두 글자씩 접힌다 → 이름 옆으로 */
+  .lv{margin-left:0;order:-1;font-size:11.5px}
+  .ct{gap:7px;row-gap:5px}
+  .ct h2{font-size:16.5px;width:100%}
+  .pen{font-size:14px}
+  .nt{font-size:13.5px}
+  .kv{gap:12px;font-size:12.5px}
+}
+@media(max-width:360px){ .ct h2{font-size:15.5px} .pen{font-size:13.5px} }
+@media(hover:none){ .src a:hover{background:transparent} }
 </style>
 </head>
 <body>
