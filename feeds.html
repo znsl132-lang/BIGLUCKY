@@ -270,7 +270,23 @@ async function load(){
     }catch(e){}
   }
   if(!DATA) DATA = SAMPLE;
+  await loadLaws();
   render();
+}
+
+// 법령·법안은 뉴스와 출처가 달라 파일을 따로 둔다.
+// 못 가져와도 뉴스 화면은 그대로 떠야 하므로 조용히 넘어간다.
+let LAWS = null;
+async function loadLaws(){
+  const urls = [`https://raw.githubusercontent.com/${REPO}/${BRANCH}/laws.json`, "laws.json"];
+  for(const u of urls){
+    try{
+      const r = await fetch(u + (u.startsWith("http") ? `?t=${Date.now()}` : ""), {cache:"no-store"});
+      if(!r.ok) continue;
+      LAWS = await r.json();
+      return;
+    }catch(e){}
+  }
 }
 
 // 한 부분에서 오류가 나도 화면 전체가 멈추지 않게 감싼다
@@ -327,14 +343,20 @@ function renderAll(){
   });
 
   // 탭 (신규 있는 그룹에 빨간 점)
+  const lawN = LAWS ? (LAWS.upcoming||[]).length + (LAWS.pendingCount||0) : 0;
   $("tabs").innerHTML = (DATA.groups||[]).map((g,i)=>{
     const n = g.items.filter(x=>x.new).length;
     const ng = g.items.filter(x=>x.neg).length;
     return `<button class="${i===curG?"on":""}" data-i="${i}">${esc(g.label)}
       <span class="n">${g.items.length}건</span>${ng?`<span class="dot" style="width:8px;height:8px"></span>`:n?'<span class="dot" style="background:var(--sub)"></span>':''}</button>`;
-  }).join("");
+  }).join("") + `<button class="${curG==="law"?"on":""}" data-i="law"
+      style="border-color:var(--yellow)">⚖ 법령·법안<span class="n">${lawN}건</span></button>`;
   $("tabs").querySelectorAll("button").forEach(b=>b.onclick=()=>{
-    curG=+b.dataset.i; curKw=null; showArch=false; $("why").hidden=true; render();});
+    const v = b.dataset.i;
+    curG = (v === "law") ? "law" : +v;
+    curKw=null; showArch=false; $("why").hidden=true; render();});
+
+  if(curG === "law"){ renderLaws(); return; }
 
   const g = (DATA.groups||[])[curG];
   if(!g){ $("list").innerHTML=`<div class="empty">데이터가 없습니다.</div>`; return; }
@@ -384,6 +406,84 @@ function renderAll(){
 
   drawStats();
   drawTrend();
+}
+
+// ⚖ 법령·법안 탭
+//   뉴스와 달리 원문이다. 통과된 법과 발의만 된 법안을 반드시 구분해서 보여준다.
+//   이 둘을 섞어서 안내하면 "이미 바뀐 줄 알았다" 같은 사고가 난다.
+function renderLaws(){
+  $("gdesc").textContent = "법제처·국회 원문 · 기사가 아니라 법령 자체입니다";
+  $("kwbar").innerHTML = "";
+  $("archBox").hidden = true;
+
+  if(!LAWS){
+    $("list").innerHTML = `<div class="empty">법령 자료를 아직 못 불러왔습니다.<br>
+      수집이 한 번도 돌지 않았거나 laws.json 이 없습니다.</div>`;
+    drawStats(); drawTrend(); return;
+  }
+
+  const dday = d => d > 0 ? `D-${d}` : d === 0 ? "오늘" : `${-d}일 전`;
+  const box = (t, sub) => `<div style="margin:18px 0 8px;font-weight:800;font-size:15px">${t}
+    ${sub?`<span style="font-weight:500;color:var(--sub);font-size:12px"> · ${sub}</span>`:""}</div>`;
+  let h = "";
+
+  if(LAWS.ocIsTest)
+    h += `<div class="empty" style="text-align:left;border-color:var(--yellow)">
+      ⚠ 법제처 공용 test 계정으로 조회 중입니다. 조회가 끊길 수 있으니 전용 ID(LAW_OC)를 등록하세요.</div>`;
+
+  // 1) 시행 예정 — 아직 안 바뀐 것. 가장 먼저 봐야 한다
+  const up = LAWS.upcoming || [];
+  if(up.length){
+    h += box("⏰ 곧 바뀝니다", "아직 시행 전입니다");
+    h += up.map(u=>`<a class="item new" href="${esc(u.link)}" target="_blank" rel="noopener noreferrer">
+      <div class="t">${esc(u.name)} <span style="color:var(--hot)">${dday(u.dday)}</span></div>
+      <div class="f"><span class="badge">📅 ${esc(u.effective)} 시행</span>
+        <span class="tag">${esc(u.revision)}</span>
+        <span>공포 ${esc(u.promulgated)} · 제${esc(u.no)}호</span></div></a>`).join("");
+  }
+
+  // 2) 현행 법령 — 지금 우리가 지켜야 하는 것
+  const ls = LAWS.laws || [];
+  if(ls.length){
+    h += box("📕 지금 적용 중인 법령", `${ls.length}종`);
+    h += ls.map(l=>`<a class="item" href="${esc(l.link)}" target="_blank" rel="noopener noreferrer">
+      <div class="t">${esc(l.name)}</div>
+      <div class="d">${esc(l.why)}</div>
+      ${l.reason?`<div class="d" style="margin-top:6px;color:var(--ink)">${esc(l.reason)}</div>`:""}
+      <div class="f"><span class="gov">🏛 ${esc(l.dept||"법제처")}</span>
+        <span class="badge">📅 ${esc(l.effective)} 시행</span>
+        <span class="tag">${esc(l.revision)}</span>
+        <span>공포 ${esc(l.promulgated)} · 제${esc(l.no)}호</span></div></a>`).join("");
+  }
+
+  // 3) 국회 계류 법안 — 아직 법이 아니다
+  const bills = LAWS.bills || [];
+  const pend = bills.filter(b=>!b.done);
+  h += box("🏛 국회에 올라간 법안", "아직 통과된 것이 아닙니다");
+  if(LAWS.billsNote){
+    h += `<div class="empty" style="text-align:left">${esc(LAWS.billsNote)}<br>
+      <span style="color:var(--sub);font-size:12px">열린국회정보에서 인증키를 받아 ASSEMBLY_KEY 로 등록하면 표시됩니다.</span></div>`;
+  } else if(!bills.length){
+    h += `<div class="empty">잡힌 법안이 없습니다.</div>`;
+  } else {
+    h += (pend.length ? pend : bills).slice(0,25).map(b=>`
+      <a class="item ${b.done?"":"new"}" href="${esc(b.link)}" target="_blank" rel="noopener noreferrer">
+        <div class="t">${esc(b.title)}</div>
+        <div class="f">
+          <span class="${b.done?"badge":"neg"}">${esc(b.result)}</span>
+          <span class="tag">${esc(b.kw)}</span>
+          <span>${esc(b.proposer)}</span>
+          <span>${esc(b.committee)}</span>
+          <span>발의 ${esc(b.date)}</span></div></a>`).join("");
+  }
+
+  h += `<div style="margin-top:22px;font-size:11px;color:var(--sub);line-height:1.9">
+    갱신 ${esc(LAWS.updatedAt||"-")}<br>` +
+    (LAWS.sources||[]).map(s=>`출처 · <a href="${esc(s.url)}" target="_blank" rel="noopener"
+      style="color:#0645ad">${esc(s.name)}</a> — ${esc(s.note)}`).join("<br>") + `</div>`;
+
+  $("list").innerHTML = h;
+  drawStats(); drawTrend();
 }
 
 // 감독관 지시 ④ — 매 실행의 수집·차단 건수를 화면 아래에 남긴다
