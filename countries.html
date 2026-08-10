@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>WE VAPE 해외 반입 규제 조회</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+:root{
+  --y:#FFC41E; --ink:#111; --sub:#666; --line:#e5e5e5; --bg:#fafafa;
+  --ban:#d92d20; --risk:#e07000; --cond:#b58900; --ok:#0b8a3e; --unk:#8a8a8a;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Pretendard,-apple-system,BlinkMacSystemFont,"Malgun Gothic",sans-serif;
+     background:var(--bg);color:var(--ink);line-height:1.6;-webkit-text-size-adjust:100%}
+.wrap{max-width:1000px;margin:0 auto;padding:0 16px 60px}
+
+header{background:var(--ink);color:#fff;padding:18px 0;margin-bottom:20px}
+header .wrap{padding-bottom:0}
+.logo{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.logo b{background:var(--y);color:#000;padding:3px 10px;border-radius:5px;font-size:15px;letter-spacing:-.3px}
+.logo span{font-size:15px;font-weight:600}
+.logo em{font-style:normal;color:#aaa;font-size:12px;margin-left:auto}
+
+.notice{background:#fff8e1;border:1px solid var(--y);border-left:4px solid var(--y);
+        border-radius:8px;padding:14px 16px;margin-bottom:18px}
+.notice h3{font-size:14px;margin-bottom:8px}
+.notice ol{margin:0;padding-left:18px;font-size:13px;color:#444}
+.notice li{margin-bottom:4px}
+
+.tools{position:sticky;top:0;z-index:10;background:var(--bg);padding:12px 0;border-bottom:1px solid var(--line);margin-bottom:16px}
+#q{width:100%;padding:13px 15px;font-size:16px;font-family:inherit;
+   border:2px solid var(--ink);border-radius:9px;outline:none;background:#fff}
+#q:focus{border-color:var(--y)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.chip{border:1px solid var(--line);background:#fff;border-radius:20px;padding:6px 13px;
+      font-size:13px;font-family:inherit;cursor:pointer;color:#444;white-space:nowrap}
+.chip.on{background:var(--ink);color:#fff;border-color:var(--ink);font-weight:600}
+.count{font-size:13px;color:var(--sub);margin:12px 0 8px}
+
+.card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px 16px;
+      margin-bottom:9px;border-left:5px solid var(--line)}
+.card.ban{border-left-color:var(--ban)}
+.card.risk{border-left-color:var(--risk)}
+.card.cond{border-left-color:var(--cond)}
+.card.ok{border-left-color:var(--ok)}
+.card.unknown{border-left-color:var(--unk)}
+.ct{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.ct h2{font-size:17px;font-weight:700}
+.ct .en{font-size:12px;color:var(--sub)}
+.ct .rg{font-size:11px;color:var(--sub);background:#f2f2f2;padding:2px 8px;border-radius:10px}
+.lv{margin-left:auto;font-size:12px;font-weight:700;padding:3px 10px;border-radius:6px;color:#fff}
+.lv.ban{background:var(--ban)} .lv.risk{background:var(--risk)}
+.lv.cond{background:var(--cond)} .lv.ok{background:var(--ok)} .lv.unknown{background:var(--unk)}
+.pen{font-size:13px;color:#333;margin-top:7px}
+.kv{display:flex;gap:14px;flex-wrap:wrap;margin-top:7px;font-size:12px}
+.kv span{color:var(--sub)}
+.kv b{color:var(--ink);font-weight:600}
+.nt{font-size:13px;color:#444;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
+.src{margin-top:8px;font-size:11px;color:var(--sub);display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.src a{color:#0645ad;text-decoration:none;border:1px solid var(--line);padding:1px 7px;border-radius:4px}
+.src a:hover{background:#f0f0f0}
+
+.empty{text-align:center;padding:50px 20px;color:var(--sub);font-size:14px}
+
+.srcbox{margin-top:34px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:18px}
+.srcbox h3{font-size:15px;margin-bottom:4px}
+.srcbox>p{font-size:12px;color:var(--sub);margin-bottom:14px}
+.srcbox li{list-style:none;padding:10px 0;border-top:1px solid var(--line);font-size:13px}
+.srcbox li a{color:#0645ad;font-weight:600;text-decoration:none;word-break:break-all}
+.srcbox li p{font-size:12px;color:var(--sub);margin-top:3px}
+footer{margin-top:22px;font-size:11px;color:#999;line-height:1.8}
+@media(max-width:600px){.lv{margin-left:0}.ct h2{font-size:16px}}
+</style>
+</head>
+<body>
+
+<header><div class="wrap"><div class="logo">
+  <b>WE VAPE</b><span>해외 반입 규제 조회</span><em id="upd">불러오는 중</em>
+</div></div></header>
+
+<div class="wrap">
+
+  <div class="notice">
+    <h3 id="ctitle">국가와 상관없이 항상 적용되는 것</h3>
+    <ol id="crules"></ol>
+  </div>
+
+  <div class="tools">
+    <input id="q" type="search" placeholder="국가명을 입력하세요  (예: 태국, 일본, Thailand)" autocomplete="off">
+    <div class="chips" id="chips"></div>
+  </div>
+
+  <div class="count" id="count"></div>
+  <div id="list"></div>
+
+  <div class="srcbox">
+    <h3>이 자료는 어디서 가져왔나</h3>
+    <p>각 국가 카드 아래 출처 배지를 누르면 원문으로 이동합니다. 규제는 수시로 바뀌므로 확인일을 함께 표시합니다.</p>
+    <ul id="srclist"></ul>
+  </div>
+
+  <footer>
+    내부 참고용 화면입니다. 전자담배 관련 내용은 담배사업법상 광고 제한 대상이므로 이 페이지를 고객 대상으로 노출하지 마십시오.<br>
+    손님께는 화면은 보여주지 말고 내용만 구두로 안내하시고, 마지막에 "출국 전 해당국 대사관 홈페이지에서 꼭 다시 확인하세요"를 덧붙이세요.<br>
+    법률 자문이 아닙니다. 최종 판단 근거는 각국 세관·대사관 공지입니다.
+  </footer>
+</div>
+
+<script>
+const REPO="znsl132-lang/BIGLUCKY", BRANCH="main", FILE="countries.json";
+const URLS=[`https://raw.githubusercontent.com/${REPO}/${BRANCH}/${FILE}`, FILE];
+const esc = s => String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+let DATA=null, filter="all", term="";
+
+async function boot(){
+  for(const u of URLS){
+    try{
+      const r = await fetch(u+(u.startsWith("http")?"?t="+Date.now():""),{cache:"no-store"});
+      if(!r.ok) continue;
+      DATA = await r.json();
+      break;
+    }catch(e){}
+  }
+  if(!DATA){
+    document.getElementById("list").innerHTML =
+      '<div class="empty">자료를 불러오지 못했습니다.<br>새로고침해도 안 되면 관리자에게 알려주세요.</div>';
+    document.getElementById("upd").textContent="불러오기 실패";
+    return;
+  }
+  try{ renderAll(); }catch(e){
+    document.getElementById("list").innerHTML='<div class="empty">화면을 그리는 중 오류가 발생했습니다: '+esc(e.message)+'</div>';
+  }
+}
+
+function renderAll(){
+  document.getElementById("upd").textContent = "확인일 "+esc(DATA._갱신)+" · "+DATA.countries.length+"개국";
+  document.getElementById("ctitle").textContent = DATA.common.title;
+  document.getElementById("crules").innerHTML = DATA.common.rules.map(r=>`<li>${esc(r)}</li>`).join("");
+
+  const order=["all","ban","risk","cond","ok","unknown"];
+  document.getElementById("chips").innerHTML = order.map(k=>{
+    if(k==="all") return `<button class="chip on" data-k="all">전체 ${DATA.countries.length}</button>`;
+    const L=DATA.levels[k], n=DATA.countries.filter(c=>c.level===k).length;
+    return `<button class="chip" data-k="${k}">${L.icon} ${esc(L.label)} ${n}</button>`;
+  }).join("");
+  document.querySelectorAll(".chip").forEach(b=>b.onclick=()=>{
+    filter=b.dataset.k;
+    document.querySelectorAll(".chip").forEach(x=>x.classList.toggle("on",x===b));
+    draw();
+  });
+
+  document.getElementById("q").addEventListener("input",e=>{term=e.target.value.trim().toLowerCase();draw();});
+
+  document.getElementById("srclist").innerHTML = Object.values(DATA.sources).map(s=>
+    `<li><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.name)}</a><p>${esc(s.note)}</p></li>`).join("");
+
+  draw();
+}
+
+function draw(){
+  const rank={ban:0,risk:1,cond:2,unknown:3,ok:4};
+  let cs = DATA.countries.filter(c=>{
+    if(filter!=="all" && c.level!==filter) return false;
+    if(!term) return true;
+    return (c.name+" "+c.en+" "+c.region).toLowerCase().includes(term);
+  }).sort((a,b)=> (rank[a.level]-rank[b.level]) || a.name.localeCompare(b.name,"ko"));
+
+  document.getElementById("count").textContent =
+    term ? `"${term}" 검색 결과 ${cs.length}개국` : `${cs.length}개국`;
+
+  if(!cs.length){
+    document.getElementById("list").innerHTML =
+      '<div class="empty">해당하는 국가가 없습니다.<br>목록에 없는 나라는 아직 확인하지 못한 것이니 대사관 확인을 안내하세요.</div>';
+    return;
+  }
+
+  document.getElementById("list").innerHTML = cs.map(c=>{
+    const L=DATA.levels[c.level]||DATA.levels.unknown;
+    const srcs=(c.src||[]).map(k=>{
+      const s=DATA.sources[k]; if(!s) return "";
+      return `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.name)}</a>`;
+    }).join("");
+    return `<div class="card ${esc(c.level)}">
+      <div class="ct">
+        <h2>${esc(c.name)}</h2>
+        <span class="en">${esc(c.en)}</span>
+        <span class="rg">${esc(c.region)}</span>
+        <span class="lv ${esc(c.level)}">${L.icon} ${esc(L.label)}</span>
+      </div>
+      ${c.penalty?`<div class="pen">${esc(c.penalty)}</div>`:""}
+      ${(c.liquid||c.device)?`<div class="kv">
+        ${c.liquid?`<span>액상 <b>${esc(c.liquid)}</b></span>`:""}
+        ${c.device?`<span>기기 <b>${esc(c.device)}</b></span>`:""}
+      </div>`:""}
+      ${c.note?`<div class="nt">${esc(c.note)}</div>`:""}
+      <div class="src">출처 ${srcs||"<i>없음 — 확인 필요</i>"} <span>· 확인 ${esc(c.checked)}</span></div>
+    </div>`;
+  }).join("");
+}
+
+boot();
+</script>
+</body>
+</html>
