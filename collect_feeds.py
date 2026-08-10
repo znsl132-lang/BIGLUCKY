@@ -1184,6 +1184,19 @@ def build_top3(groups, now):
     return picked
 
 
+def cut(s, n):
+    """글자 수로 뭉텅 자르면 '연간 실적 전…' 처럼 단어 중간에서 끊긴다.
+    읽는 사람에게는 정보가 아니라 미끼가 된다. 띄어쓰기 경계에서 자른다."""
+    s = (s or "").strip()
+    if len(s) <= n:
+        return s
+    head = s[:n]
+    sp = head.rfind(" ")
+    if sp > n * 0.6:          # 너무 앞에서 끊기면 차라리 그대로 둔다
+        head = head[:sp]
+    return head.rstrip(" ,·-") + "…"
+
+
 def build_summary(groups, rising):
     """그날 요약 3줄. 매장 언급 > 판매 감시 > 급상승 > 최다 기사 순으로 뽑는다."""
     lines = []
@@ -1192,16 +1205,16 @@ def build_summary(groups, rising):
     # 직원이 아침에 보는 화면이다. 규제·단속을 맨 위에 둔다.
     rg = by_id.get("reg", {}).get("items", [])
     if rg:
-        lines.append(f"📋 규제·단속 {len(rg)}건 — {rg[0]['title'][:44]}")
+        lines.append(f"📋 규제·단속 {len(rg)}건 — {cut(rg[0]['title'], 44)}")
 
     st = by_id.get("store", {}).get("items", [])
     neg_st = [i for i in st if i["neg"]]
     new_st = [i for i in st if i["new"]]
     if neg_st:
         w = ", ".join(neg_st[0]["negWords"][:3])
-        lines.append(f"⚠️ 매장 불만족 신호 {len(neg_st)}건 ({w}) — {neg_st[0]['title'][:34]}")
+        lines.append(f"⚠️ 매장 불만족 신호 {len(neg_st)}건 ({w}) — {cut(neg_st[0]['title'], 34)}")
     if new_st:
-        lines.append(f"우리 매장 언급 {len(new_st)}건 — {new_st[0]['title'][:40]}")
+        lines.append(f"우리 매장 언급 {len(new_st)}건 — {cut(new_st[0]['title'], 40)}")
 
     wt = [i for i in by_id.get("watch", {}).get("items", []) if i["new"]]
     if wt:
@@ -1214,7 +1227,7 @@ def build_summary(groups, rising):
     if len(lines) < 3:
         vp = by_id.get("vape", {}).get("items", [])
         if vp:
-            lines.append(f"업종 뉴스 {len(vp)}건 — {vp[0]['title'][:40]}")
+            lines.append(f"업종 뉴스 {len(vp)}건 — {cut(vp[0]['title'], 40)}")
     if not lines:
         lines.append("특별히 눈에 띄는 건이 없습니다.")
     return lines[:3]
