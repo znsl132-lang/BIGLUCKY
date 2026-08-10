@@ -1,5 +1,6 @@
 {
- "updatedAt": "2026-08-10 16:11:36 KST",
+ "staleSince": "2026-08-10 16:11:36 KST",
+ "updatedAt": "2026-08-10 19:48:01 KST",
  "ocIsTest": true,
  "billsNote": "국회 인증키(ASSEMBLY_KEY)가 등록되지 않아 건너뛰었습니다",
  "laws": [
@@ -169,6 +170,5 @@
    "url": "https://open.assembly.go.kr/portal/openapi/main.do",
    "note": "국회에 발의된 법률안. 아직 통과된 것이 아님"
   }
- ],
- "staleSince": "2026-08-10 16:11:36 KST"
+ ]
 }
