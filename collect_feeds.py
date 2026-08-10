@@ -857,9 +857,15 @@ def main():
         g_cutoff = (now - timedelta(days=wd)) if wd else cutoff
         g_blog_days = wd if wd else 2
         items, dup_links, dup_titles, dup_descs = [], set(), set(), set()
+        # ★ 탈락 사유는 빠짐없이 세야 한다.
+        #   2026-08-10 점검에서 '기간밖·날짜불명·중복' 이 선언만 되고 한 번도
+        #   증가하지 않아 화면에서 늘 0 으로 찍히고 있었다. 그 결과 규제·단속 탭은
+        #   3,120건을 수집해 놓고 1,897건이 왜 빠졌는지 알 수 없는 상태였다.
+        #   판매감시·커뮤니티가 0건이 돼도 원인을 짚을 수 없었던 이유다.
         st = {"수집": 0, "기간밖": 0, "날짜불명": 0, "스팸": 0, "차단도메인": 0,
-              "차단어": 0, "소재불일치": 0, "제목불일치": 0, "카페불일치": 0,
-              "중복": 0, "매체상한": 0, "최종": 0}
+              "차단어": 0, "광고": 0, "정치": 0, "소재불일치": 0, "제목불일치": 0,
+              "카페불일치": 0, "중복": 0, "재등장": 0, "매체상한": 0,
+              "표시상한": 0, "최종": 0}
         per_source = {}          # 같은 언론사·카페가 화면을 점령하는 것을 막는다
 
         for src in g["sources"]:
@@ -892,10 +898,10 @@ def main():
                         try:
                             d = parsedate_to_datetime(it["pubDate"]).astimezone(KST)
                             if d < g_cutoff:
-                                continue
+                                st["기간밖"] += 1; continue
                             pub, dated = d.strftime("%Y-%m-%d %H:%M"), True
                         except Exception:
-                            continue
+                            st["날짜불명"] += 1; continue
                         # ★ 네이버가 주는 pubDate 는 '기사 작성일'이 아니라
                         #   '네이버에 제공된 시간'이다. 언론사가 옛 기사를 재송고하면
                         #   2023년 기사도 오늘 날짜로 온다 (라오스 단속 기사 — 2026-08-01).
@@ -904,22 +910,22 @@ def main():
                         if real and abs((datetime.strptime(real, "%Y-%m-%d").date()
                                          - d.date()).days) >= 2:
                             if real < g_cutoff.strftime("%Y-%m-%d"):
-                                continue        # 실제로는 기간 밖 → 제외
+                                st["기간밖"] += 1; continue   # 실제로는 기간 밖 → 제외
                             pub = real
                     elif it.get("postdate"):                    # 블로그 (YYYYMMDD)
                         try:
                             d = datetime.strptime(it["postdate"], "%Y%m%d").replace(tzinfo=KST)
                             if d.date() < (now - timedelta(days=g_blog_days)).date():
-                                continue
+                                st["기간밖"] += 1; continue
                             pub, dated = d.strftime("%Y-%m-%d"), True
                         except Exception:
-                            continue
+                            st["날짜불명"] += 1; continue
 
                     # ── 필터 ──
                     if g["drop_politics"] and any(w in blob for w in POLITICS_WORDS):
-                        continue
+                        st["정치"] += 1; continue
                     if g["drop_ads"] and any(w in blob for w in AD_WORDS):
-                        continue
+                        st["광고"] += 1; continue
                     # 검색 노출용 키워드 나열 스팸은 어느 그룹에서도 버린다
                     if is_keyword_spam(title, desc,
                                        it.get("cafename") or it.get("bloggername") or ""):
@@ -961,10 +967,10 @@ def main():
                     if rt and not any(w in title.lower() for w in rt):
                         st["제목불일치"] += 1; continue
                     if any(w in title for w in NOISE_WORDS):
-                        continue
+                        st["차단어"] += 1; continue
                     # 강력범죄·사건 기사는 어느 그룹에서도 제외 (제목+요약 모두 검사)
                     if any(w in blob for w in HARD_BLOCK):
-                        continue
+                        st["차단어"] += 1; continue
 
                     # ── 날짜가 안 온 소스(카페글·웹문서)는 직접 알아낸다 ──
                     #   ★ 못 찾으면 버린다. '날짜 미상'으로 남겨두면 10년 전 글이 섞인다.
@@ -973,14 +979,16 @@ def main():
                         got = resolve_pubdate(link, pubdates)
                         if got:
                             if got < g_cutoff.strftime("%Y-%m-%d"):
-                                continue          # 기간 밖 → 제외
+                                st["기간밖"] += 1; continue     # 기간 밖 → 제외
                             pub, dated = got, True
                         elif (src in DATE_EXEMPT_SOURCES
                               and any(d in low_link for d in NAVER_UGC_DOMAINS)):
                             # 네이버 카페·블로그는 sort=date 라 최신순이다. 날짜 없이도 통과시킨다.
                             pub = "날짜 미상"
                         else:
-                            continue              # 그 밖(웹문서 등)은 게시일 불명이면 제외
+                            # 그 밖(웹문서 등)은 게시일 불명이면 제외.
+                            # 이 숫자가 크면 필터가 아니라 '날짜를 못 읽어서' 비는 것이다.
+                            st["날짜불명"] += 1; continue
 
                     # ── 중복 ──
                     # 보도자료를 여러 매체가 그대로 받아쓰면 제목만 조금씩 다르다.
@@ -989,9 +997,9 @@ def main():
                     nd = re.sub(r"[^\w가-힣]", "", desc)[:45]
                     if link in dup_links or (nt and nt in dup_titles) \
                        or (len(nd) >= 25 and nd in dup_descs):
-                        continue
+                        st["중복"] += 1; continue
                     if link in taken:
-                        continue
+                        st["중복"] += 1; continue
                     dup_links.add(link)
                     if nt:
                         dup_titles.add(nt)
@@ -1003,8 +1011,9 @@ def main():
                     if is_new:
                         seen[lh] = today
                     # 날짜가 없는 소스는 신규가 아니면 버린다 (과거 글이 계속 쌓이는 것 방지)
+                    # 이 숫자가 크면 '새 글이 없어서' 0건인 것이지 필터 탓이 아니다.
                     if not dated and not is_new:
-                        continue
+                        st["재등장"] += 1; continue
 
                     where = (it.get("cafename") or it.get("bloggername")
                              or re.sub(r"^https?://(www\.|news\.|m\.)?([^/]+).*", r"\2", link))
@@ -1047,7 +1056,11 @@ def main():
         # 불만족 글을 맨 위로, 그다음 신규, 그다음 최신순
         TIER_RANK = {"gov": 3, "press": 2, "news": 1, "user": 0}
         # 매장 탭은 '손님 글'을 홍보 글보다 위로 올린다 (지시 ②)
-        st["최종"] = len(items)
+        # '최종'은 화면에 실제로 뜨는 건수여야 한다.
+        # 예전에는 상한을 적용하기 전 숫자라 통계표에 52건이라 적혀 있는데
+        # 화면에는 30건만 있는 상황이 생겼다. 넘친 몫은 '표시상한'으로 따로 센다.
+        st["표시상한"] = max(0, len(items) - MAX_PER_GROUP)
+        st["최종"] = min(len(items), MAX_PER_GROUP)
         stats[g["id"]] = st
         items.sort(key=lambda x: (x["neg"],
                                   1 if x.get("voice") == "customer" else 0,
