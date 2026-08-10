@@ -24,6 +24,7 @@ import json
 import os
 import re
 import sys
+import time
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -52,12 +53,22 @@ BILL_WORDS = ["담배", "니코틴", "전자담배", "흡연", "금연"]
 BILL_NOISE = ["엽연초", "연초경작", "재배농가", "경작자", "농업소득"]
 
 
-def get(url, timeout=15):
-    with urlopen(Request(url, headers=UA), timeout=timeout) as r:
-        return r.read().decode("utf-8", "replace")
+def get(url, timeout=25, retries=3):
+    """법제처는 공용 test 계정일 때 자주 느려진다. 한 번 실패했다고 포기하지 않는다.
+    2026-08-10 실행에서 5종 전부 timeout 이 나서 재시도를 넣었다."""
+    last = None
+    for i in range(retries):
+        try:
+            with urlopen(Request(url, headers=UA), timeout=timeout) as r:
+                return r.read().decode("utf-8", "replace")
+        except Exception as e:
+            last = e
+            if i < retries - 1:
+                time.sleep(2 * (i + 1))       # 2초 → 4초
+    raise last
 
 
-def jget(url, timeout=15):
+def jget(url, timeout=25):
     return json.loads(get(url, timeout))
 
 
@@ -245,16 +256,46 @@ def main():
         u["dday"] = (datetime.strptime(u["effective"], "%Y-%m-%d").date() - now.date()).days
     upcoming.sort(key=lambda x: x["effective"])
 
-    # 최근 시행분(지난 180일)도 따로 모은다 — "이거 언제부터 바뀐 거죠?" 대비
-    since = (now - timedelta(days=180)).strftime("%Y-%m-%d")
-    recent = sorted([l for l in laws if l["effective"] >= since],
-                    key=lambda x: x["effective"], reverse=True)
-
     bills, bills_note = fetch_bills(os.environ.get("ASSEMBLY_KEY", "").strip())
     pending = [b for b in bills if not b["done"]]
     print(f"  국회 법안 {len(bills)}건 (계류 {len(pending)}건) {bills_note}")
 
+    # ── 실패했을 때 빈 파일로 덮어쓰지 않는다 ──
+    # 2026-08-10: 법제처가 전부 timeout 나면서 어제 잘 나오던 5종이 0건이 됐다.
+    # 법령은 매일 바뀌는 게 아니라 어제 값이 오늘도 거의 맞다.
+    # 못 가져왔으면 '모른다'가 아니라 '어제 것을 그대로 쓰되 언제 것인지 밝힌다'가 맞다.
+    prev = {}
+    try:
+        with open(OUT_PATH, encoding="utf-8") as f:
+            prev = json.load(f)
+    except Exception:
+        pass
+
+    stale_since = ""
+    if not laws and prev.get("laws"):
+        laws = prev["laws"]
+        upcoming = prev.get("upcoming", [])
+        # 보관해 둔 D-day 는 어제 기준이므로 오늘 기준으로 다시 센다
+        for u in upcoming:
+            try:
+                u["dday"] = (datetime.strptime(u["effective"], "%Y-%m-%d").date() - now.date()).days
+            except Exception:
+                pass
+        upcoming = [u for u in upcoming if u.get("dday", 0) > -14]
+        stale_since = prev.get("updatedAt", "") or "(시각 불명)"
+        print(f"  [보존] 이번 조회가 실패해 이전 자료를 유지합니다 — 마지막 성공 {stale_since}")
+
+    if not bills and prev.get("bills") and not bills_note:
+        bills = prev["bills"]
+        pending = [b for b in bills if not b["done"]]
+
+    # 최근 시행분(지난 180일) — 보존분까지 반영된 뒤에 계산해야 한다
+    since = (now - timedelta(days=180)).strftime("%Y-%m-%d")
+    recent = sorted([l for l in laws if l["effective"] >= since],
+                    key=lambda x: x["effective"], reverse=True)
+
     payload = {
+        "staleSince": stale_since,
         "updatedAt": now.strftime("%Y-%m-%d %H:%M:%S KST"),
         "ocIsTest": oc_is_test,
         "billsNote": bills_note,
