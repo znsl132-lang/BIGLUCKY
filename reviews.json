@@ -1,8 +1,8 @@
 {
-  "updatedAt": "2026-08-10 22:00",
+  "updatedAt": "2026-08-11 10:03",
   "branches": {
     "구월 로데오점": {
-      "naver": 2422,
+      "naver": 2424,
       "kakao": 19,
       "daangn": 19,
       "tmap": null
@@ -14,7 +14,7 @@
       "tmap": null
     },
     "부천 상동점": {
-      "naver": 1374,
+      "naver": 1372,
       "kakao": 10,
       "daangn": 5,
       "tmap": null
@@ -26,7 +26,7 @@
       "tmap": null
     },
     "인천 검단점": {
-      "naver": 94,
+      "naver": 93,
       "kakao": 1,
       "daangn": 1,
       "tmap": null
@@ -44,13 +44,13 @@
       "tmap": null
     },
     "인천 논현점": {
-      "naver": 1036,
+      "naver": 1034,
       "kakao": 27,
       "daangn": 12,
       "tmap": null
     },
     "인천 연수점": {
-      "naver": 1193,
+      "naver": 1192,
       "kakao": 70,
       "daangn": 1,
       "tmap": null
@@ -1452,6 +1452,62 @@
       },
       "인천 연수점": {
         "naver": 1193,
+        "kakao": 70,
+        "daangn": 1,
+        "tmap": null
+      }
+    },
+    "2026-08-11": {
+      "구월 로데오점": {
+        "naver": 2424,
+        "kakao": 19,
+        "daangn": 19,
+        "tmap": null
+      },
+      "구월 길병원점": {
+        "naver": 1317,
+        "kakao": 18,
+        "daangn": 2,
+        "tmap": null
+      },
+      "부천 상동점": {
+        "naver": 1372,
+        "kakao": 10,
+        "daangn": 5,
+        "tmap": null
+      },
+      "부천 신중동점": {
+        "naver": 1119,
+        "kakao": 9,
+        "daangn": 0,
+        "tmap": null
+      },
+      "인천 검단점": {
+        "naver": 93,
+        "kakao": 1,
+        "daangn": 1,
+        "tmap": null
+      },
+      "인천 계산점": {
+        "naver": 905,
+        "kakao": 1,
+        "daangn": 4,
+        "tmap": null
+      },
+      "인천 공항점": {
+        "naver": 109,
+        "kakao": 0,
+        "daangn": 0,
+        "tmap": null
+      },
+      "인천 논현점": {
+        "naver": 1034,
+        "kakao": 27,
+        "daangn": 12,
+        "tmap": null
+      },
+      "인천 연수점": {
+        "naver": 1192,
         "kakao": 70,
         "daangn": 1,
         "tmap": null
