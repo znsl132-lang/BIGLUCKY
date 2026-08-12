@@ -2825,7 +2825,8 @@ try{ window.__ENH(); }catch(e){}
 </script>
 <script>
 /* ===== 변경 이력 (표 하단) =====
-   상단 '변경 안내'를 누르면 부드럽게 내려가 전체 이력을 본다. 기존 팝업 대신 쓴다. */
+   상단 '변경 안내'를 누르면 부드럽게 내려가 전체 이력을 본다.
+   사람별로 묶고, 신규 직원 추가는 한 줄로 요약한다. */
 (function(){
   if(window.__wvHist) return; window.__wvHist = true;
 
@@ -2843,17 +2844,27 @@ try{ window.__ENH(); }catch(e){}
       '#wvHist .hd b{font-size:15px;color:#2b2d42;letter-spacing:-.3px}',
       '#wvHist .hd span{font-size:11.5px;color:#9a9ba6}',
       '#wvHist .box{border:1px solid #e6e8ef;border-radius:14px;background:#fff;overflow:hidden;transition:box-shadow .7s ease}',
-      '#wvHist .it{display:flex;gap:12px;padding:13px 15px;border-top:1px solid #f0f1f5;opacity:0;transform:translateY(7px);transition:opacity .42s cubic-bezier(.22,1,.36,1),transform .42s cubic-bezier(.22,1,.36,1)}',
-      '#wvHist .it:first-child{border-top:none}',
+      '#wvHist .it{padding:14px 16px;border-top:1px solid #f1f2f6;opacity:0;transform:translateY(7px);transition:opacity .42s cubic-bezier(.22,1,.36,1),transform .42s cubic-bezier(.22,1,.36,1)}',
+      '#wvHist .it:first-child{border-top:none;background:#fffdf6}',
       '#wvHist.in .it{opacity:1;transform:none}',
-      '#wvHist .dot{flex:0 0 auto;width:9px;height:9px;border-radius:50%;background:#c9a227;margin-top:6px}',
-      '#wvHist .it.old .dot{background:#d3d6de}',
-      '#wvHist .bd{flex:1;min-width:0}',
-      '#wvHist .t1{font-size:13px;color:#2b2d42;line-height:1.6;word-break:keep-all}',
-      '#wvHist .t2{font-size:11.5px;color:#9a9ba6;margin-top:3px}',
-      '#wvHist .memo{margin-top:5px;font-size:12px;color:#5b6b7a;background:#f7f8fb;border-radius:8px;padding:7px 9px;line-height:1.55}',
+      '#wvHist .top{display:flex;align-items:center;gap:7px;margin-bottom:9px}',
+      '#wvHist .when{font-size:12px;font-weight:800;color:#2b2d42;letter-spacing:-.2px}',
+      '#wvHist .tag{font-size:10.5px;color:#8a8f9c;background:#f2f3f7;border-radius:5px;padding:2px 6px;font-weight:700}',
+      '#wvHist .it:first-child .tag.now{background:#c9a227;color:#fff}',
+      '#wvHist .pr{display:flex;gap:9px;align-items:flex-start;padding:4px 0}',
+      '#wvHist .pn{flex:0 0 58px;font-size:12.5px;font-weight:800;color:#2b2d42;padding-top:3px;text-align:right}',
+      '#wvHist .cs{flex:1;display:flex;flex-wrap:wrap;gap:5px}',
+      '#wvHist .c{font-size:11.5px;line-height:1.5;border-radius:6px;padding:2px 7px;white-space:nowrap;border:1px solid transparent}',
+      '#wvHist .c i{font-style:normal;font-weight:800;margin-right:4px;opacity:.75}',
+      '#wvHist .c.add{background:#eaf7f0;color:#1f7a5a;border-color:#cdeadd}',
+      '#wvHist .c.off{background:#f4f5f8;color:#71757f;border-color:#e6e8ef}',
+      '#wvHist .c.mv{background:#eef3ff;color:#22409a;border-color:#d5dffb}',
+      '#wvHist .c.ex{background:#2b2d42;color:#fff;border-color:#2b2d42}',
+      '#wvHist .new{display:inline-flex;align-items:center;gap:6px;background:#fff6e5;border:1px solid #f0dcae;color:#8a6100;font-size:12.5px;font-weight:800;border-radius:8px;padding:5px 10px}',
+      '#wvHist .memo{margin-top:8px;font-size:12px;color:#5b6b7a;background:#f7f8fb;border-radius:8px;padding:7px 10px;line-height:1.55}',
       '#wvHist .empty{padding:22px 15px;text-align:center;color:#9a9ba6;font-size:12.5px}',
       '#wvHist.flash .box{box-shadow:0 0 0 3px rgba(201,162,39,.28)}',
+      '@media(max-width:600px){#wvHist .pn{flex-basis:46px;font-size:12px}#wvHist .c{font-size:11px}}',
       '#wvNotice{cursor:pointer;transition:filter .2s ease}',
       '#wvNotice:hover{filter:brightness(.96)}'
     ].join('');
@@ -2874,6 +2885,58 @@ try{ window.__ENH(); }catch(e){}
     return h;
   }
 
+  /* ── 변경 문구 쪼개기 ── */
+  function parse(s){
+    return String(s || '').split('·').map(function(x){ return x.trim(); })
+      .filter(function(x){ return x; })
+      .map(function(x){
+        var m = /^(\d+)일\s+(\S+)\s+(.+?)→(.+)$/.exec(x);
+        return m ? { d:+m[1], n:m[2], a:m[3].trim(), b:m[4].trim() } : { raw:x };
+      });
+  }
+  function kind(a, b){
+    if(a === '제외' || b === '제외') return 'ex';
+    if(a === '휴무') return 'add';
+    if(b === '휴무') return 'off';
+    return 'mv';
+  }
+
+  function bodyOf(auto){
+    var items = parse(auto);
+    var g = {}, order = [], loose = [];
+    items.forEach(function(x){
+      if(!x.n){ loose.push(x.raw); return; }
+      if(!g[x.n]){ g[x.n] = []; order.push(x.n); }
+      g[x.n].push(x);
+    });
+    /* 신규 추가 판정: 그 사람 변경이 12건 이상이고 거의 전부 휴무에서 시작 */
+    var fresh = order.filter(function(n){
+      var L = g[n];
+      if(L.length < 12) return false;
+      var f = L.filter(function(x){ return x.a === '휴무'; }).length;
+      return f / L.length >= 0.9;
+    });
+    var html = '';
+    if(fresh.length){
+      html += '<div class="new">＋ 신규 직원 추가 (' + fresh.map(esc).join(', ') + ')</div>';
+    }
+    var rest = order.filter(function(n){ return fresh.indexOf(n) < 0; });
+    rest.forEach(function(n){
+      html += '<div class="pr"><div class="pn">' + esc(n) + '</div><div class="cs">'
+        + g[n].sort(function(p, q){ return p.d - q.d; }).map(function(x){
+            return '<span class="c ' + kind(x.a, x.b) + '"><i>' + x.d + '일</i>'
+              + esc(x.a) + '→' + esc(x.b) + '</span>';
+          }).join('')
+        + '</div></div>';
+    });
+    if(loose.length){
+      html += '<div class="pr"><div class="pn"></div><div class="cs">'
+        + loose.map(function(x){ return '<span class="c mv">' + esc(x) + '</span>'; }).join('')
+        + '</div></div>';
+    }
+    return { html:html, n:items.length };
+  }
+
   function draw(list){
     var h = host();
     var box = document.getElementById('wvHsBox');
@@ -2887,12 +2950,15 @@ try{ window.__ENH(); }catch(e){}
     }
     sub.textContent = month() + ' · ' + list.length + '건';
     box.innerHTML = list.map(function(r, i){
-      return '<div class="it' + (i ? ' old' : '') + '" style="transition-delay:' + Math.min(i * 45, 400) + 'ms">'
-        + '<div class="dot"></div><div class="bd">'
-        + '<div class="t1">' + esc(r.what || '(내용 없음)') + '</div>'
-        + '<div class="t2">' + esc(r.when || '') + (r.tab ? ' · ' + esc(r.tab) : '') + '</div>'
+      var b = bodyOf(r.what);
+      return '<div class="it" style="transition-delay:' + Math.min(i * 45, 400) + 'ms">'
+        + '<div class="top"><span class="when">' + esc(r.when || '') + '</span>'
+        + (i === 0 ? '<span class="tag now">최신</span>' : '')
+        + (r.tab ? '<span class="tag">' + esc(r.tab.replace(/^\S+\s*/, '')) + '</span>' : '')
+        + '<span class="tag">' + b.n + '건</span></div>'
+        + b.html
         + (r.memo ? '<div class="memo">' + esc(r.memo) + '</div>' : '')
-        + '</div></div>';
+        + '</div>';
     }).join('');
     setTimeout(function(){ h.classList.add('in'); }, 30);
   }
@@ -2938,7 +3004,7 @@ try{ window.__ENH(); }catch(e){}
     var b = document.getElementById('wvNotice');
     var txt = b ? String(b.textContent || '').replace(/^[^가-힣]*변경 안내/, '').trim() : '';
     if(!txt){ draw(null); return; }
-    draw(txt.split('·').map(function(s){ return { what: s.trim() }; }).filter(function(x){ return x.what; }));
+    draw([{ what:txt, when:'', memo:'', tab:'' }]);
   }
 
   function ease(t){ return t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2; }
@@ -2978,12 +3044,7 @@ try{ window.__ENH(); }catch(e){}
     window.__wvGoHist();
   }, true);
 
-  function tip(){
-    var b = document.getElementById('wvNotice');
-    if(b && !b.title) b.title = '눌러서 변경 이력 전체 보기';
-    setTimeout(tip, 2000);
-  }
-  setTimeout(function(){ css(); host(); load(); tip(); }, 2200);
+  setTimeout(function(){ css(); host(); load(); }, 2200);
 
   var lastM = '';
   setInterval(function(){
