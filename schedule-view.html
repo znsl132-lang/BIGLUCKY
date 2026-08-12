@@ -323,7 +323,7 @@ async function loadMonth(m){
     render(parseCSV(await res.text()));
     const now=new Date(); const p=n=>String(n).padStart(2,'0');
     document.getElementById('stamp').textContent=`열만 ${now.getFullYear()}.${p(now.getMonth()+1)}.${p(now.getDate())} ${p(now.getHours())}:${p(now.getMinutes())}`;
-    document.getElementById('foot').textContent='이름을 누르면 그 사람 휴무가 강조됩니다(다시 누르면 해제). 위에서 달을 바꿸면 지난달도 볼 수 있어요.';
+    document.getElementById('foot').textContent='이름을 누르면 그 사람 휴무가 강조됩니다(다시 누르면 해제). 위에서 달을 바꾸면 지난달도 볼 수 있어요.';
   }catch(e){ showError(e.message||'불러오기 오류'); }
 }
 async function load(){
@@ -2824,9 +2824,9 @@ try{ window.__ENH(); }catch(e){}
 })();
 </script>
 <script>
-/* ===== 변경 이력 (표 하단) =====
-   상단 '변경 안내'를 누르면 부드럽게 내려가 전체 이력을 본다.
-   사람별로 묶고, 신규 직원 추가는 한 줄로 요약한다. */
+/* ===== 변경 이력 팝업 =====
+   '변경 안내'를 누르면 팝업이 뜬다.
+   맨 위에 가장 최근 이력이 펼쳐져 있고, 이전 이력은 접었다 펼 수 있다. */
 (function(){
   if(window.__wvHist) return; window.__wvHist = true;
 
@@ -2839,50 +2839,50 @@ try{ window.__ENH(); }catch(e){}
     if(document.getElementById('wvHsCss')) return;
     var st = document.createElement('style'); st.id = 'wvHsCss';
     st.textContent = [
-      '#wvHist{margin:26px auto 40px;max-width:1100px;padding:0 12px;scroll-margin-top:16px}',
-      '#wvHist .hd{display:flex;align-items:baseline;gap:8px;margin-bottom:10px}',
-      '#wvHist .hd b{font-size:15px;color:#2b2d42;letter-spacing:-.3px}',
-      '#wvHist .hd span{font-size:11.5px;color:#9a9ba6}',
-      '#wvHist .box{border:1px solid #e6e8ef;border-radius:14px;background:#fff;overflow:hidden;transition:box-shadow .7s ease}',
-      '#wvHist .it{padding:14px 16px;border-top:1px solid #f1f2f6;opacity:0;transform:translateY(7px);transition:opacity .42s cubic-bezier(.22,1,.36,1),transform .42s cubic-bezier(.22,1,.36,1)}',
-      '#wvHist .it:first-child{border-top:none;background:#fffdf6}',
-      '#wvHist.in .it{opacity:1;transform:none}',
-      '#wvHist .top{display:flex;align-items:center;gap:7px;margin-bottom:9px}',
-      '#wvHist .when{font-size:12px;font-weight:800;color:#2b2d42;letter-spacing:-.2px}',
-      '#wvHist .tag{font-size:10.5px;color:#8a8f9c;background:#f2f3f7;border-radius:5px;padding:2px 6px;font-weight:700}',
-      '#wvHist .it:first-child .tag.now{background:#c9a227;color:#fff}',
-      '#wvHist .pr{display:flex;gap:9px;align-items:flex-start;padding:4px 0}',
-      '#wvHist .pn{flex:0 0 58px;font-size:12.5px;font-weight:800;color:#2b2d42;padding-top:3px;text-align:right}',
-      '#wvHist .cs{flex:1;display:flex;flex-wrap:wrap;gap:5px}',
-      '#wvHist .c{font-size:11.5px;line-height:1.5;border-radius:6px;padding:2px 7px;white-space:nowrap;border:1px solid transparent}',
-      '#wvHist .c i{font-style:normal;font-weight:800;margin-right:4px;opacity:.75}',
-      '#wvHist .c.add{background:#eaf7f0;color:#1f7a5a;border-color:#cdeadd}',
-      '#wvHist .c.off{background:#f4f5f8;color:#71757f;border-color:#e6e8ef}',
-      '#wvHist .c.mv{background:#eef3ff;color:#22409a;border-color:#d5dffb}',
-      '#wvHist .c.ex{background:#2b2d42;color:#fff;border-color:#2b2d42}',
-      '#wvHist .new{display:inline-flex;align-items:center;gap:6px;background:#fff6e5;border:1px solid #f0dcae;color:#8a6100;font-size:12.5px;font-weight:800;border-radius:8px;padding:5px 10px}',
-      '#wvHist .memo{margin-top:8px;font-size:12px;color:#5b6b7a;background:#f7f8fb;border-radius:8px;padding:7px 10px;line-height:1.55}',
-      '#wvHist .empty{padding:22px 15px;text-align:center;color:#9a9ba6;font-size:12.5px}',
-      '#wvHist.flash .box{box-shadow:0 0 0 3px rgba(201,162,39,.28)}',
-      '@media(max-width:600px){#wvHist .pn{flex-basis:46px;font-size:12px}#wvHist .c{font-size:11px}}',
+      '#wvHsOv{position:fixed;inset:0;background:rgba(10,12,25,.55);z-index:100006;display:none;align-items:center;justify-content:center;padding:14px;opacity:0;transition:opacity .22s ease}',
+      '#wvHsOv.on{opacity:1}',
+      '.wvHsCard{background:#fff;border-radius:16px;width:min(680px,96vw);max-height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.35);transform:translateY(10px) scale(.99);transition:transform .26s cubic-bezier(.22,1,.36,1)}',
+      '#wvHsOv.on .wvHsCard{transform:none}',
+      '.wvHsTop{background:#2b2d42;color:#fff;padding:13px 16px;display:flex;align-items:center;gap:8px}',
+      '.wvHsTop b{font-size:15px;letter-spacing:-.3px}',
+      '.wvHsTop .sub{font-size:11.5px;opacity:.7}',
+      '.wvHsX{margin-left:auto;border:none;background:rgba(255,255,255,.16);color:#fff;width:30px;height:30px;border-radius:50%;font-size:15px;cursor:pointer}',
+      '.wvHsBody{overflow:auto;padding:14px 16px 18px}',
+      '.wvHsNew{border:1px solid #f0dcae;background:#fffdf6;border-radius:12px;padding:13px 14px}',
+      '.wvHsSecTtl{font-size:11.5px;font-weight:800;color:#8a6100;margin-bottom:8px;letter-spacing:.2px}',
+      '.wvHsWhen{font-size:12.5px;font-weight:800;color:#2b2d42}',
+      '.wvHsTag{font-size:10.5px;color:#8a8f9c;background:#f2f3f7;border-radius:5px;padding:2px 6px;font-weight:700;margin-left:6px}',
+      '.wvHsRow{display:flex;gap:9px;align-items:flex-start;padding:4px 0}',
+      '.wvHsPn{flex:0 0 58px;font-size:12.5px;font-weight:800;color:#2b2d42;padding-top:3px;text-align:right}',
+      '.wvHsCs{flex:1;display:flex;flex-wrap:wrap;gap:5px}',
+      '.wvHsC{font-size:11.5px;line-height:1.5;border-radius:6px;padding:2px 7px;white-space:nowrap;border:1px solid transparent}',
+      '.wvHsC i{font-style:normal;font-weight:800;margin-right:4px;opacity:.75}',
+      '.wvHsC.add{background:#eaf7f0;color:#1f7a5a;border-color:#cdeadd}',
+      '.wvHsC.off{background:#f4f5f8;color:#71757f;border-color:#e6e8ef}',
+      '.wvHsC.mv{background:#eef3ff;color:#22409a;border-color:#d5dffb}',
+      '.wvHsC.ex{background:#2b2d42;color:#fff;border-color:#2b2d42}',
+      '.wvHsFresh{display:inline-flex;align-items:center;gap:6px;background:#fff6e5;border:1px solid #f0dcae;color:#8a6100;font-size:12.5px;font-weight:800;border-radius:8px;padding:5px 10px}',
+      '.wvHsMemo{margin-top:8px;font-size:12px;color:#5b6b7a;background:#f7f8fb;border-radius:8px;padding:7px 10px;line-height:1.55}',
+      '.wvHsMore{margin-top:14px}',
+      '.wvHsMoreBtn{width:100%;display:flex;align-items:center;gap:8px;border:1px solid #e2e5ee;background:#fafbfd;border-radius:10px;padding:10px 13px;font-size:12.5px;font-weight:800;color:#4a4b57;cursor:pointer}',
+      '.wvHsMoreBtn .ar{margin-left:auto;transition:transform .28s cubic-bezier(.22,1,.36,1);font-size:11px;color:#9a9ba6}',
+      '.wvHsMore.open .wvHsMoreBtn .ar{transform:rotate(180deg)}',
+      '.wvHsList{max-height:0;overflow:hidden;transition:max-height .34s cubic-bezier(.22,1,.36,1)}',
+      '.wvHsAcc{border:1px solid #eceef3;border-radius:10px;margin-top:8px;overflow:hidden;background:#fff}',
+      '.wvHsAccH{display:flex;align-items:center;gap:7px;padding:10px 12px;cursor:pointer;user-select:none}',
+      '.wvHsAccH:hover{background:#fafbfd}',
+      '.wvHsAccH .ar{margin-left:auto;font-size:11px;color:#b6b9c4;transition:transform .28s cubic-bezier(.22,1,.36,1)}',
+      '.wvHsAcc.open .wvHsAccH .ar{transform:rotate(180deg)}',
+      '.wvHsAcc.open .wvHsAccH{background:#f7f8fb}',
+      '.wvHsPeek{font-size:11.5px;color:#9a9ba6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:44%}',
+      '.wvHsAccB{max-height:0;overflow:hidden;transition:max-height .32s cubic-bezier(.22,1,.36,1)}',
+      '.wvHsAccB .pad{padding:4px 12px 12px}',
+      '.wvHsEmpty{padding:22px 4px;text-align:center;color:#9a9ba6;font-size:12.5px}',
+      '@media(max-width:600px){.wvHsPn{flex-basis:46px;font-size:12px}.wvHsC{font-size:11px}.wvHsPeek{display:none}}',
       '#wvNotice{cursor:pointer;transition:filter .2s ease}',
       '#wvNotice:hover{filter:brightness(.96)}'
     ].join('');
     document.head.appendChild(st);
-  }
-
-  function host(){
-    var h = document.getElementById('wvHist');
-    if(h) return h;
-    css();
-    h = document.createElement('section');
-    h.id = 'wvHist';
-    h.innerHTML = '<div class="hd"><b>변경 이력</b><span id="wvHsSub"></span></div>'
-      + '<div class="box" id="wvHsBox"><div class="empty">불러오는 중…</div></div>';
-    var foot = document.querySelector('footer');
-    if(foot && foot.parentNode) foot.parentNode.insertBefore(h, foot);
-    else document.body.appendChild(h);
-    return h;
   }
 
   /* ── 변경 문구 쪼개기 ── */
@@ -2900,99 +2900,162 @@ try{ window.__ENH(); }catch(e){}
     if(b === '휴무') return 'off';
     return 'mv';
   }
-
-  function bodyOf(auto){
-    var items = parse(auto);
-    var g = {}, order = [], loose = [];
+  function group(auto){
+    var items = parse(auto), g = {}, order = [], loose = [];
     items.forEach(function(x){
       if(!x.n){ loose.push(x.raw); return; }
       if(!g[x.n]){ g[x.n] = []; order.push(x.n); }
       g[x.n].push(x);
     });
-    /* 신규 추가 판정: 그 사람 변경이 12건 이상이고 거의 전부 휴무에서 시작 */
     var fresh = order.filter(function(n){
       var L = g[n];
       if(L.length < 12) return false;
       var f = L.filter(function(x){ return x.a === '휴무'; }).length;
       return f / L.length >= 0.9;
     });
-    var html = '';
-    if(fresh.length){
-      html += '<div class="new">＋ 신규 직원 추가 (' + fresh.map(esc).join(', ') + ')</div>';
-    }
-    var rest = order.filter(function(n){ return fresh.indexOf(n) < 0; });
-    rest.forEach(function(n){
-      html += '<div class="pr"><div class="pn">' + esc(n) + '</div><div class="cs">'
-        + g[n].sort(function(p, q){ return p.d - q.d; }).map(function(x){
-            return '<span class="c ' + kind(x.a, x.b) + '"><i>' + x.d + '일</i>'
+    return { items:items, g:g, order:order, loose:loose, fresh:fresh };
+  }
+  function bodyHtml(auto){
+    var q = group(auto), html = '';
+    if(q.fresh.length) html += '<div class="wvHsFresh">＋ 신규 직원 추가 (' + q.fresh.map(esc).join(', ') + ')</div>';
+    q.order.filter(function(n){ return q.fresh.indexOf(n) < 0; }).forEach(function(n){
+      html += '<div class="wvHsRow"><div class="wvHsPn">' + esc(n) + '</div><div class="wvHsCs">'
+        + q.g[n].sort(function(p, r){ return p.d - r.d; }).map(function(x){
+            return '<span class="wvHsC ' + kind(x.a, x.b) + '"><i>' + x.d + '일</i>'
               + esc(x.a) + '→' + esc(x.b) + '</span>';
-          }).join('')
-        + '</div></div>';
+          }).join('') + '</div></div>';
     });
-    if(loose.length){
-      html += '<div class="pr"><div class="pn"></div><div class="cs">'
-        + loose.map(function(x){ return '<span class="c mv">' + esc(x) + '</span>'; }).join('')
+    if(q.loose.length){
+      html += '<div class="wvHsRow"><div class="wvHsPn"></div><div class="wvHsCs">'
+        + q.loose.map(function(x){ return '<span class="wvHsC mv">' + esc(x) + '</span>'; }).join('')
         + '</div></div>';
     }
-    return { html:html, n:items.length };
+    return html;
+  }
+  function peek(auto){
+    var q = group(auto);
+    if(q.fresh.length) return '신규 ' + q.fresh.join(', ');
+    if(!q.order.length) return '';
+    return q.order.slice(0, 2).join(', ') + (q.order.length > 2 ? ' 외 ' + (q.order.length - 2) + '명' : '');
+  }
+
+  /* ── 팝업 ── */
+  function ov(){
+    var o = document.getElementById('wvHsOv');
+    if(o) return o;
+    css();
+    o = document.createElement('div'); o.id = 'wvHsOv';
+    o.addEventListener('click', function(e){ if(e.target === o) close(); });
+    document.body.appendChild(o);
+    return o;
+  }
+  function open(){
+    var o = ov();
+    o.style.display = 'flex';
+    setTimeout(function(){ o.classList.add('on'); }, 10);
+  }
+  function close(){
+    var o = document.getElementById('wvHsOv');
+    if(!o) return;
+    o.classList.remove('on');
+    setTimeout(function(){ o.style.display = 'none'; }, 220);
+  }
+  document.addEventListener('keydown', function(e){ if(e.key === 'Escape') close(); });
+
+  function shell(inner){
+    var o = ov();
+    o.innerHTML = '<div class="wvHsCard" onclick="event.stopPropagation()">'
+      + '<div class="wvHsTop"><b>변경 이력</b><span class="sub" id="wvHsSub"></span>'
+      + '<button class="wvHsX" id="wvHsX">✕</button></div>'
+      + '<div class="wvHsBody" id="wvHsBody">' + inner + '</div></div>';
+    document.getElementById('wvHsX').onclick = close;
   }
 
   function draw(list){
-    var h = host();
-    var box = document.getElementById('wvHsBox');
-    var sub = document.getElementById('wvHsSub');
-    h.classList.remove('in');
     if(!list || !list.length){
-      box.innerHTML = '<div class="empty">이번 달은 아직 변경된 내용이 없습니다.</div>';
-      sub.textContent = month();
-      setTimeout(function(){ h.classList.add('in'); }, 30);
+      shell('<div class="wvHsEmpty">이번 달은 아직 변경된 내용이 없습니다.</div>');
+      document.getElementById('wvHsSub').textContent = month();
       return;
     }
-    sub.textContent = month() + ' · ' + list.length + '건';
-    box.innerHTML = list.map(function(r, i){
-      var b = bodyOf(r.what);
-      return '<div class="it" style="transition-delay:' + Math.min(i * 45, 400) + 'ms">'
-        + '<div class="top"><span class="when">' + esc(r.when || '') + '</span>'
-        + (i === 0 ? '<span class="tag now">최신</span>' : '')
-        + (r.tab ? '<span class="tag">' + esc(r.tab) + '</span>' : '')
-        + '<span class="tag">' + b.n + '건</span></div>'
-        + b.html
-        + (r.memo ? '<div class="memo">' + esc(r.memo) + '</div>' : '')
-        + '</div>';
-    }).join('');
-    setTimeout(function(){ h.classList.add('in'); }, 30);
+    var top = list[0], rest = list.slice(1);
+    var html = '<div class="wvHsNew">'
+      + '<div class="wvHsSecTtl">가장 최근 변경</div>'
+      + '<div><span class="wvHsWhen">' + esc(top.when) + '</span>'
+      + (top.tab ? '<span class="wvHsTag">' + esc(top.tab) + '</span>' : '')
+      + '<span class="wvHsTag">' + parse(top.what).length + '건</span></div>'
+      + '<div style="margin-top:8px">' + bodyHtml(top.what) + '</div>'
+      + (top.memo ? '<div class="wvHsMemo">' + esc(top.memo) + '</div>' : '')
+      + '</div>';
+    if(rest.length){
+      html += '<div class="wvHsMore" id="wvHsMore">'
+        + '<button class="wvHsMoreBtn" id="wvHsMoreBtn">이전 이력 ' + rest.length + '건'
+        + '<span class="ar">▼</span></button>'
+        + '<div class="wvHsList" id="wvHsList">'
+        + rest.map(function(r, i){
+            return '<div class="wvHsAcc" data-i="' + i + '">'
+              + '<div class="wvHsAccH"><span class="wvHsWhen">' + esc(r.when) + '</span>'
+              + (r.tab ? '<span class="wvHsTag">' + esc(r.tab) + '</span>' : '')
+              + '<span class="wvHsTag">' + parse(r.what).length + '건</span>'
+              + '<span class="wvHsPeek">' + esc(peek(r.what)) + '</span>'
+              + '<span class="ar">▼</span></div>'
+              + '<div class="wvHsAccB"><div class="pad">' + bodyHtml(r.what)
+              + (r.memo ? '<div class="wvHsMemo">' + esc(r.memo) + '</div>' : '')
+              + '</div></div></div>';
+          }).join('')
+        + '</div></div>';
+    }
+    shell(html);
+    document.getElementById('wvHsSub').textContent = month() + ' · 전체 ' + list.length + '건';
+
+    var more = document.getElementById('wvHsMore');
+    if(more){
+      var listEl = document.getElementById('wvHsList');
+      function sync(){ listEl.style.maxHeight = more.classList.contains('open') ? (listEl.scrollHeight + 40) + 'px' : '0px'; }
+      document.getElementById('wvHsMoreBtn').onclick = function(){
+        more.classList.toggle('open');
+        sync();
+      };
+      listEl.querySelectorAll('.wvHsAcc').forEach(function(acc){
+        var b = acc.querySelector('.wvHsAccB');
+        acc.querySelector('.wvHsAccH').onclick = function(){
+          var on = acc.classList.toggle('open');
+          b.style.maxHeight = on ? (b.scrollHeight + 20) + 'px' : '0px';
+          setTimeout(sync, 340);
+        };
+      });
+    }
   }
 
-  var busy = false;
-  function load(){
+  var busy = false, cache = null;
+  function load(force){
     var u = url();
     if(!u){ draw(null); return; }
+    if(cache && !force){ draw(cache); return; }
     if(busy) return;
     busy = true;
-    var m = month();
     fetch(u + '?mode=all&t=' + Date.now(), {cache:'no-store'})
       .then(function(r){ return r.text(); })
       .then(function(res0){
-      busy = false;
-      var j = null; try{ j = JSON.parse(res0); }catch(e){}
-      var arr = null;
-      if(j && typeof j.notice === 'string'){ try{ arr = JSON.parse(j.notice); }catch(e){} }
-      else if(j && Array.isArray(j.notice)) arr = j.notice;
-      if(!Array.isArray(arr) || !arr.length){ fallback(); return; }
-      var total = arr.length;
-      var out = arr.map(function(x, i){
-        return {
-          what: String((x && x.auto) || '').trim(),
-          when: String((x && x.at) || '').trim(),
-          memo: String((x && x.memo) || '').trim(),
-          tab:  '수정' + (total - i)
-        };
-      }).filter(function(x){ return x.what || x.memo; });
-      if(!out.length){ fallback(); return; }
-      draw(out);
-    })['catch'](function(){ busy = false; fallback(); });
+        busy = false;
+        var j = null; try{ j = JSON.parse(res0); }catch(e){}
+        var arr = null;
+        if(j && typeof j.notice === 'string'){ try{ arr = JSON.parse(j.notice); }catch(e){} }
+        else if(j && Array.isArray(j.notice)) arr = j.notice;
+        if(!Array.isArray(arr) || !arr.length){ fallback(); return; }
+        var total = arr.length;
+        var out = arr.map(function(x, i){
+          return {
+            what: String((x && x.auto) || '').trim(),
+            when: String((x && x.at) || '').trim(),
+            memo: String((x && x.memo) || '').trim(),
+            tab:  '수정' + (total - i)
+          };
+        }).filter(function(x){ return x.what || x.memo; });
+        if(!out.length){ fallback(); return; }
+        cache = out;
+        draw(out);
+      })['catch'](function(){ busy = false; fallback(); });
   }
-
   function fallback(){
     var b = document.getElementById('wvNotice');
     var txt = b ? String(b.textContent || '').replace(/^[^가-힣]*변경 안내/, '').trim() : '';
@@ -3000,33 +3063,12 @@ try{ window.__ENH(); }catch(e){}
     draw([{ what:txt, when:'', memo:'', tab:'' }]);
   }
 
-  function ease(t){ return t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2; }
-  function glide(to, ms){
-    var from = window.pageYOffset || document.documentElement.scrollTop;
-    var d = to - from;
-    if(Math.abs(d) < 2) return;
-    function now(){ return window.performance ? performance.now() : Date.now(); }
-    var t0 = now(), done = false, iv = 0;
-    function tick(){
-      if(done) return;
-      var p = Math.min(1, (now() - t0) / ms);
-      window.scrollTo(0, from + d * ease(p));
-      if(p >= 1){ done = true; if(iv) clearInterval(iv); }
-    }
-    iv = setInterval(tick, 16);
-    (function loop(){ if(done) return; tick(); requestAnimationFrame(loop); })();
-  }
-
   window.__wvGoHist = function(){
-    var h = host();
-    load();
+    css();
     var p = document.getElementById('wvNpop'); if(p) p.style.display = 'none';
-    var y = h.getBoundingClientRect().top + (window.pageYOffset || document.documentElement.scrollTop) - 14;
-    glide(y, 620);
-    setTimeout(function(){
-      h.classList.add('flash');
-      setTimeout(function(){ h.classList.remove('flash'); }, 900);
-    }, 620);
+    shell('<div class="wvHsEmpty">불러오는 중…</div>');
+    open();
+    load(false);
   };
 
   document.addEventListener('click', function(e){
@@ -3037,13 +3079,12 @@ try{ window.__ENH(); }catch(e){}
     window.__wvGoHist();
   }, true);
 
-  setTimeout(function(){ css(); host(); load(); }, 2200);
-
   var lastM = '';
   setInterval(function(){
     var m = month();
-    if(m && m !== lastM){ lastM = m; load(); }
+    if(m && m !== lastM){ lastM = m; cache = null; }
   }, 1500);
+  setTimeout(css, 1500);
 })();
 </script>
 </html>
