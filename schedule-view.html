@@ -2954,7 +2954,7 @@ try{ window.__ENH(); }catch(e){}
       return '<div class="it" style="transition-delay:' + Math.min(i * 45, 400) + 'ms">'
         + '<div class="top"><span class="when">' + esc(r.when || '') + '</span>'
         + (i === 0 ? '<span class="tag now">최신</span>' : '')
-        + (r.tab ? '<span class="tag">' + esc(r.tab.replace(/^\S+\s*/, '')) + '</span>' : '')
+        + (r.tab ? '<span class="tag">' + esc(r.tab) + '</span>' : '')
         + '<span class="tag">' + b.n + '건</span></div>'
         + b.html
         + (r.memo ? '<div class="memo">' + esc(r.memo) + '</div>' : '')
@@ -2970,29 +2970,22 @@ try{ window.__ENH(); }catch(e){}
     if(busy) return;
     busy = true;
     var m = month();
-    Promise.all([
-      fetch(u + '?mode=all&t=' + Date.now(), {cache:'no-store'}).then(function(r){ return r.text(); }),
-      fetch(u + '?mode=revs&month=' + encodeURIComponent(m) + '&t=' + Date.now(), {cache:'no-store'})
-        .then(function(r){ return r.text(); })['catch'](function(){ return ''; })
-    ]).then(function(res){
+    fetch(u + '?mode=all&t=' + Date.now(), {cache:'no-store'})
+      .then(function(r){ return r.text(); })
+      .then(function(res0){
       busy = false;
-      var j = null; try{ j = JSON.parse(res[0]); }catch(e){}
+      var j = null; try{ j = JSON.parse(res0); }catch(e){}
       var arr = null;
       if(j && typeof j.notice === 'string'){ try{ arr = JSON.parse(j.notice); }catch(e){} }
       else if(j && Array.isArray(j.notice)) arr = j.notice;
       if(!Array.isArray(arr) || !arr.length){ fallback(); return; }
-      var tabs = [];
-      try{
-        var rv = JSON.parse(res[1]);
-        if(Array.isArray(rv)) tabs = rv.map(function(x){ return x && x.name ? String(x.name) : ''; })
-          .filter(function(x){ return x; }).reverse();
-      }catch(e){}
+      var total = arr.length;
       var out = arr.map(function(x, i){
         return {
           what: String((x && x.auto) || '').trim(),
           when: String((x && x.at) || '').trim(),
           memo: String((x && x.memo) || '').trim(),
-          tab:  tabs.length === arr.length ? tabs[i] : ''
+          tab:  '수정' + (total - i)
         };
       }).filter(function(x){ return x.what || x.memo; });
       if(!out.length){ fallback(); return; }
