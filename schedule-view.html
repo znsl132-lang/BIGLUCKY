@@ -2823,4 +2823,173 @@ try{ window.__ENH(); }catch(e){}
   }, true);
 })();
 </script>
+<script>
+/* ===== 변경 이력 (표 하단) =====
+   상단 '변경 안내'를 누르면 부드럽게 내려가 전체 이력을 본다. 기존 팝업 대신 쓴다. */
+(function(){
+  if(window.__wvHist) return; window.__wvHist = true;
+
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){
+    return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]; }); }
+  function url(){ return (typeof WEBAPP_URL !== 'undefined' && WEBAPP_URL) ? WEBAPP_URL : ''; }
+  function month(){ var s = document.getElementById('monthSel'); return s ? s.value : ''; }
+
+  function css(){
+    if(document.getElementById('wvHsCss')) return;
+    var st = document.createElement('style'); st.id = 'wvHsCss';
+    st.textContent = [
+      '#wvHist{margin:26px auto 40px;max-width:1100px;padding:0 12px;scroll-margin-top:16px}',
+      '#wvHist .hd{display:flex;align-items:baseline;gap:8px;margin-bottom:10px}',
+      '#wvHist .hd b{font-size:15px;color:#2b2d42;letter-spacing:-.3px}',
+      '#wvHist .hd span{font-size:11.5px;color:#9a9ba6}',
+      '#wvHist .box{border:1px solid #e6e8ef;border-radius:14px;background:#fff;overflow:hidden;transition:box-shadow .7s ease}',
+      '#wvHist .it{display:flex;gap:12px;padding:13px 15px;border-top:1px solid #f0f1f5;opacity:0;transform:translateY(7px);transition:opacity .42s cubic-bezier(.22,1,.36,1),transform .42s cubic-bezier(.22,1,.36,1)}',
+      '#wvHist .it:first-child{border-top:none}',
+      '#wvHist.in .it{opacity:1;transform:none}',
+      '#wvHist .dot{flex:0 0 auto;width:9px;height:9px;border-radius:50%;background:#c9a227;margin-top:6px}',
+      '#wvHist .it.old .dot{background:#d3d6de}',
+      '#wvHist .bd{flex:1;min-width:0}',
+      '#wvHist .t1{font-size:13px;color:#2b2d42;line-height:1.6;word-break:keep-all}',
+      '#wvHist .t2{font-size:11.5px;color:#9a9ba6;margin-top:3px}',
+      '#wvHist .memo{margin-top:5px;font-size:12px;color:#5b6b7a;background:#f7f8fb;border-radius:8px;padding:7px 9px;line-height:1.55}',
+      '#wvHist .empty{padding:22px 15px;text-align:center;color:#9a9ba6;font-size:12.5px}',
+      '#wvHist.flash .box{box-shadow:0 0 0 3px rgba(201,162,39,.28)}',
+      '#wvNotice{cursor:pointer;transition:filter .2s ease}',
+      '#wvNotice:hover{filter:brightness(.96)}'
+    ].join('');
+    document.head.appendChild(st);
+  }
+
+  function host(){
+    var h = document.getElementById('wvHist');
+    if(h) return h;
+    css();
+    h = document.createElement('section');
+    h.id = 'wvHist';
+    h.innerHTML = '<div class="hd"><b>변경 이력</b><span id="wvHsSub"></span></div>'
+      + '<div class="box" id="wvHsBox"><div class="empty">불러오는 중…</div></div>';
+    var foot = document.querySelector('footer');
+    if(foot && foot.parentNode) foot.parentNode.insertBefore(h, foot);
+    else document.body.appendChild(h);
+    return h;
+  }
+
+  function draw(list){
+    var h = host();
+    var box = document.getElementById('wvHsBox');
+    var sub = document.getElementById('wvHsSub');
+    h.classList.remove('in');
+    if(!list || !list.length){
+      box.innerHTML = '<div class="empty">이번 달은 아직 변경된 내용이 없습니다.</div>';
+      sub.textContent = month();
+      setTimeout(function(){ h.classList.add('in'); }, 30);
+      return;
+    }
+    sub.textContent = month() + ' · ' + list.length + '건';
+    box.innerHTML = list.map(function(r, i){
+      return '<div class="it' + (i ? ' old' : '') + '" style="transition-delay:' + Math.min(i * 45, 400) + 'ms">'
+        + '<div class="dot"></div><div class="bd">'
+        + '<div class="t1">' + esc(r.what || '(내용 없음)') + '</div>'
+        + '<div class="t2">' + esc(r.when || '') + (r.tab ? ' · ' + esc(r.tab) : '') + '</div>'
+        + (r.memo ? '<div class="memo">' + esc(r.memo) + '</div>' : '')
+        + '</div></div>';
+    }).join('');
+    setTimeout(function(){ h.classList.add('in'); }, 30);
+  }
+
+  var busy = false;
+  function load(){
+    var u = url();
+    if(!u){ draw(null); return; }
+    if(busy) return;
+    busy = true;
+    var m = month();
+    Promise.all([
+      fetch(u + '?mode=all&t=' + Date.now(), {cache:'no-store'}).then(function(r){ return r.text(); }),
+      fetch(u + '?mode=revs&month=' + encodeURIComponent(m) + '&t=' + Date.now(), {cache:'no-store'})
+        .then(function(r){ return r.text(); })['catch'](function(){ return ''; })
+    ]).then(function(res){
+      busy = false;
+      var j = null; try{ j = JSON.parse(res[0]); }catch(e){}
+      var arr = null;
+      if(j && typeof j.notice === 'string'){ try{ arr = JSON.parse(j.notice); }catch(e){} }
+      else if(j && Array.isArray(j.notice)) arr = j.notice;
+      if(!Array.isArray(arr) || !arr.length){ fallback(); return; }
+      var tabs = [];
+      try{
+        var rv = JSON.parse(res[1]);
+        if(Array.isArray(rv)) tabs = rv.map(function(x){ return x && x.name ? String(x.name) : ''; })
+          .filter(function(x){ return x; }).reverse();
+      }catch(e){}
+      var out = arr.map(function(x, i){
+        return {
+          what: String((x && x.auto) || '').trim(),
+          when: String((x && x.at) || '').trim(),
+          memo: String((x && x.memo) || '').trim(),
+          tab:  tabs.length === arr.length ? tabs[i] : ''
+        };
+      }).filter(function(x){ return x.what || x.memo; });
+      if(!out.length){ fallback(); return; }
+      draw(out);
+    })['catch'](function(){ busy = false; fallback(); });
+  }
+
+  function fallback(){
+    var b = document.getElementById('wvNotice');
+    var txt = b ? String(b.textContent || '').replace(/^[^가-힣]*변경 안내/, '').trim() : '';
+    if(!txt){ draw(null); return; }
+    draw(txt.split('·').map(function(s){ return { what: s.trim() }; }).filter(function(x){ return x.what; }));
+  }
+
+  function ease(t){ return t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2; }
+  function glide(to, ms){
+    var from = window.pageYOffset || document.documentElement.scrollTop;
+    var d = to - from;
+    if(Math.abs(d) < 2) return;
+    function now(){ return window.performance ? performance.now() : Date.now(); }
+    var t0 = now(), done = false, iv = 0;
+    function tick(){
+      if(done) return;
+      var p = Math.min(1, (now() - t0) / ms);
+      window.scrollTo(0, from + d * ease(p));
+      if(p >= 1){ done = true; if(iv) clearInterval(iv); }
+    }
+    iv = setInterval(tick, 16);
+    (function loop(){ if(done) return; tick(); requestAnimationFrame(loop); })();
+  }
+
+  window.__wvGoHist = function(){
+    var h = host();
+    load();
+    var p = document.getElementById('wvNpop'); if(p) p.style.display = 'none';
+    var y = h.getBoundingClientRect().top + (window.pageYOffset || document.documentElement.scrollTop) - 14;
+    glide(y, 620);
+    setTimeout(function(){
+      h.classList.add('flash');
+      setTimeout(function(){ h.classList.remove('flash'); }, 900);
+    }, 620);
+  };
+
+  document.addEventListener('click', function(e){
+    var n = e.target && e.target.closest ? e.target.closest('#wvNotice') : null;
+    if(!n) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    window.__wvGoHist();
+  }, true);
+
+  function tip(){
+    var b = document.getElementById('wvNotice');
+    if(b && !b.title) b.title = '눌러서 변경 이력 전체 보기';
+    setTimeout(tip, 2000);
+  }
+  setTimeout(function(){ css(); host(); load(); tip(); }, 2200);
+
+  var lastM = '';
+  setInterval(function(){
+    var m = month();
+    if(m && m !== lastM){ lastM = m; load(); }
+  }, 1500);
+})();
+</script>
 </html>
