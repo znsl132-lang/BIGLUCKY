@@ -3039,11 +3039,38 @@ try{ window.__ENH(); }catch(e){}
   }
 
   var busy = false, cache = null;
-  function load(force){
+
+  /* 응답 → 화면용 목록 */
+  function shape(arr){
+    if(!Array.isArray(arr) || !arr.length) return null;
+    var total = arr.length;
+    var out = arr.map(function(x, i){
+      return {
+        what: String((x && x.auto) || '').trim(),
+        when: String((x && x.at) || '').trim(),
+        memo: String((x && x.memo) || '').trim(),
+        tab:  '수정' + (total - i)
+      };
+    }).filter(function(x){ return x.what || x.memo; });
+    return out.length ? out : null;
+  }
+
+  /* 이미 받아둔 것에서 바로 꺼낸다 (요청 없음) */
+  function fromCached(){
+    try{
+      var b = JSON.parse(localStorage.getItem('wvBundle_v1') || 'null');
+      if(!b) return null;
+      if(b.month && month() && b.month !== month()) return null;
+      var arr = null;
+      if(typeof b.notice === 'string'){ try{ arr = JSON.parse(b.notice); }catch(e){} }
+      else if(Array.isArray(b.notice)) arr = b.notice;
+      return shape(arr);
+    }catch(e){ return null; }
+  }
+
+  function pull(then){
     var u = url();
-    if(!u){ draw(null); return; }
-    if(cache && !force){ draw(cache); return; }
-    if(busy) return;
+    if(!u || busy) return;
     busy = true;
     fetch(u + '?mode=all&t=' + Date.now(), {cache:'no-store'})
       .then(function(r){ return r.text(); })
@@ -3053,20 +3080,32 @@ try{ window.__ENH(); }catch(e){}
         var arr = null;
         if(j && typeof j.notice === 'string'){ try{ arr = JSON.parse(j.notice); }catch(e){} }
         else if(j && Array.isArray(j.notice)) arr = j.notice;
-        if(!Array.isArray(arr) || !arr.length){ fallback(); return; }
-        var total = arr.length;
-        var out = arr.map(function(x, i){
-          return {
-            what: String((x && x.auto) || '').trim(),
-            when: String((x && x.at) || '').trim(),
-            memo: String((x && x.memo) || '').trim(),
-            tab:  '수정' + (total - i)
-          };
-        }).filter(function(x){ return x.what || x.memo; });
-        if(!out.length){ fallback(); return; }
+        then(shape(arr));
+      })['catch'](function(){ busy = false; then(null); });
+  }
+
+  function load(force){
+    if(!url()){ draw(null); return; }
+    if(cache && !force){ draw(cache); return; }
+    var quick = fromCached();
+    if(quick){
+      cache = quick;
+      draw(quick);
+      /* 뒤에서 조용히 확인하고, 새 이력이 있을 때만 다시 그린다 */
+      pull(function(out){
+        if(!out) return;
+        if(cache && out.length === cache.length && out[0].when === cache[0].when) return;
         cache = out;
-        draw(out);
-      })['catch'](function(){ busy = false; fallback(); });
+        var ov2 = document.getElementById('wvHsOv');
+        if(ov2 && ov2.style.display === 'flex' && !document.querySelector('.wvHsAcc.open')) draw(out);
+      });
+      return;
+    }
+    pull(function(out){
+      if(!out){ fallback(); return; }
+      cache = out;
+      draw(out);
+    });
   }
   function fallback(){
     var b = document.getElementById('wvNotice');
@@ -3078,7 +3117,8 @@ try{ window.__ENH(); }catch(e){}
   window.__wvGoHist = function(){
     css();
     var p = document.getElementById('wvNpop'); if(p) p.style.display = 'none';
-    shell('<div class="wvHsEmpty">불러오는 중…</div>');
+    /* 이미 가진 게 없을 때만 대기 화면을 띄운다 */
+    if(!cache && !fromCached()) shell('<div class="wvHsEmpty">불러오는 중…</div>');
     open();
     load(false);
   };
@@ -3096,7 +3136,11 @@ try{ window.__ENH(); }catch(e){}
     var m = month();
     if(m && m !== lastM){ lastM = m; cache = null; }
   }, 1500);
-  setTimeout(css, 1500);
+  setTimeout(function(){
+    css();
+    var q = fromCached();
+    if(q){ cache = q; }
+  }, 1500);
 })();
 </script>
 </html>
