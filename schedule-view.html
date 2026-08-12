@@ -3010,7 +3010,17 @@ try{ window.__ENH(); }catch(e){}
     var more = document.getElementById('wvHsMore');
     if(more){
       var listEl = document.getElementById('wvHsList');
-      function sync(){ listEl.style.maxHeight = more.classList.contains('open') ? (listEl.scrollHeight + 40) + 'px' : '0px'; }
+      function sync(){
+        if(more.classList.contains('open')){
+          listEl.style.maxHeight = (listEl.scrollHeight + 40) + 'px';
+          /* 펼침이 끝나면 제한을 풀어 안쪽을 열어도 잘리지 않게 한다 */
+          setTimeout(function(){ if(more.classList.contains('open')) listEl.style.maxHeight = 'none'; }, 360);
+        } else {
+          listEl.style.maxHeight = listEl.scrollHeight + 'px';
+          requestAnimationFrame(function(){ listEl.style.maxHeight = '0px'; });
+          setTimeout(function(){ if(!more.classList.contains('open')) listEl.style.maxHeight = '0px'; }, 60);
+        }
+      }
       document.getElementById('wvHsMoreBtn').onclick = function(){
         more.classList.toggle('open');
         sync();
@@ -3020,7 +3030,9 @@ try{ window.__ENH(); }catch(e){}
         acc.querySelector('.wvHsAccH').onclick = function(){
           var on = acc.classList.toggle('open');
           b.style.maxHeight = on ? (b.scrollHeight + 20) + 'px' : '0px';
-          setTimeout(sync, 340);
+          if(on) setTimeout(function(){
+            if(acc.classList.contains('open')) b.style.maxHeight = 'none';
+          }, 340);
         };
       });
     }
