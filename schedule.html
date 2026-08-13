@@ -3664,7 +3664,7 @@ var WV_RANK = 1;
 var WV_RANK_CUT  = [['장현진','김형진'], ['오명록'], ['홍다운'], ['신재현']];
 var WV_RANK_GIVE = [['신재현'], ['장현진','김형진'], ['오명록'], ['홍다운']];
 var WV_RANK_FLOOR = 6;
-var WV_RANK_MAXADD = 5;
+var WV_RANK_MAXADD = 0;   /* 0 = 잉여 휴무 자동 부여 안 함 (실장이 ③탭 '추가 휴무 부여'로 직접 배분) */
 function wvRankInit(){
   if(location.search.indexOf('opt=1') < 0) return;
   if(window.__wvRank) return;
