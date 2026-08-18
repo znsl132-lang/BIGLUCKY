@@ -1,6 +1,6 @@
 {
- "staleSince": "2026-08-18 13:12:56 KST",
- "updatedAt": "2026-08-18 19:02:52 KST",
+ "staleSince": "",
+ "updatedAt": "2026-08-19 08:50:22 KST",
  "ocIsTest": true,
  "billsNote": "국회 인증키(ASSEMBLY_KEY)가 등록되지 않아 건너뛰었습니다",
  "laws": [
@@ -78,7 +78,7 @@
    "revision": "일부개정",
    "no": "21537",
    "link": "https://www.law.go.kr/법령/청소년 보호법",
-   "dday": 51
+   "dday": 50
   },
   {
    "name": "청소년 보호법",
@@ -87,7 +87,7 @@
    "revision": "일부개정",
    "no": "21537",
    "link": "https://www.law.go.kr/법령/청소년 보호법",
-   "dday": 233
+   "dday": 232
   }
  ],
  "recent": [
