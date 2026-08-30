@@ -304,6 +304,19 @@
     color: var(--ink-soft);
     margin: 8px 0 0;
   }
+  .rainbow {
+    font-size: clamp(21px, 5.4vw, 36px);
+    letter-spacing: .02em;
+    max-width: 66%;
+    word-break: keep-all;
+    background-image: linear-gradient(100deg, #E5484D, #F5A524, #E8C71E, #46A758, #3B9EFF, #8E4EC6, #E5484D);
+    background-size: 220% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: rainflow 3.4s linear infinite;
+  }
+  @keyframes rainflow { to { background-position: -220% 0; } }
 
   .reason-title {
     font-family: "Nanum Gothic Coding", monospace;
@@ -408,6 +421,7 @@
   button:focus-visible { outline: 2px solid var(--stamp); outline-offset: 3px; }
   .btn-run {
     position: relative;
+    z-index: 5;
     border-color: var(--stamp);
     color: var(--stamp);
     transition: transform .3s cubic-bezier(.22, .9, .28, 1), background .15s, color .15s;
@@ -623,19 +637,68 @@
     55% { transform: scaleX(1.12) scaleY(.02); opacity: 1; filter: brightness(3); }
     100% { transform: scaleX(0) scaleY(0); opacity: 0; filter: brightness(4); }
   }
-  .revive {
+  .static {
     position: absolute;
-    bottom: 22px;
-    left: 0;
-    right: 0;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+    opacity: .8;
+    transition: opacity .5s;
+    z-index: 2;
+  }
+  .static.fade { opacity: 0; }
+
+  .reboot {
+    width: min(520px, 100%);
+    text-align: center;
+    position: relative;
+    z-index: 3;
+  }
+  .reboot.on { animation: crton .55s ease-out; }
+  @keyframes crton {
+    0% { transform: scaleY(.004) scaleX(1.14); filter: brightness(6); opacity: .3; }
+    45% { transform: scaleY(.05) scaleX(1.04); filter: brightness(2.4); }
+    100% { transform: scale(1); filter: brightness(1); opacity: 1; }
+  }
+  .reboot-lead {
+    font-family: "Nanum Myeongjo", serif;
+    font-size: clamp(18px, 4.6vw, 26px);
+    line-height: 1.7;
+    color: #EFECE2;
+    margin: 0 0 20px;
+  }
+  .reboot-text {
+    width: 100%;
+    background: #101010;
+    color: #EFECE2;
+    border: 1px solid #3A3A34;
+    font-family: "IBM Plex Sans KR", system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.75;
+    padding: 14px;
+    resize: vertical;
+    text-align: left;
+  }
+  .reboot-text:focus { outline: 2px solid #FF4A3B; outline-offset: 2px; }
+  .btn-copy {
+    margin-top: 12px;
+    width: 100%;
+    padding: 14px;
+    background: #EFECE2;
+    color: #101010;
+    border: 1px solid #EFECE2;
+    font-weight: 600;
+    letter-spacing: .08em;
+  }
+  .btn-copy:hover, .btn-copy:focus-visible { background: #FF4A3B; border-color: #FF4A3B; color: #FFF; }
+  .reboot-foot {
     font-family: "Nanum Gothic Coding", monospace;
     font-size: 11px;
     color: #6A675E;
-    opacity: 0;
-    transition: opacity 1.2s;
-    margin: 0;
+    margin: 16px 0 0;
+    line-height: 1.7;
   }
-  .revive.show { opacity: .5; }
 
   [hidden] { display: none !important; }
 
@@ -688,15 +751,15 @@
   <section id="verdict" hidden>
     <div class="verdict-box">
       <span class="box-label">심 사 결 과</span>
-      <p class="verdict-word">반 려</p>
-      <p class="verdict-sub">본 요청은 처리하지 아니하기로 결정되었습니다.</p>
+      <p class="verdict-word" id="verdict-word">반 려</p>
+      <p class="verdict-sub" id="verdict-sub">본 요청은 처리하지 아니하기로 결정되었습니다.</p>
       <div class="stamp" id="stamp">
-        <span class="big">반려</span>
+        <span class="big" id="stamp-big">반려</span>
         <span class="small">요청검토과</span>
       </div>
     </div>
 
-    <p class="reason-title">반 려 사 유</p>
+    <p class="reason-title" id="reason-title">반 려 사 유</p>
     <p class="reason-wrap"><span class="reason" id="reason"></span></p>
 
     <div class="actions">
@@ -736,11 +799,19 @@
 </div>
 
 <div class="blackout" id="blackout" hidden>
-  <div class="bye">
-    <p class="bye-1">안타깝네요. 정말 승인하고 싶었는데,<br>거절하시는 바람에 못 도와드리겠군요.</p>
-    <p class="bye-2">그럼 20000~ 빤스런 라스콩~!</p>
+  <div class="bye" id="bye">
+    <p class="bye-1" id="bye-1"></p>
+    <p class="bye-2" id="bye-2"></p>
   </div>
-  <p class="revive" id="revive">( 새로고침하면 다시 살아납니다 )</p>
+
+  <canvas class="static" id="static" hidden></canvas>
+
+  <div class="reboot" id="reboot" hidden>
+    <p class="reboot-lead">요청 내용은 돌려드려야 하니,<br>다시 드리겠습니다.</p>
+    <textarea class="reboot-text" id="return-text" rows="4" readonly></textarea>
+    <button class="btn-copy" id="btn-copy" type="button">복사하기</button>
+    <p class="reboot-foot">본 요청은 접수되지 않았습니다. 원문 그대로 반환합니다.<br>다른 곳에 요청해 보시기 바랍니다.</p>
+  </div>
 </div>
 
 <script>
@@ -869,7 +940,26 @@
   ];
 
   var round = 0, dodges = 0, timers = [], pool = [];
-  var reqName = "", reqText = "";
+  var reqName = "", reqText = "", reflect = false;
+
+  /* ── 비속어·비방 감지 → 무지개 반사 ── */
+  var BAD = ["시발","씨발","씨빨","시부랄","씨부랄","좆","존나","존니","지랄","염병","병신","븅신","새끼","개새","썅","쌍놈","닥쳐","꺼져","엿먹","죽어","죽을래","미친","또라이","돌아이","등신","머저리","멍청","바보","한심","꼴통","무능","쓰레기","재수없","싸가지","건방","주제","니가뭔데","네가뭔데","말같지","어이없","웃기지마","개소리","헛소리","놀고있네","tlqkf","시1발","ㅅㅂ","ㅄ","ㅂㅅ","ㅈㄴ","ㅗ","ㅆㅂ","ㄲㅈ","ㄷㅊ","ㅁㅊ","fuck","shit","idiot","stupid"];
+
+  function isNasty(s) {
+    var t = String(s).toLowerCase().replace(/[\s.,!?~^\-_*'"()\[\]{}<>/\\|:;]/g, "");
+    for (var i = 0; i < BAD.length; i++) {
+      if (t.indexOf(BAD[i]) !== -1) { return true; }
+    }
+    return false;
+  }
+
+  var REFLECT_REASONS = [
+    "귀하께서 하신 말씀은 전부 귀하께 그대로 돌아갑니다.",
+    "본 센터는 반사 처리 규정에 따라 원문을 발신자에게 전량 반송하였습니다.",
+    "무지개 반사, 거울 반사, 되돌리기까지 3중으로 처리 완료하였습니다.",
+    "접수 즉시 반사되었습니다. 지금 이 문서를 보시는 분께 적용됩니다.",
+    "그 말은 제 것이 아니고 귀하의 것입니다. 돌려드립니다."
+  ];
 
   function rand(a) { return a[Math.floor(Math.random() * a.length)]; }
   function pad(n, w) { n = String(n); while (n.length < w) { n = "0" + n; } return n; }
@@ -899,6 +989,7 @@
   }
 
   function nextReason() {
+    if (reflect) { return REFLECT_REASONS[Math.floor(Math.random() * REFLECT_REASONS.length)]; }
     if (reqText && Math.random() < 0.3) { return dynamicReason(); }
     if (!pool.length) { pool = REASONS.slice(); }
     var i = Math.floor(Math.random() * pool.length);
@@ -978,6 +1069,13 @@
   function showVerdict() {
     reviewSec.hidden = true;
     verdictSec.hidden = false;
+    if (reflect) {
+      $("verdict-word").textContent = "☆ 무지개 반사 ☆";
+      $("verdict-word").classList.add("rainbow");
+      $("verdict-sub").textContent = "귀하의 말씀은 발신자에게 전량 반송되었습니다.";
+      $("stamp-big").textContent = "반사";
+      $("reason-title").textContent = "반 사 사 유";
+    }
     stampEl.style.opacity = "";
     void stampEl.offsetWidth;
     stampEl.classList.add("hit");
@@ -997,18 +1095,30 @@
     return v < lo ? lo : (v > hi ? hi : v);
   }
 
-  function bounds() {
+  /* 종이 안쪽 ∩ 화면 안쪽 — 버튼이 화면 밖으로 도망가지 않게 */
+  function bounds(topPad) {
     var box = paper.getBoundingClientRect();
     var b = appealBtn.getBoundingClientRect();
     var cdx = appealBtn._dx || 0, cdy = appealBtn._dy || 0;
     var homeL = b.left - cdx, homeT = b.top - cdy;
-    return {
+    var vw = window.innerWidth || document.documentElement.clientWidth;
+    var vh = window.innerHeight || document.documentElement.clientHeight;
+
+    var left = Math.max(box.left + 12, 8);
+    var right = Math.min(box.right - 12, vw - 8);
+    var top = Math.max(box.top + (topPad === undefined ? 58 : topPad), 12);
+    var bottom = Math.min(box.bottom - 14, vh - 14);
+
+    var g = {
       cdx: cdx, cdy: cdy,
-      minX: box.left + 12 - homeL,
-      maxX: box.right - 12 - b.width - homeL,
-      minY: box.top + 58 - homeT,
-      maxY: box.bottom - 14 - b.height - homeT
+      minX: left - homeL,
+      maxX: right - b.width - homeL,
+      minY: top - homeT,
+      maxY: bottom - b.height - homeT
     };
+    if (g.maxX < g.minX) { g.maxX = g.minX; }
+    if (g.maxY < g.minY) { g.maxY = g.minY; }
+    return g;
   }
 
   function showBubbleText(t, ms) {
@@ -1060,14 +1170,8 @@
     bubbleEl.classList.remove("show");
     tauntEl.textContent = "20회 달성. 좋습니다, 딱 한 번만 잡게 해 드리겠습니다.";
 
-    var box = paper.getBoundingClientRect();
-    var b = appealBtn.getBoundingClientRect();
-    var homeL = b.left - (appealBtn._dx || 0), homeT = b.top - (appealBtn._dy || 0);
-    var minX = box.left + 10 - homeL, maxX = box.right - 10 - b.width - homeL;
-    var minY = box.top + 10 - homeT, maxY = box.bottom - 10 - b.height - homeT;
-    if (maxX < minX) { maxX = minX; }
-    if (maxY < minY) { maxY = minY; }
-
+    var g = bounds(12);
+    var minX = g.minX, maxX = g.maxX, minY = g.minY, maxY = g.maxY;
     var x = appealBtn._dx || 0, y = appealBtn._dy || 0;
     var ang = Math.random() * Math.PI * 2, sp = 33;
     var vx = Math.cos(ang) * sp, vy = Math.sin(ang) * sp;
@@ -1191,20 +1295,99 @@
     }, 1600);
   }
 
-  function shutdown() {
+  function farewell(line1, line2, withReturn) {
     clearTimeout(swapTimer);
     clearTimers();
     overlayEl.hidden = true;
+    $("bye-1").innerHTML = line1;
+    $("bye-2").innerHTML = line2;
     var black = $("blackout");
     black.hidden = false;
-    setTimeout(function () { black.classList.add("off"); }, 3400);
-    setTimeout(function () { try { window.close(); } catch (err) {} }, 3900);
-    setTimeout(function () { $("revive").classList.add("show"); }, 7000);
+    var t0 = reduce ? 400 : 3400;
+    setTimeout(function () { black.classList.add("off"); }, t0);
+    if (withReturn) {
+      setTimeout(function () { staticBurst(900); }, t0 + 850);
+      setTimeout(showReboot, t0 + 1650);
+    } else {
+      setTimeout(closeWindow, t0 + 750);
+    }
   }
 
+  function closeWindow() {
+    try { window.close(); } catch (e) {}
+    try { if (window.top !== window.self) { window.top.close(); } } catch (e) {}
+  }
+
+  function shutdown() {
+    farewell("안타깝네요. 정말 승인하고 싶었는데,<br>거절하시는 바람에 못 도와드리겠군요.",
+             "그럼 20000~ 빤스런 라스콩~!", true);
+  }
+
+  /* ── 지지직 (TV 노이즈) ── */
+  function staticBurst(ms, done) {
+    var cv = $("static");
+    if (reduce) { if (done) { setTimeout(done, 120); } return; }
+    cv.classList.remove("fade");
+    cv.hidden = false;
+    var W = 150, H = 95;
+    cv.width = W;
+    cv.height = H;
+    var ctx = cv.getContext("2d");
+    var end = Date.now() + (ms || 900);
+    (function draw() {
+      var img = ctx.createImageData(W, H), d = img.data;
+      for (var i = 0; i < d.length; i += 4) {
+        var v = Math.random() * 255;
+        d[i] = d[i + 1] = d[i + 2] = v;
+        d[i + 3] = 255;
+      }
+      ctx.putImageData(img, 0, 0);
+      if (Date.now() < end) { setTimeout(function () { requestAnimationFrame(draw); }, 45); return; }
+      cv.classList.add("fade");
+      setTimeout(function () { cv.hidden = true; if (done) { done(); } }, 450);
+    })();
+  }
+
+  /* ── 다시 켜짐: 요청 내용 반환 ── */
+  function showReboot() {
+    $("bye").hidden = true;
+    var rb = $("reboot");
+    $("return-text").value = reqText || "(요청 내용 없음)";
+    rb.hidden = false;
+    rb.classList.add("on");
+  }
+
+  function copyBack() {
+    var ta = $("return-text"), btn = $("btn-copy");
+    var ok = false;
+    try {
+      ta.focus();
+      ta.select();
+      ta.setSelectionRange(0, 99999);
+      ok = document.execCommand("copy");
+    } catch (e) { ok = false; }
+
+    function finish() {
+      btn.textContent = "복사되었습니다";
+      btn.disabled = true;
+      setTimeout(function () {
+        $("reboot").hidden = true;
+        staticBurst(1000, closeWindow);
+      }, 800);
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(ta.value).then(finish, finish);
+    } else {
+      finish();
+    }
+  }
+
+  $("btn-copy").addEventListener("click", copyBack);
+
   acceptBtn.addEventListener("click", function () {
-    round++;
-    runReview();
+    farewell("이의 없음으로 접수되었습니다. 본 건은 이것으로 종결합니다.",
+             "도움이 필요하시면<br>언제든지 요청해주세요!", false);
   });
 
   reissueBtn.addEventListener("click", function () {
@@ -1224,6 +1407,7 @@
 
     reqName = n;
     reqText = r;
+    reflect = isNasty(r) || isNasty(n);
     errEl.textContent = "";
     $("req-body").textContent = "“" + r + "”";
     $("req-by").textContent = "— 요청인 " + n;
