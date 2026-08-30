@@ -29,6 +29,7 @@
     --ink-soft: #5D6773;
     --rule: #C3BFB0;
     --stamp: #C2362C;
+    --ok: #2E7D50;
     --marker: #E7D452;
     --shadow: rgba(24, 30, 24, .34);
   }
@@ -42,6 +43,7 @@
       --ink-soft: #4C5663;
       --rule: #ADA898;
       --stamp: #B22F26;
+      --ok: #3E9A63;
       --marker: #D3C044;
       --shadow: rgba(0, 0, 0, .6);
     }
@@ -55,6 +57,7 @@
     --ink-soft: #4C5663;
     --rule: #ADA898;
     --stamp: #B22F26;
+    --ok: #3E9A63;
     --marker: #D3C044;
     --shadow: rgba(0, 0, 0, .6);
   }
@@ -304,6 +307,9 @@
     color: var(--ink-soft);
     margin: 8px 0 0;
   }
+  .verdict-word.ok { color: var(--ok); }
+  .stamp.ok { border-color: var(--ok); color: var(--ok); }
+
   .rainbow {
     font-size: clamp(21px, 5.4vw, 36px);
     letter-spacing: .02em;
@@ -940,18 +946,45 @@
   ];
 
   var round = 0, dodges = 0, timers = [], pool = [];
-  var reqName = "", reqText = "", reflect = false;
+  var reqName = "", reqText = "", mode = "";
 
   /* ── 비속어·비방 감지 → 무지개 반사 ── */
   var BAD = ["시발","씨발","씨빨","시부랄","씨부랄","좆","존나","존니","지랄","염병","병신","븅신","새끼","개새","썅","쌍놈","닥쳐","꺼져","엿먹","죽어","죽을래","미친","또라이","돌아이","등신","머저리","멍청","바보","한심","꼴통","무능","쓰레기","재수없","싸가지","건방","주제","니가뭔데","네가뭔데","말같지","어이없","웃기지마","개소리","헛소리","놀고있네","tlqkf","시1발","ㅅㅂ","ㅄ","ㅂㅅ","ㅈㄴ","ㅗ","ㅆㅂ","ㄲㅈ","ㄷㅊ","ㅁㅊ","fuck","shit","idiot","stupid"];
 
-  function isNasty(s) {
-    var t = String(s).toLowerCase().replace(/[\s.,!?~^\-_*'"()\[\]{}<>/\\|:;]/g, "");
-    for (var i = 0; i < BAD.length; i++) {
-      if (t.indexOf(BAD[i]) !== -1) { return true; }
+  /* 접대·이득 제안 → 승인 */
+  var GOOD = ["대신근무","근무대신","대신서","대신해","대신할","대타","야근대신","연차양보","양보하","넘겨드","돈드","돈을드","송금","입금","현금","사드릴","사드리","사줄","사줄게","사올게","쏠게","쏠께","쏘겠","한턱","기프티콘","상품권","용돈","보너스","인센티브","선물","치킨","피자","커피사","밥사","술사","청소해","설거지","빨래","심부름","반띵","나눠드","수익","월급","로또","마사지","운전해","태워드","업어드"];
+
+  /* 칭찬·아부 */
+  var PRAISE = ["잘생","미남","인물이좋","인물좋","훈남","멋있","멋지","인기쟁이","인기많","능력자","대단하","존경","최고","짱","센스","매력","동안","유능","카리스마","다정","훌륭","리더","믿음직","성실하","똑똑"];
+
+  function norm(s) {
+    return String(s).toLowerCase().replace(/[\s.,!?~^\-_*'"()\[\]{}<>/\\|:;]/g, "");
+  }
+
+  function hits(t, list) {
+    for (var i = 0; i < list.length; i++) {
+      if (t.indexOf(list[i]) !== -1) { return true; }
     }
     return false;
   }
+
+  function judge(name, req) {
+    var t = norm(req) + " " + norm(name);
+    if (hits(t, BAD)) { return "reflect"; }
+    if (hits(t, GOOD)) { return "approve"; }
+    if (hits(t, PRAISE)) { return "praise"; }
+    return "";
+  }
+
+  var APPROVE_REASON = "본 내용은 법적으로 효력을 지니며, 요청하신 내용은 장머운에게 바로 전달됩니다. 장머운 삶의 질 향상을 위해 직접 나서서 힘써주시는 것에 무구한 영광을 표하는 바입니다.";
+
+  var PRAISE_REASONS = [
+    "담당자도 알고 있습니다. 너무 들어서 이제 그만 듣고 싶다고 합니다.",
+    "칭찬 감사합니다. 다만 사실 확인 절차 없이도 이미 알고 있는 내용입니다.",
+    "귀하의 안목은 인정합니다. 요청은 반려합니다.",
+    "듣기 좋은 말씀이나, 담당자의 자존감은 이미 포화 상태입니다.",
+    "그런 말씀 하신 분이 오늘만 네 분째입니다. 그래도 반려입니다."
+  ];
 
   var REFLECT_REASONS = [
     "귀하께서 하신 말씀은 전부 귀하께 그대로 돌아갑니다.",
@@ -989,7 +1022,9 @@
   }
 
   function nextReason() {
-    if (reflect) { return REFLECT_REASONS[Math.floor(Math.random() * REFLECT_REASONS.length)]; }
+    if (mode === "approve") { return APPROVE_REASON; }
+    if (mode === "reflect") { return REFLECT_REASONS[Math.floor(Math.random() * REFLECT_REASONS.length)]; }
+    if (mode === "praise") { return PRAISE_REASONS[Math.floor(Math.random() * PRAISE_REASONS.length)]; }
     if (reqText && Math.random() < 0.3) { return dynamicReason(); }
     if (!pool.length) { pool = REASONS.slice(); }
     var i = Math.floor(Math.random() * pool.length);
@@ -1069,12 +1104,26 @@
   function showVerdict() {
     reviewSec.hidden = true;
     verdictSec.hidden = false;
-    if (reflect) {
+    if (mode === "reflect") {
       $("verdict-word").textContent = "☆ 무지개 반사 ☆";
       $("verdict-word").classList.add("rainbow");
       $("verdict-sub").textContent = "귀하의 말씀은 발신자에게 전량 반송되었습니다.";
       $("stamp-big").textContent = "반사";
       $("reason-title").textContent = "반 사 사 유";
+    } else if (mode === "approve") {
+      $("verdict-word").textContent = "승 인";
+      $("verdict-word").classList.add("ok");
+      $("verdict-sub").textContent = "본 요청은 원안대로 승인되었습니다.";
+      $("stamp-big").textContent = "승인";
+      $("stamp").classList.add("ok");
+      $("reason-title").textContent = "승 인 사 유";
+      appealBtn.hidden = true;
+      reissueBtn.hidden = true;
+      acceptBtn.textContent = "확 인";
+      $("fine-notes").innerHTML =
+        "<p>※ 본 승인서는 법적 효력을 지닙니다. 번복 시 담당자가 매우 서운해합니다.</p>" +
+        "<p>※ 이행 기한은 요청인이 정하되, 빠를수록 좋습니다.</p>" +
+        "<p>※ 본 결정에 대한 재심사는 접수하지 않습니다. 승인이니까요.</p>";
     }
     stampEl.style.opacity = "";
     void stampEl.offsetWidth;
@@ -1386,6 +1435,11 @@
   $("btn-copy").addEventListener("click", copyBack);
 
   acceptBtn.addEventListener("click", function () {
+    if (mode === "approve") {
+      farewell("승인 건은 담당자 장머운에게 즉시 전달되었습니다.<br>이행 일자는 추후 통보드리겠습니다.",
+               "말 바꾸기 없기!", false);
+      return;
+    }
     farewell("이의 없음으로 접수되었습니다. 본 건은 이것으로 종결합니다.",
              "도움이 필요하시면<br>언제든지 요청해주세요!", false);
   });
@@ -1407,7 +1461,7 @@
 
     reqName = n;
     reqText = r;
-    reflect = isNasty(r) || isNasty(n);
+    mode = judge(n, r);
     errEl.textContent = "";
     $("req-body").textContent = "“" + r + "”";
     $("req-by").textContent = "— 요청인 " + n;
