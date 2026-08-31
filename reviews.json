@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-08-31 16:10",
+  "updatedAt": "2026-08-31 18:04",
   "branches": {
     "구월 로데오점": {
       "naver": 2447,
@@ -8,7 +8,7 @@
       "tmap": null
     },
     "구월 길병원점": {
-      "naver": 1316,
+      "naver": 1315,
       "kakao": 20,
       "daangn": 6,
       "tmap": null
@@ -2585,7 +2585,7 @@
         "tmap": null
       },
       "구월 길병원점": {
-        "naver": 1316,
+        "naver": 1315,
         "kakao": 20,
         "daangn": 6,
         "tmap": null
