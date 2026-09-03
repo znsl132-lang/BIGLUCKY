@@ -1,8 +1,8 @@
 {
-  "updatedAt": "2026-09-02 22:14",
+  "updatedAt": "2026-09-03 10:03",
   "branches": {
     "구월 로데오점": {
-      "naver": 2449,
+      "naver": 2447,
       "kakao": 23,
       "daangn": 45,
       "tmap": null
@@ -14,7 +14,7 @@
       "tmap": null
     },
     "부천 상동점": {
-      "naver": 1383,
+      "naver": 1384,
       "kakao": 13,
       "daangn": 11,
       "tmap": null
@@ -44,7 +44,7 @@
       "tmap": null
     },
     "인천 논현점": {
-      "naver": 1047,
+      "naver": 1046,
       "kakao": 27,
       "daangn": 13,
       "tmap": null
@@ -2734,6 +2734,62 @@
       },
       "인천 논현점": {
         "naver": 1047,
+        "kakao": 27,
+        "daangn": 13,
+        "tmap": null
+      },
+      "인천 연수점": {
+        "naver": 1203,
+        "kakao": 71,
+        "daangn": 4,
+        "tmap": null
+      }
+    },
+    "2026-09-03": {
+      "구월 로데오점": {
+        "naver": 2447,
+        "kakao": 23,
+        "daangn": 45,
+        "tmap": null
+      },
+      "구월 길병원점": {
+        "naver": 1315,
+        "kakao": 20,
+        "daangn": 6,
+        "tmap": null
+      },
+      "부천 상동점": {
+        "naver": 1384,
+        "kakao": 13,
+        "daangn": 11,
+        "tmap": null
+      },
+      "부천 신중동점": {
+        "naver": 1127,
+        "kakao": 9,
+        "daangn": 0,
+        "tmap": null
+      },
+      "인천 검단점": {
+        "naver": 96,
+        "kakao": 1,
+        "daangn": 1,
+        "tmap": null
+      },
+      "인천 계산점": {
+        "naver": 909,
+        "kakao": 2,
+        "daangn": 6,
+        "tmap": null
+      },
+      "인천 공항점": {
+        "naver": 113,
+        "kakao": 0,
+        "daangn": 0,
+        "tmap": null
+      },
+      "인천 논현점": {
+        "naver": 1046,
         "kakao": 27,
         "daangn": 13,
         "tmap": null
