@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-09-25 10:03",
+  "updatedAt": "2026-09-25 12:03",
   "branches": {
     "구월 로데오점": {
       "naver": 2464,
@@ -38,7 +38,7 @@
       "tmap": null
     },
     "인천 공항점": {
-      "naver": 116,
+      "naver": 117,
       "kakao": 1,
       "daangn": 0,
       "tmap": null
@@ -4015,7 +4015,7 @@
         "tmap": null
       },
       "인천 공항점": {
-        "naver": 116,
+        "naver": 117,
         "kakao": 1,
         "daangn": 0,
         "tmap": null
