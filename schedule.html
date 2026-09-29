@@ -1338,7 +1338,7 @@ function genOnce(y,m,nDays,reqs,mk,seed,preset){
           const sh=S.stores.find(s2=>s2.n!==st.n&&_cnt(s2.n,d)<s2.need
             &&(!_strict||(allowed(cand,s2.n)&&(!selfOnly.has(s2.n)||cand.home===s2.n||(cand.pref||[]).includes(s2.n))&&(s2.n===cand.home||awayOK(cand)))));
           if(sh){ cells[cand.name][d]=sh.n; }
-          else { cells[cand.name][d]=OFF; if(fixedOff[cand.name]) fixedOff[cand.name].add(d); }
+          /* 갈 곳이 없으면 그대로 근무(중복)로 둔다 — 휴무는 지정 일수만 (실장 지시 2026-09-29) */
           atSt=atSt.filter(e=>e.name!==cand.name);
         }
       }
@@ -2152,6 +2152,7 @@ function editCell(ev,name,d){
       h+=item(st.n+'(CL)',st.n+' CL',storeColor(st.n));
     }
   });
+  h+=item('순환','순환','#efe9ff');
   h+=item('','휴무','#f4f4f5');
   h+=item('전휴무','전휴무',null,'cell-hol');
   h+=item('휴가','휴가',null,'cell-vac');
@@ -3099,6 +3100,56 @@ function wvRefineOnce(sc, opts){
    ② 남는 사람이 일반 직원이면 맞교환: 그 직원을 팀장·실장 자리로 보내고 팀장·실장은 순환
       (편성 제외 · 소속 고정 · 파트 규칙 · 고정된 날은 지킴)
    · 순환 날짜는 대상자끼리 고르게 나눈다 */
+
+/* ===== 휴무 초과 방지 (WV_OFFCAP) — 끄려면 WV_OFFCAP = 0 =====
+   생성 결과에서 누군가 휴무('')가 지정 일수(월 휴무 + 실장이 준 추가 휴무)를 넘으면
+   넘친 날을 근무로 되돌린다. 본인이 넣은 요청 휴무 날은 건드리지 않는다.
+   · 팀장·실장 → '순환' · 그 외 → 소속 매장(순환 소속이면 그날 사람이 가장 적은 갈 수 있는 매장)
+   · 되돌린 날이 6일 연속 근무를 만들면 다른 날을 고른다 */
+var WV_OFFCAP = 1;
+function wvCapOffs(sc){
+  if(!WV_OFFCAP || !sc || !sc.cells) return 0;
+  var cells = sc.cells, nD = sc.nDays;
+  var mk = sc.year + '-' + String(sc.month).padStart(2, '0');
+  var ABS = ['휴가','병가','훈련','출장','전휴무','제외'];
+  var isW = function(v){ return !!v && v !== '' && ABS.indexOf(v) < 0; };
+  var base = function(v){ return String(v || '').replace(/\((OP|CL|PT)\)$/, ''); };
+  var reqOff = {}; ((S.reqs && S.reqs[mk]) || []).forEach(function(r){ if(r.type === '휴무요청') reqOff[r.emp + '|' + (r.day - 1)] = 1; });
+  var bonus = {}; ((S.extraLog && S.extraLog[mk]) || []).forEach(function(x){ if(x.bulk) bonus[x.name] = (bonus[x.name] || 0) + 1; });
+  var hol = {}; ((S.hols && S.hols[mk]) || []).forEach(function(x){ hol[x - 1] = 1; });
+  var runIf = function(arr, d){ var L = 1, k; for(k = d - 1; k >= 0 && isW(arr[k]); k--) L++; for(k = d + 1; k < nD && isW(arr[k]); k++) L++; return L; };
+  var staffOn = function(stn, d){ var n = 0; S.emps.forEach(function(q){ if(q.role === '교육' || !cells[q.name]) return; var v = cells[q.name][d]; if(isW(v) && v !== '순환' && base(v) === stn) n++; }); return n; };
+  var fixed = 0;
+  S.emps.forEach(function(e){
+    if(e.role === '교육' || !cells[e.name]) return;
+    var arr = cells[e.name];
+    var tgt = (typeof offTarget === 'function' ? offTarget(e) : (e.offN == null ? 10 : e.offN)) + (bonus[e.name] || 0);
+    var off = arr.filter(function(v){ return v === ''; }).length;
+    var over = off - tgt;
+    if(over <= 0) return;
+    var mgr = (typeof WV_PATROL_TITLES !== 'undefined' ? WV_PATROL_TITLES : ['팀장','실장']).indexOf(String(e.title || '').trim()) >= 0;
+    var cand = [];
+    for(var d = 0; d < nD; d++){ if(arr[d] === '' && !hol[d] && !reqOff[e.name + '|' + d]) cand.push(d); }
+    cand.sort(function(a, b){ return runIf(arr, a) - runIf(arr, b); });   // 연속근무가 짧아지는 날부터
+    for(var i = 0; i < cand.length && over > 0; i++){
+      var d2 = cand[i];
+      if(runIf(arr, d2) > 5) continue;
+      var val;
+      if(mgr) val = '순환';
+      else if(e.home && e.home !== '순환') val = e.home;
+      else {
+        var ok = S.stores.filter(function(st){
+          if((e.ban || []).indexOf(st.n) >= 0) return false;
+          var x = (typeof needX === 'function') ? needX(st.n, d2, mk) : null;
+          return !(x != null && st._need != null && x < st._need);
+        }).sort(function(a, b){ return (staffOn(a.n, d2) - (typeof needAtN === 'function' ? needAtN(a.n, d2, mk) : a.need)) - (staffOn(b.n, d2) - (typeof needAtN === 'function' ? needAtN(b.n, d2, mk) : b.need)); });
+        val = ok.length ? ok[0].n : '순환';
+      }
+      arr[d2] = val; over--; fixed++;
+    }
+  });
+  return fixed;
+}
 var WV_PATROL = 1;
 var WV_PATROL_TITLES = ['팀장', '실장'];
 function wvPatrol(sc, opts){
@@ -3190,6 +3241,9 @@ function wvPatrol(sc, opts){
     var preset = arguments[1];
     var r = _g.apply(this, arguments);
     try{
+      var capN = 0;
+      try{ if(typeof sched !== 'undefined' && sched && sched.cells) capN = wvCapOffs(sched); }catch(e2){ console.warn('휴무 초과 방지 건너뜀:', e2); }
+      if(capN && typeof renderSched === 'function') renderSched();
       if(WV_PATROL && typeof sched !== 'undefined' && sched && sched.cells){
         var n = wvPatrol(sched, {
           lockedDay: preset ? function(nm, d){ return d < preset.fromIdx || (preset.locked && preset.locked.has(nm)); } : null
