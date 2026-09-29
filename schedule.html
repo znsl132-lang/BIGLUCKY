@@ -1113,7 +1113,11 @@ function genOnce(y,m,nDays,reqs,mk,seed,preset){
     });
     // 남은 순환 미정 인력 → 그날 인원 적은 매장 지원
     rotFree().forEach(e=>{
-      const tgt=S.stores.filter(s2=>!selfOnly.has(s2.n)&&allowed(e,s2.n)).sort((a,b)=>((at[a.n].length-a.need)-(at[b.n].length-b.need))||(prefRank(e,a.n)-prefRank(e,b.n)))[0]||S.stores.find(s2=>allowed(e,s2.n))||S.stores[0];
+      const pool0=S.stores.filter(s2=>!selfOnly.has(s2.n)&&allowed(e,s2.n));
+      // 인원 예외로 일부러 줄인 매장(예: 로데오 1인 날)에는 잉여 인력을 보내지 않는다 — 다른 곳이 전혀 없을 때만
+      const poolX=pool0.filter(s2=>{ const x=needX(s2.n,d,mk); return !(x!=null&&s2._need!=null&&x<s2._need); });
+      const pool=poolX.length?poolX:pool0;
+      const tgt=pool.sort((a,b)=>((at[a.n].length-a.need)-(at[b.n].length-b.need))||(prefRank(e,a.n)-prefRank(e,b.n)))[0]||S.stores.find(s2=>allowed(e,s2.n))||S.stores[0];
       cells[e.name][d]=tgt.n; at[tgt.n].push(e.name);
     });
     // 로데오 OP/CL 라벨: 역할이 오픈/마감인 사람만. 풀타임·그 외는 라벨 없이 풀타임 근무.
