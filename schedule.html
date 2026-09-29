@@ -314,6 +314,18 @@
     </div>
     <div id="holList"></div>
   </div>
+  <div class="card" id="needXCard">
+    <h3>매장 인원 예외 <span class="hint">(이 달만 · 예: 로데오 화·수·목은 1인 풀근무)</span></h3>
+    <div class="rowbtns">
+      <select id="nxStore"></select>
+      <input type="text" id="nxDays" placeholder="날짜 (예: 2,9,16 · 15-17 · 0902)" style="width:210px">
+      <input type="number" id="nxNeed" min="0" max="5" value="1" style="width:56px" title="그날 필요 인원">
+      <span class="hint">명</span>
+      <button class="btn small" onclick="addNeedX()">추가</button>
+    </div>
+    <div id="nxList"></div>
+    <p class="hint">기본 인원은 ① 탭 매장 목록 값이고, 여기 적은 날짜만 바뀝니다. 2인 매장을 1인으로 두면 그날은 OP/CL 없이 풀근무 1명이 배치되고, 0으로 두면 그날은 매장이 쉽니다.</p>
+  </div>
   <div class="card">
     <h3>특이사항 추가 <span class="hint" id="reqMonthLabel"></span></h3>
     <div class="rowbtns">
@@ -487,6 +499,43 @@ function defaults(){
   };
 }
 function save(){ localStorage.setItem('wevape_sched', JSON.stringify(S)); }
+
+/* ===== 매장 인원 예외 (WV_NEEDX) — 끄려면 WV_NEEDX = 0 =====
+   특정 달·특정 날짜에 매장 필요 인원을 바꾼다. 예) 로데오 화·수·목 1인.
+   S.needX[월] = [{store, day(1-based), need}]
+   store.need 는 getter: __wvD(지금 계산 중인 날짜)가 잡혀 있으면 그날 값, 아니면 기본값 */
+var WV_NEEDX = 1;
+var __wvD = -1;
+function needX(stn, d, mk){
+  if(!WV_NEEDX || d == null || d < 0) return null;
+  mk = mk || (typeof monthKey === 'function' ? monthKey() : '');
+  var L = (S && S.needX && S.needX[mk]) || [];
+  for(var i = 0; i < L.length; i++) if(L[i].store === stn && +L[i].day === d + 1) return +L[i].need;
+  return null;
+}
+function needAtN(stn, d, mk){
+  var x = needX(stn, d, mk);
+  if(x != null) return x;
+  var st = (S.stores || []).find(function(s){ return s.n === stn; });
+  return st ? (st._need != null ? st._need : +st.need || 0) : 1;
+}
+function needSum(d, mk){ var t = 0; (S.stores || []).forEach(function(s){ t += needAtN(s.n, d, mk); }); return t; }
+function needTotalDays(nDays, holSet, mk){ var t = 0; for(var d = 0; d < nDays; d++){ if(holSet && holSet(d)) continue; t += needSum(d, mk); } return t; }
+function wvWrapStores(){
+  (S.stores || []).forEach(function(st){
+    var pd = Object.getOwnPropertyDescriptor(st, 'need');
+    if(pd && pd.get) return;
+    var base = +st.need || 0;
+    Object.defineProperty(st, '_need', { value: base, writable: true, enumerable: false, configurable: true });
+    Object.defineProperty(st, 'need', {
+      get: function(){ return __wvD >= 0 ? needAtN(this.n, __wvD) : this._need; },
+      set: function(v){ this._need = +v || 0; },
+      enumerable: true, configurable: true
+    });
+  });
+}
+setInterval(function(){ try{ if(typeof S !== 'undefined' && S && S.stores) wvWrapStores(); }catch(e){} }, 1500);
+
 function load(){
   try{
     const s=JSON.parse(localStorage.getItem('wevape_sched'));
@@ -507,6 +556,7 @@ function showTab(i,btn){
 
 // ---------- UI: 설정 ----------
 function renderStores(){
+  wvWrapStores();
   const box=document.getElementById('storeList');
   box.innerHTML=S.stores.map((st,i)=>
     `<span class="reqtag">${st.n} <input type="number" value="${st.need}" min="0" max="5" style="width:44px" onchange="S.stores[${i}].need=+this.value;save()"><b onclick="delStore(${i})">✕</b></span>`
@@ -603,6 +653,7 @@ function renderReqs(){
   const mk=monthKey();
   document.getElementById('reqMonthLabel').textContent=mk?('— '+mk.replace('-','년 ')+'월'):'(월을 선택하세요)';
   renderHols();
+  try{ renderNeedX(); }catch(e){}
   const box=document.getElementById('reqList');
   const list=S.reqs[mk]||[];
   if(!list.length){ box.innerHTML='<p class="hint">등록된 특이사항이 없습니다.</p>'; return; }
@@ -635,14 +686,61 @@ function addHol(){
   save(); renderHols();
 }
 function delHol(i){ const mk=monthKey(); S.hols[mk].splice(i,1); save(); renderHols(); }
+
+// ---------- 매장 인원 예외 (WV_NEEDX) ----------
+function renderNeedXStores(){
+  const sel=document.getElementById('nxStore'); if(!sel) return;
+  const cur=sel.value;
+  sel.innerHTML=(S.stores||[]).map(st=>`<option value="${st.n}">${st.n} (기본 ${st.need}명)</option>`).join('');
+  if(cur&&[...sel.options].some(o=>o.value===cur)) sel.value=cur;
+}
+function addNeedX(){
+  const mk=monthKey(); if(!mk){ alert('상단에서 대상 월을 먼저 선택하세요.'); return; }
+  const [y,m]=mk.split('-').map(Number);
+  const maxD=new Date(y,m,0).getDate();
+  const store=document.getElementById('nxStore').value;
+  const need=parseInt(document.getElementById('nxNeed').value,10);
+  if(!store){ alert('매장을 고르세요.'); return; }
+  if(!(need>=0&&need<=5)){ alert('인원은 0~5 사이로 입력하세요.'); return; }
+  const days=parseDays(document.getElementById('nxDays').value,maxD,m);
+  if(!days.length){ alert('날짜를 입력하세요. 예: 2,9,16 · 15-17 · 0902'); return; }
+  if(!S.needX) S.needX={};
+  if(!S.needX[mk]) S.needX[mk]=[];
+  days.forEach(day=>{
+    S.needX[mk]=S.needX[mk].filter(x=>!(x.store===store&&x.day===day));
+    S.needX[mk].push({store,day,need});
+  });
+  S.needX[mk].sort((a,b)=>a.store.localeCompare(b.store)||a.day-b.day);
+  document.getElementById('nxDays').value='';
+  save(); renderNeedX(); try{ renderCapacity(); }catch(e){}
+}
+function delNeedX(i){ const mk=monthKey(); S.needX[mk].splice(i,1); save(); renderNeedX(); try{ renderCapacity(); }catch(e){} }
+function renderNeedX(){
+  renderNeedXStores();
+  const mk=monthKey();
+  const box=document.getElementById('nxList'); if(!box) return;
+  const list=(S.needX&&S.needX[mk])||[];
+  if(!list.length){ box.innerHTML='<p class="hint">등록된 매장 인원 예외가 없습니다.</p>'; return; }
+  const [y,m]=mk.split('-').map(Number);
+  const dow=['일','월','화','수','목','금','토'];
+  const by={}; list.forEach((x,i)=>{ (by[x.store]=by[x.store]||[]).push({...x,i}); });
+  box.innerHTML='<table class="reqtbl"><thead><tr><th style="width:90px">매장</th><th>날짜 (✕로 삭제)</th><th style="width:50px">건수</th></tr></thead><tbody>'+
+    Object.keys(by).map(stn=>{
+      const base=(S.stores.find(s=>s.n===stn)||{}).need;
+      return `<tr><td><b>${stn}</b> <span class="hint">기본 ${base}명</span></td><td>`+
+        by[stn].map(x=>`<span class="daychip ${x.need<base?'t-vac':(x.need>base?'t-fix':'')}"><span class="dnum">${x.day}일<small style="margin-left:2px">${dow[new Date(y,m-1,x.day).getDay()]}</small></span><small>${x.need===0?'휴점':x.need+'명'}</small><b onclick="delNeedX(${x.i})">✕</b></span>`).join('')+
+        `</td><td class="cnt">${by[stn].length}</td></tr>`;
+    }).join('')+'</tbody></table>';
+}
 // ---------- 특이사항 임시 저장 ----------
 function saveReqDraft(){
   const mk=monthKey(); if(!mk){ alert('상단에서 대상 월을 먼저 선택하세요.'); return; }
   if(!S.reqDrafts) S.reqDrafts={};
   if(!S.reqDrafts[mk]) S.reqDrafts[mk]=[];
   const n=(S.reqs[mk]||[]).length, hn=((S.hols&&S.hols[mk])||[]).length;
-  const label=new Date().toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})+` (특이사항 ${n}건${hn?`·전휴무 ${hn}일`:''})`;
-  S.reqDrafts[mk].push({label,reqs:JSON.parse(JSON.stringify(S.reqs[mk]||[])),hols:JSON.parse(JSON.stringify((S.hols&&S.hols[mk])||[]))});
+  const xn=((S.needX&&S.needX[mk])||[]).length;
+  const label=new Date().toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})+` (특이사항 ${n}건${hn?`·전휴무 ${hn}일`:''}${xn?`·인원예외 ${xn}건`:''})`;
+  S.reqDrafts[mk].push({label,reqs:JSON.parse(JSON.stringify(S.reqs[mk]||[])),hols:JSON.parse(JSON.stringify((S.hols&&S.hols[mk])||[])),needX:JSON.parse(JSON.stringify((S.needX&&S.needX[mk])||[]))});
   if(S.reqDrafts[mk].length>10) S.reqDrafts[mk].shift();
   save(); renderReqDrafts();
   alert('특이사항 임시 저장 완료: '+label);
@@ -662,6 +760,8 @@ function loadReqDraft(){
   S.reqs[mk]=JSON.parse(JSON.stringify(d.reqs));
   if(!S.hols) S.hols={};
   S.hols[mk]=JSON.parse(JSON.stringify(d.hols||[]));
+  if(!S.needX) S.needX={};
+  S.needX[mk]=JSON.parse(JSON.stringify(d.needX||[]));
   save(); renderReqs();
 }
 function applyReqDraft(){
@@ -673,6 +773,8 @@ function applyReqDraft(){
     S.reqs[mk]=JSON.parse(JSON.stringify(d.reqs));
     if(!S.hols) S.hols={};
     S.hols[mk]=JSON.parse(JSON.stringify(d.hols||[]));
+    if(!S.needX) S.needX={};
+    S.needX[mk]=JSON.parse(JSON.stringify(d.needX||[]));
     save(); renderReqs();
   }
   const btn=document.querySelectorAll('.tabs button')[2];
@@ -699,6 +801,10 @@ function renderHols(){
 
 // ---------- 스케줄 생성 ----------
 function generate(keepExtra,preset){
+  try{ wvWrapStores(); }catch(e){}
+  try{ return __generate(keepExtra,preset); } finally { __wvD=-1; }
+}
+function __generate(keepExtra,preset){
   const mk=monthKey(); if(!mk){ alert('상단에서 대상 월을 먼저 선택하세요.'); return; }
   const [y,m]=mk.split('-').map(Number);
   const nDays=new Date(y,m,0).getDate();
@@ -881,7 +987,9 @@ function genOnce(y,m,nDays,reqs,mk,seed,preset){
     }
     return away<home;
   };
+  wvWrapStores();
   for(let d=0;d<nDays;d++){
+    __wvD=d;
     if(isHol[d]){ S.emps.forEach(e=>{ if(cells[e.name][d]===null) cells[e.name][d]='전휴무'; }); continue; }
     // 고정 직원: 미정이면 자기 매장 근무 (교육생·자체인원매장 멤버 제외)
     S.emps.forEach(e=>{
@@ -1105,6 +1213,7 @@ function genOnce(y,m,nDays,reqs,mk,seed,preset){
       // 목적지: 잉여 인원이 있는 근무일 중, 휴무로 바꿔도 새 3연속 휴무가 안 생기는 날
       let t=-1;
       for(let k=0;k<nDays;k++){
+        __wvD=k;
         if(isHol[k]||isLocked(e.name,k)) continue;
         const v=arr[k];
         if(!v||v===OFF||['휴가','병가','훈련','출장','전휴무'].includes(v)) continue;
@@ -1130,8 +1239,9 @@ function genOnce(y,m,nDays,reqs,mk,seed,preset){
     const _offN=nm=>cells[nm].reduce((a,v)=>a+(v===OFF?1:0),0);
     S.stores.forEach(st=>{
       const homeStaff=S.emps.filter(e=>!isTrainee(e)&&e.home===st.n);
-      if(homeStaff.length<=st.need) return;
+      __wvD=-1; if(homeStaff.length<=st.need) return;
       for(let d=0;d<nDays;d++){
+        __wvD=d;
         if(isHol[d]) continue;
         let atSt=homeStaff.filter(e=>_isW(cells[e.name][d])&&_base(cells[e.name][d])===st.n&&!isLocked(e.name,d));
         while(atSt.length>st.need){
@@ -1150,6 +1260,7 @@ function genOnce(y,m,nDays,reqs,mk,seed,preset){
   // 5) 최종 검증: 공백 매장이 없는지 전수 확인, 발견 시 잉여 근무일과 휴무를 맞교환해 복구
   const cntAt=(stn,dd)=>S.emps.reduce((a,o)=>a+((!isTrainee(o)&&isWork(cells[o.name][dd])&&baseOf(cells[o.name][dd])===stn)?1:0),0);
   for(let d=0;d<nDays;d++){
+    __wvD=d;
     if(isHol[d]) continue;
     S.stores.forEach(st=>{
       let cur=cntAt(st.n,d);
@@ -1190,6 +1301,7 @@ function genOnce(y,m,nDays,reqs,mk,seed,preset){
   // 5.5) 최종 라벨 정리: 2인 매장(로데오)의 OP/CL을 편성 확정 후 다시 부여
   //      — 오픈/마감 역할 우선, 소속 파트가 그다음. 그 외(순환·타매장 파트)는 라벨 없이 풀타임.
   for(let d=0;d<nDays;d++){
+    __wvD=d;
     if(isHol[d]) continue;
     S.stores.filter(st=>st.need>=2).forEach(st=>{
       const names=S.emps.filter(e=>!isTrainee(e)&&isWork(cells[e.name][d])&&baseOf(cells[e.name][d])===st.n).map(e=>e.name);
@@ -1280,6 +1392,7 @@ function computeDupes(){
   const {nDays,cells,month}=sched;
   const strip=v=>v.replace(/\((OP|CL|PT)\)$/,'');
   for(let d=0;d<nDays;d++){
+    __wvD=d;
     S.stores.filter(st=>st.need<2).forEach(st=>{
       const es=S.emps.filter(e=>e.role!=='교육').filter(e=>{
         const v=cells[e.name]&&cells[e.name][d];
@@ -1318,6 +1431,7 @@ function recommendOffs(){
   Object.values(S.extraLog||{}).forEach(a=>a.forEach(x=>hist[x.name]=(hist[x.name]||0)+1));
   const items=[];
   for(let d=0;d<nDays;d++){
+    __wvD=d;
     S.stores.forEach(st=>{
       const es=S.emps.filter(e=>e.role!=='교육').filter(e=>{
         const v=cells[e.name][d];
@@ -1350,6 +1464,7 @@ function coverageWarnsForDays(dayIdxs){
   const hols=(S.hols&&S.hols[monthKey()])||[];
   const out=[];
   dayIdxs.forEach(d=>{
+    __wvD=d;
     if(hols.includes(d+1)) return; // 전매장 휴무일 제외
     S.stores.forEach(st=>{
       const cnt=S.emps.filter(e=>e.role!=='교육').filter(e=>{
@@ -1760,6 +1875,7 @@ function extraCands(){
   const hols=(S.hols&&S.hols[mk])||[];
   const byEmp={}; let total=0;
   for(let d=0;d<nDays;d++){
+    __wvD=d;
     if(hols.includes(d+1)) continue;
     const at={}; S.stores.forEach(st=>at[st.n]=[]);
     S.emps.forEach(e=>{ if(e.role==='교육') return; const v=cells[e.name][d]; if(v&&v!==OFF&&!['휴가','병가','훈련','출장','전휴무'].includes(v)){ const b=v.replace(/\((OP|CL)\)$/,''); if(at[b]) at[b].push(e.name); } });
@@ -1827,6 +1943,7 @@ function planExtra(name){
   }
   // 1) 그날 자기 매장에 잉여 인원이 있으면 그대로 빠짐 (변동 없음)
   for(let d=0;d<nDays;d++){
+    __wvD=d;
     if(hols.includes(d+1)) continue;
     const v=cells[name][d]; if(!isWork(v)) continue;
     const X=baseOf(v);
@@ -1834,6 +1951,7 @@ function planExtra(name){
   }
   // 2) 다른 매장의 잉여 인원을 대체 투입
   for(let d=0;d<nDays;d++){
+    __wvD=d;
     if(hols.includes(d+1)) continue;
     const v=cells[name][d]; if(!isWork(v)) continue;
     const X=baseOf(v);
@@ -2384,7 +2502,8 @@ function renderCapacity(){
   var op=Math.max(0,D-H);
   var isTr=function(e){return e.role==='교육';};
   var totalNeed=S.stores.reduce(function(a,st){return a+(+st.need||0);},0);
-  var required=totalNeed*op;
+  var __holS=new Set(((S.hols&&S.hols[mk])||[]).map(function(x){return x-1;}));
+  var required=needTotalDays(D,function(d){return __holS.has(d);},mk);
   var reqs=(mk&&S.reqs&&S.reqs[mk])||[];
   var vacCnt={};
   reqs.forEach(function(r){ if(['휴가','병가','훈련','출장'].indexOf(r.type)>=0){ vacCnt[r.emp]=(vacCnt[r.emp]||0)+1; } });
@@ -2504,14 +2623,15 @@ function wvOptimize(sc){
   var homeCnt={}; S.stores.forEach(function(s){homeCnt[s.n]=0;}); S.emps.forEach(function(e){ if(homeCnt[e.home]!=null)homeCnt[e.home]++; });
   var selfOnly={}; S.stores.forEach(function(s){ selfOnly[s.n]=(homeCnt[s.n]>=2&&s.need<homeCnt[s.n]); });
   var needOf={}; S.stores.forEach(function(s){needOf[s.n]=s.need;});
+  var needOfD=function(stn,dd){ return needAtN(stn,dd,mk); };
   function canWork(e,st){ var p=e.pref||[],b=e.ban||[]; if(b.indexOf(st)>=0)return false; if(selfOnly[st])return e.home===st; return p.indexOf(st)>=0||e.home===st; }
   function consecWorkOK(nm,d){ var run=1,k; for(k=d-1;k>=0&&isW(cells[nm][k]);k--)run++; for(k=d+1;k<nDays&&isW(cells[nm][k]);k++)run++; return run<=6; }
   function staffOn(d){ var c={}; S.stores.forEach(function(s){c[s.n]=0;}); emps.forEach(function(e){var v=cells[e.name][d]; if(isW(v)){var b=baseOf(v); if(c[b]!=null)c[b]++;}}); return c; }
   function offCount(nm){ var n=0,d; for(d=0;d<nDays;d++) if(cells[nm][d]==='')n++; return n; }
-  function labelFor(e,st){ if(needOf[st]>=2){ if(e.role==='오픈')return st+'(OP)'; if(e.role==='마감')return st+'(CL)'; } return st; }
+  function labelFor(e,st,dd){ if((dd==null?needOf[st]:needOfD(st,dd))>=2){ if(e.role==='오픈')return st+'(OP)'; if(e.role==='마감')return st+'(CL)'; } return st; }
   // PASS A: fill empties
   var d,s;
-  for(d=0;d<nDays;d++){ if(hol.has(d))continue;
+  for(d=0;d<nDays;d++){ __wvD=d; if(hol.has(d))continue;
     var c=staffOn(d);
     var order=S.stores.slice().sort(function(a,b){return (b.need-c[b.n])-(a.need-c[a.n]);});
     for(var oi=0;oi<order.length;oi++){ s=order[oi]; var guard=0;
@@ -2519,7 +2639,7 @@ function wvOptimize(sc){
         var cand=emps.filter(function(e){ return cells[e.name][d]===''&&!req.has(e.name+'|'+d)&&canWork(e,s.n)&&consecWorkOK(e.name,d); });
         if(!cand.length)break;
         cand.sort(function(a,b){return offCount(b.name)-offCount(a.name);});
-        var pk=cand[0]; cells[pk.name][d]=labelFor(pk,s.n); c[s.n]++;
+        var pk=cand[0]; cells[pk.name][d]=labelFor(pk,s.n,d); c[s.n]++;
       }
     }
   }
@@ -2532,8 +2652,8 @@ function wvOptimize(sc){
         var sh=S.stores.filter(function(s){return c[s.n]<s.need&&canWork(e,s.n);}).sort(function(a,b){return (b.need-c[b.n])-(a.need-c[a.n]);});
         if(sh.length)store=sh[0].n; else { var ok=S.stores.filter(function(s){return canWork(e,s.n)&&!selfOnly[s.n];}); if(ok.length){ ok.sort(function(a,b){return (c[a.n]-a.need)-(c[b.n]-b.need);}); store=ok[0].n; } }
         if(!store)continue;
-        var wasShort=c[store]<needOf[store];
-        arr[p]=labelFor(e,store);
+        var wasShort=c[store]<needOfD(store,p);
+        arr[p]=labelFor(e,store,p);
         if(!wasShort){ var done=false; for(var w=0;w<nDays&&!done;w++){ if(w===p||hol.has(w)||req.has(nm+'|'+w))continue; if(!isW(arr[w]))continue; var b=baseOf(arr[w]); var cw=staffOn(w); if(cw[b]-needOf[b]>=1){ var save=arr[w]; arr[w]=''; if(offRunAt(nm,w)<=2)done=true; else arr[w]=save; } } }
       } }
       d=j;
@@ -2589,7 +2709,7 @@ function wvCtx(sc){
     nDays: sc.nDays, isW: isW, baseOf: baseOf, acts: acts, hol: hol, prot: prot,
     needOf: needOf, selfOnly: selfOnly,
     target: function(e){ return (typeof offTarget === 'function' ? offTarget(e) : 10) + (bonus[e.name] || 0); },
-    label: function(e, st){ if(needOf[st] >= 2){ if(e.role === '오픈') return st + '(OP)'; if(e.role === '마감') return st + '(CL)'; } return st; }
+    label: function(e, st){ if(needAtN(st, __wvD) >= 2){ if(e.role === '오픈') return st + '(OP)'; if(e.role === '마감') return st + '(CL)'; } return st; }
   };
 }
 
@@ -2597,6 +2717,7 @@ function scoreSchedule(cells, C){
   var d, i, st, e, v, b, nDays = C.nDays;
   var det = { gap:0, dupe:0, over6:0, runCurve:0, tight:0, restSpread:0, blockMove:0, move:0, moveTop:0, restRun3:0, mateAllOff:0, offShort:0, offOver:0 };
   for(d = 0; d < nDays; d++){
+    __wvD = d;
     if(C.hol[d]) continue;
     var at = {}; S.stores.forEach(function(s){ at[s.n] = 0; });
     for(i = 0; i < C.acts.length; i++){
@@ -2734,6 +2855,7 @@ function wvRefineOnce(sc, opts){
   for(var it = 0; it < iters; it++){
     var T = T0 * Math.pow(T1 / T0, it / iters);
     var d = ri(nDays);
+    __wvD = d;
     if(C.hol[d]) continue;
     var workers = [], offs = [];
     for(var i = 0; i < C.acts.length; i++){
@@ -2758,7 +2880,7 @@ function wvRefineOnce(sc, opts){
         var vv = cells[B0.name][dd]; if(!C.isW(vv)) continue;
         if(!canLeave(B0, dd)) continue;
         var uu = C.baseOf(vv), atd = countAt(dd);
-        if(atd[uu] > (C.needOf[uu] || 1)) days.push(dd, dd, dd); else days.push(dd);
+        if(atd[uu] > (needAtN(uu, dd) || 1)) days.push(dd, dd, dd); else days.push(dd);
       }
       if(!days.length) continue;
       var D2 = days[ri(days.length)];
@@ -2770,7 +2892,7 @@ function wvRefineOnce(sc, opts){
       for(var k = 0; k < workers.length; k++){
         var wkr = workers[k], fr = C.baseOf(cells[wkr.name][d]);
         if(fr === tgt || !canEnter(wkr, tgt) || !canLeave(wkr, d)) continue;
-        if(at[fr] > (C.needOf[fr] || 1)) pool.push(wkr, wkr, wkr); else pool.push(wkr);
+        if(at[fr] > (needAtN(fr, d) || 1)) pool.push(wkr, wkr, wkr); else pool.push(wkr);
       }
       if(!pool.length) continue;
       var P = pool[ri(pool.length)];
@@ -2822,7 +2944,7 @@ function wvRefineOnce(sc, opts){
               [A2.name, D3, cells[A2.name][D3]], [B2.name, D3, cells[B2.name][D3]]];
       cells[A2.name][d] = '';
       cells[B2.name][d] = C.label(B2, X2);
-      cells[A2.name][D3] = C.label(A2, Y2);
+      __wvD = D3; cells[A2.name][D3] = C.label(A2, Y2); __wvD = d;
       cells[B2.name][D3] = '';
     } else {
       var Cc = workers[ri(workers.length)], from2 = C.baseOf(cells[Cc.name][d]);
@@ -3032,6 +3154,7 @@ function wvIssues(o){
   var mk = sched.year + '-' + String(sched.month).padStart(2, '0');
   var gaps = [], dupes = [], miss = [];
   for(var d = 0; d < nDays; d++){
+    __wvD = d;
     if(C.hol[d]) continue;
     var at = {}; S.stores.forEach(function(s2){ at[s2.n] = []; });
     C.acts.forEach(function(e){
@@ -3321,7 +3444,9 @@ function wvBusy(msg){
     var cap = 0;
     acts.forEach(function(e){ cap += Math.max(0, work - offTarget(e)); });
     var totalNeed = S.stores.reduce(function(a, s){ return a + s.need; }, 0);
-    var need = totalNeed * work;
+    var __hs = new Set(((S.hols && S.hols[mk]) || []).map(function(x){ return x - 1; }));
+    var __nD = (function(){ var q = String(mk).split('-'); return new Date(+q[0], +q[1], 0).getDate(); })();
+    var need = needTotalDays(__nD, function(d){ return __hs.has(d); }, mk);
 
     var reach = function(e){
       var out = [];
@@ -3341,7 +3466,7 @@ function wvBusy(msg){
       var st = S.stores.filter(function(x){ return x.n === sn; })[0];
       if(!st) return;
       var have = lock[sn].reduce(function(a, e){ return a + Math.max(0, work - offTarget(e)); }, 0);
-      var mine = st.need * work;
+      var mine = 0; for(var __d = 0; __d < __nD; __d++){ if(__hs.has(__d)) continue; mine += needAtN(st.n, __d, mk); }
       if(have > mine) waste.push({ store: sn, days: have - mine, who: lock[sn].map(function(e){ return e.name; }) });
     });
     var wasteN = waste.reduce(function(a, x){ return a + x.days; }, 0);
@@ -3350,7 +3475,8 @@ function wvBusy(msg){
     S.stores.forEach(function(st){
       var have = 0;
       acts.forEach(function(e){ if(reach(e).indexOf(st.n) >= 0) have += Math.max(0, work - offTarget(e)); });
-      if(have < st.need * work) thin.push({ store: st.n, short: st.need * work - have });
+      var __mine2 = 0; for(var __d2 = 0; __d2 < __nD; __d2++){ if(__hs.has(__d2)) continue; __mine2 += needAtN(st.n, __d2, mk); }
+      if(have < __mine2) thin.push({ store: st.n, short: __mine2 - have });
     });
 
     return { mk: mk, work: work, cap: cap, need: need, slack: cap - need,
@@ -3569,6 +3695,7 @@ var WV_LNS_ITERS = 15000;
   }
   function apply(j){
     S.stores = j.stores.map(function(x){ return { n:x.n, need:x.need }; });
+    wvWrapStores();
     S.emps = j.emps.map(function(e){
       var o = { name:e.name, title:e.title || '', home:e.home || '',
         offN:(e.offN == null ? 10 : e.offN), role:e.role || '', type:e.type || '정규직' };
@@ -3677,7 +3804,8 @@ function wvRankInit(){
     (S.emps || []).forEach(function(e){ t += (e.offN == null ? 10 : e.offN); });
     var n = 0;
     (S.stores || []).forEach(function(s){ n += (s.need || 0); });
-    return (S.emps || []).length + '/' + (S.stores || []).length + '/' + t + '/' + n;
+    var nx = 0; try{ nx = JSON.stringify((S.needX && S.needX[monthKey()]) || []).length; }catch(e){}
+    return (S.emps || []).length + '/' + (S.stores || []).length + '/' + t + '/' + n + '/' + nx;
   }
   function calc(mk){
     var key = mk + '|' + sig();
@@ -3689,9 +3817,8 @@ function wvRankInit(){
     var work = nDays - holN;
     var acts = (S.emps || []).filter(function(e){ return e.role !== '교육'; });
     if(!acts.length) return null;
-    var needPerDay = 0;
-    (S.stores || []).forEach(function(s){ needPerDay += (s.need || 0); });
-    var needTotal = needPerDay * work;
+    var __hs2 = new Set(((S.hols && S.hols[mk]) || []).map(function(x){ return x - 1; }));
+    var needTotal = needTotalDays(nDays, function(d){ return __hs2.has(d); }, mk);
     var cap = 0;
     acts.forEach(function(e){ cap += (work - _o(e)); });
     var diff = cap - needTotal;
@@ -3849,8 +3976,8 @@ function wvChkInit(){
         var nD = new Date(y, mo, 0).getDate();
         var holN = ((S.hols && S.hols[m]) || []).length;
         var work = nD - holN;
-        var need = 0; (S.stores || []).forEach(function(s){ need += (s.need || 0); });
-        var needT = need * work;
+        var __hs3 = new Set(((S.hols && S.hols[m]) || []).map(function(x){ return x - 1; }));
+        var needT = needTotalDays(nD, function(d){ return __hs3.has(d); }, m);
         var cap = 0; acts.forEach(function(e){ cap += (work - (typeof offTarget === 'function' ? offTarget(e) : (e.offN == null ? 10 : e.offN))); });
         var d = cap - needT;
         if(d < 0) push('bad', esc(m) + ' — 근무일이 <b>' + (-d) + '일 모자랍니다</b> (필요 ' + needT + '일 · 가용 ' + cap + '일)',
@@ -4029,6 +4156,7 @@ wvChkInit();
     if(typeof sched === 'undefined' || !sched){ alert('먼저 스케줄을 생성하세요.'); return; }
     css();
     var Y = sched.year, M = sched.month, nD = sched.nDays, cells = sched.cells;
+    var __mkC = Y + '-' + String(M).padStart(2, '0');
     var need = 0;
     try{ (S.stores || []).forEach(function(s){ if(s.n === store) need = +s.need || 0; }); }catch(x){}
     var first = new Date(Y, M - 1, 1).getDay();
@@ -4048,11 +4176,12 @@ wvChkInit();
         who.push(nm + tail);
       }
       totalMan += who.length;
-      var short = need && who.length < need;
+      var needD = needAtN(store, d, __mkC);
+      var short = needD && who.length < needD;
       if(short) totalShort++;
       var dow = new Date(Y, M - 1, d + 1).getDay();
       html += '<div class="sc-c' + (short ? ' short' : '') + (dow === 0 ? ' sun' : dow === 6 ? ' sat' : '') + '">'
-        + '<span class="sc-d">' + (d + 1) + '<span class="sc-cnt">' + who.length + (need ? '/' + need : '') + '</span></span>'
+        + '<span class="sc-d">' + (d + 1) + '<span class="sc-cnt">' + who.length + (needD ? '/' + needD : '') + '</span></span>'
         + who.map(function(x){ return '<span class="sc-n">' + x + '</span>'; }).join('')
         + '</div>';
     }
