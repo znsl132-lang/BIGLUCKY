@@ -529,6 +529,8 @@ function wvWrapStores(){
     if(pd && pd.get) return;
     var base = +st.need || 0;
     Object.defineProperty(st, '_need', { value: base, writable: true, enumerable: false, configurable: true });
+    /* 저장(localStorage · 시트)할 때는 날짜별 값이 아니라 항상 기본값을 쓴다 */
+    Object.defineProperty(st, 'toJSON', { value: function(){ return { n: this.n, need: this._need }; }, enumerable: false, configurable: true });
     Object.defineProperty(st, 'need', {
       get: function(){
         if(__wvD < 0) return this._need;
@@ -566,7 +568,7 @@ function renderStores(){
   wvWrapStores();
   const box=document.getElementById('storeList');
   box.innerHTML=S.stores.map((st,i)=>
-    `<span class="reqtag">${st.n} <input type="number" value="${st.need}" min="0" max="5" style="width:44px" onchange="S.stores[${i}].need=+this.value;save()"><b onclick="delStore(${i})">✕</b></span>`
+    `<span class="reqtag">${st.n} <input type="number" value="${st._need!=null?st._need:st.need}" min="0" max="5" style="width:44px" onchange="S.stores[${i}].need=+this.value;save()"><b onclick="delStore(${i})">✕</b></span>`
   ).join('');
   const sel=document.getElementById('reqStore');
   sel.innerHTML=S.stores.map(st=>`<option>${st.n}</option>`).join('');
@@ -3771,7 +3773,7 @@ var WV_LNS_ITERS = 15000;
   }
   function collect(){
     return {
-      stores: (S.stores || []).map(function(x){ return { n:x.n, need:x.need }; }),
+      stores: (S.stores || []).map(function(x){ return { n:x.n, need:(x._need != null ? x._need : x.need) }; }),
       emps: (S.emps || []).map(function(e){
         return { name:e.name, title:e.title || '', home:e.home || '',
           offN:(e.offN == null ? 10 : e.offN), role:e.role || '',
