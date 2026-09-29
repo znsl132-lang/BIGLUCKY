@@ -2326,7 +2326,7 @@ function importXlsx(){
       const c0=4; // 소속/성명/직책/구분 다음부터 날짜
       const cells={}; const unknown=[]; const badVals=new Set();
       const knownStores=new Set(S.stores.map(s2=>s2.n));
-      const knownAbs=['휴가','병가','훈련','출장','전휴무','제외'];
+      const knownAbs=['휴가','병가','훈련','출장','전휴무','제외','순환'];
       for(let r=3;r<aoa.length;r++){
         const row=aoa[r]; if(!row||!String(row[1]||'').trim()) continue;
         const name=String(row[1]).trim();
@@ -3088,6 +3088,119 @@ function wvRefineOnce(sc, opts){
     wrapped.__wvopt = true;
     generate = wrapped;
   }
+})();
+</script>
+<script>
+/* ===== 지점 순환 근무 (WV_PATROL) — 끄려면 WV_PATROL = 0 =====
+   순환 = 한 매장에 하루 종일 있지 않고 지점을 돌며 점검하는 근무. 칸에 '순환'으로 찍힌다.
+   · 팀장·실장만 가능 · 근무일로 친다(휴무 아님) · 매장 인원에는 안 셈
+   · 전 매장을 먼저 채운 뒤, 남는 인력만 순환으로 돌린다 (순환 때문에 매장이 비는 일 없음)
+   ① 매장에 필요 이상 서 있는 팀장·실장 → 순환
+   ② 남는 사람이 일반 직원이면 맞교환: 그 직원을 팀장·실장 자리로 보내고 팀장·실장은 순환
+      (편성 제외 · 소속 고정 · 파트 규칙 · 고정된 날은 지킴)
+   · 순환 날짜는 대상자끼리 고르게 나눈다 */
+var WV_PATROL = 1;
+var WV_PATROL_TITLES = ['팀장', '실장'];
+function wvPatrol(sc, opts){
+  if(!WV_PATROL || !sc || !sc.cells) return 0;
+  opts = opts || {};
+  var cells = sc.cells, nD = sc.nDays;
+  var mk = sc.year + '-' + String(sc.month).padStart(2, '0');
+  var hol = {}; ((S.hols && S.hols[mk]) || []).forEach(function(x){ hol[x - 1] = 1; });
+  var ABS = ['휴가','병가','훈련','출장','전휴무','제외'];
+  var isW = function(v){ return !!v && v !== '' && ABS.indexOf(v) < 0; };
+  var base = function(v){ return String(v || '').replace(/\((OP|CL|PT)\)$/, ''); };
+  var emp = {}; S.emps.forEach(function(e){ emp[e.name] = e; });
+  var acts = S.emps.filter(function(e){ return e.role !== '교육' && cells[e.name]; });
+  var mgr = acts.filter(function(e){ return WV_PATROL_TITLES.indexOf(String(e.title || '').trim()) >= 0; });
+  if(!mgr.length) return 0;
+  var storeSet = {}; S.stores.forEach(function(st){ storeSet[st.n] = 1; });
+  var need = function(stn, d){ return (typeof needAtN === 'function') ? needAtN(stn, d, mk) : ((S.stores.find(function(x){ return x.n === stn; }) || {}).need || 1); };
+  var locked = function(nm, d){ return !!(opts.lockedDay && opts.lockedDay(nm, d)); };
+  var canGo = function(e, stn){
+    if((e.ban || []).indexOf(stn) >= 0) return false;
+    if(e.home === '순환') return true;
+    return stn === e.home || (e.pref || []).indexOf(stn) >= 0;
+  };
+  var awayOK = function(e, d){               // 파트: 타 매장 근무가 소속 근무를 넘지 않게
+    if(e.role !== '파트' || e.home === '순환') return true;
+    var home = 0, away = 0;
+    for(var k = 0; k < nD; k++){ if(k === d) continue; var v = cells[e.name][k]; if(!isW(v) || v === '순환') continue; if(base(v) === e.home) home++; else away++; }
+    return away + 1 <= home;
+  };
+  var patrolN = {}; mgr.forEach(function(e){ patrolN[e.name] = cells[e.name].filter(function(v){ return v === '순환'; }).length; });
+  var byFew = function(a, b){ return patrolN[a.name] - patrolN[b.name] || (a.name < b.name ? -1 : 1); };
+  var relabel = function(stn, d){
+    var names = acts.filter(function(e){ return base(cells[e.name][d]) === stn && isW(cells[e.name][d]); }).map(function(e){ return e.name; });
+    var two = need(stn, d) >= 2 && names.length >= 2;
+    if(!two){ names.forEach(function(n){ if(!locked(n, d)) cells[n][d] = stn; }); return; }
+    var op = names.filter(function(n){ return emp[n].role === '오픈'; })[0] || names.filter(function(n){ return emp[n].role === '파트' && emp[n].home === stn; })[0];
+    var cl = names.filter(function(n){ return n !== op && emp[n].role === '마감'; })[0] || names.filter(function(n){ return n !== op && emp[n].role === '파트' && emp[n].home === stn; })[0];
+    names.forEach(function(n){ if(locked(n, d)) return; cells[n][d] = n === op ? stn + '(OP)' : (n === cl ? stn + '(CL)' : stn); });
+  };
+  var made = 0;
+  for(var d = 0; d < nD; d++){
+    if(hol[d]) continue;
+    var guard = 0, changed = true;
+    while(changed && guard++ < 20){
+      changed = false;
+      var at = {}; S.stores.forEach(function(st){ at[st.n] = []; });
+      acts.forEach(function(e){ var v = cells[e.name][d]; if(isW(v) && v !== '순환'){ var b = base(v); if(at[b]) at[b].push(e); } });
+      // ① 잉여 매장에 팀장·실장이 서 있으면 바로 순환
+      for(var si = 0; si < S.stores.length && !changed; si++){
+        var X = S.stores[si].n;
+        if(at[X].length <= need(X, d)) continue;
+        var M1 = at[X].filter(function(e){ return mgr.indexOf(e) >= 0 && !locked(e.name, d); }).sort(byFew)[0];
+        if(M1){ cells[M1.name][d] = '순환'; patrolN[M1.name]++; made++; relabel(X, d); changed = true; }
+      }
+      if(changed) continue;
+      // ② 맞교환: 잉여 매장 X의 일반 직원 P → 팀장·실장 M이 있는 매장 Y, M → 순환
+      var best = null;
+      S.stores.forEach(function(sx){
+        var X = sx.n; if(at[X].length <= need(X, d)) return;
+        at[X].forEach(function(P){
+          if(mgr.indexOf(P) >= 0 || locked(P.name, d)) return;
+          S.stores.forEach(function(sy){
+            var Y = sy.n; if(Y === X) return;
+            if(!canGo(P, Y) || !awayOK(P, d)) return;
+            at[Y].forEach(function(M){
+              if(mgr.indexOf(M) < 0 || locked(M.name, d)) return;
+              var score = patrolN[M.name] * 10 + (P.home === Y ? 0 : 1);
+              if(!best || score < best.score) best = { P: P, M: M, X: X, Y: Y, score: score };
+            });
+          });
+        });
+      });
+      if(best){
+        cells[best.P.name][d] = best.Y;
+        cells[best.M.name][d] = '순환';
+        patrolN[best.M.name]++; made++;
+        relabel(best.X, d); relabel(best.Y, d);
+        changed = true;
+      }
+    }
+  }
+  sc.patrol = patrolN;
+  return made;
+}
+(function(){
+  if(typeof generate !== 'function' || generate.__wvpatrol) return;
+  var _g = generate;
+  var wrapped = function(){
+    var preset = arguments[1];
+    var r = _g.apply(this, arguments);
+    try{
+      if(WV_PATROL && typeof sched !== 'undefined' && sched && sched.cells){
+        var n = wvPatrol(sched, {
+          lockedDay: preset ? function(nm, d){ return d < preset.fromIdx || (preset.locked && preset.locked.has(nm)); } : null
+        });
+        if(n && typeof renderSched === 'function') renderSched();
+      }
+    }catch(e){ console.warn('지점 순환 건너뜀:', e); }
+    return r;
+  };
+  wrapped.__wvpatrol = true;
+  generate = wrapped;
 })();
 </script>
 <script>
@@ -4226,6 +4339,8 @@ wvChkInit();
     var tds = document.querySelectorAll('#schedTable td[data-d]');
     for(var i = 0; i < tds.length; i++){
       var td = tds[i], txt = String(td.textContent || '').trim();
+      if(txt === '순환'){ if(!td.classList.contains('wvPat')){ td.classList.add('wvPat'); td.style.background = '#efe9ff'; td.style.color = '#5b3fb0'; td.style.fontWeight = '800'; } continue; }
+      if(td.classList.contains('wvPat')){ td.classList.remove('wvPat'); td.style.background = ''; td.style.color = ''; td.style.fontWeight = ''; }
       if(txt === MARK){
         if(!td.classList.contains('wvXc')){ td.classList.add('wvXc'); td.style.background = '#23262e'; }
         continue;
