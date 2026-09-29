@@ -1127,6 +1127,18 @@ function genOnce(y,m,nDays,reqs,mk,seed,preset){
   S.emps.forEach(e=>{ if(isTrainee(e)) return; const a=cells[e.name]; for(let d=0;d<nDays;d++) if(a[d]===null) a[d]=OFF; });
   const baseOf=v=>v?v.replace(/\((OP|CL)\)$/,''):v;
   const isWork=v=>v&&v!==OFF&&!['휴가','병가','훈련','출장','전휴무'].includes(v);
+  // 잉여 근무일을 옮길 매장 고르기: 그날 인원 여유가 가장 적은 곳 · 인원 예외로 줄인 매장은 피함
+  const hasNeedX=WV_NEEDX&&((S.needX&&S.needX[mk])||[]).length>0;
+  const bestStoreFor=(e,k)=>{
+    const keep=__wvD; __wvD=k;
+    const c={}; S.stores.forEach(s2=>c[s2.n]=0);
+    S.emps.forEach(q=>{ if(isTrainee(q)) return; const v=cells[q.name][k]; if(isWork(v)){ const b=baseOf(v); if(c[b]!=null) c[b]++; } });
+    const pool0=S.stores.filter(s2=>allowed(e,s2.n)&&!selfOnly.has(s2.n));
+    const poolX=pool0.filter(s2=>{ const x=needX(s2.n,k,mk); return !(x!=null&&s2._need!=null&&x<s2._need); });
+    const pool=(poolX.length?poolX:pool0).slice().sort((a,b)=>((c[a.n]-a.need)-(c[b.n]-b.need))||(prefRank(e,a.n)-prefRank(e,b.n)));
+    __wvD=keep;
+    return pool[0]?pool[0].n:(((e.pref||[])[0])||S.stores[0].n);
+  };
   // 4.5) 최대 연속 근무 6일 제한: 초과 구간은 휴무와 교환해 끊음
   const isRestV=v=>v===OFF||v==='전휴무'||v==='휴가'||v==='병가';
   S.emps.filter(e=>!isTrainee(e)&&!lockedEmp.has(e.name)).forEach(e=>{
@@ -1162,7 +1174,7 @@ function genOnce(y,m,nDays,reqs,mk,seed,preset){
       }
       if(o<0) break;
       arr[brk]=OFF; fixedOff[e.name].add(brk);
-      arr[o]= e.home!=='순환' ? e.home : (((e.pref||[])[0])||S.stores[0].n);
+      arr[o]= e.home!=='순환' ? e.home : (hasNeedX ? bestStoreFor(e,o) : (((e.pref||[])[0])||S.stores[0].n));
     }
   });
   // 4.6) 소프트 교정 ①: 6일 연속 근무도 가급적 회피 (가능할 때만 5일 이하로 쪼갬)
@@ -1200,7 +1212,7 @@ function genOnce(y,m,nDays,reqs,mk,seed,preset){
       }
       if(o<0) break; // 방법 없으면 6일 유지 (불가피)
       arr[brk]=OFF;
-      arr[o]= e.home!=='순환' ? e.home : (((e.pref||[])[0])||S.stores[0].n);
+      arr[o]= e.home!=='순환' ? e.home : (hasNeedX ? bestStoreFor(e,o) : (((e.pref||[])[0])||S.stores[0].n));
     }
   });
   // 4.7) 소프트 교정 ②: 3일 연속 휴무 가급적 분산
@@ -1232,7 +1244,7 @@ function genOnce(y,m,nDays,reqs,mk,seed,preset){
         t=k; break;
       }
       if(t<0) break; // 방법 없으면 유지 (가급적)
-      arr[moveD]= e.home!=='순환' ? e.home : (((e.pref||[])[0])||S.stores[0].n);
+      arr[moveD]= e.home!=='순환' ? e.home : (hasNeedX ? bestStoreFor(e,moveD) : (((e.pref||[])[0])||S.stores[0].n));
       if(workRunAt(arr,moveD,prevTail[e.name]||0)>5){ arr[moveD]=OFF; break; } // 새 초과 연속근무 방지
       arr[t]=OFF;
     }
