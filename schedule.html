@@ -318,7 +318,7 @@
     <h3>매장 인원 예외 <span class="hint">(이 달만 · 예: 로데오 화·수·목은 1인 풀근무)</span></h3>
     <div class="rowbtns">
       <select id="nxStore"></select>
-      <input type="text" id="nxDays" placeholder="날짜 (예: 2,9,16 · 15-17 · 0902)" style="width:210px">
+      <input type="text" id="nxDays" placeholder="날짜 또는 요일 (예: 화수목 · 주말 · 2,9,16 · 15-17)" style="width:280px">
       <input type="number" id="nxNeed" min="0" max="5" value="1" style="width:56px" title="그날 필요 인원">
       <span class="hint">명</span>
       <button class="btn small" onclick="addNeedX()">추가</button>
@@ -506,6 +506,7 @@ function save(){ localStorage.setItem('wevape_sched', JSON.stringify(S)); }
    store.need 는 getter: __wvD(지금 계산 중인 날짜)가 잡혀 있으면 그날 값, 아니면 기본값 */
 var WV_NEEDX = 1;
 var __wvD = -1;
+var __wvResetQ = false;
 var __wvMK = '';
 function needX(stn, d, mk){
   if(!WV_NEEDX || d == null || d < 0) return null;
@@ -529,7 +530,12 @@ function wvWrapStores(){
     var base = +st.need || 0;
     Object.defineProperty(st, '_need', { value: base, writable: true, enumerable: false, configurable: true });
     Object.defineProperty(st, 'need', {
-      get: function(){ return __wvD >= 0 ? needAtN(this.n, __wvD) : this._need; },
+      get: function(){
+        if(__wvD < 0) return this._need;
+        /* 계산이 끝나면(현재 동기 작업이 끝나는 즉시) 날짜 표시를 되돌린다 — 화면이 마지막 날짜 값을 읽지 않도록 */
+        if(!__wvResetQ){ __wvResetQ = true; Promise.resolve().then(function(){ __wvD = -1; __wvResetQ = false; }); }
+        return needAtN(this.n, __wvD);
+      },
       set: function(v){ this._need = +v || 0; },
       enumerable: true, configurable: true
     });
@@ -689,11 +695,23 @@ function addHol(){
 function delHol(i){ const mk=monthKey(); S.hols[mk].splice(i,1); save(); renderHols(); }
 
 // ---------- 매장 인원 예외 (WV_NEEDX) ----------
+function nxBase(stn){ const st=(S.stores||[]).find(s=>s.n===stn); return st?(st._need!=null?st._need:+st.need||0):0; }
 function renderNeedXStores(){
   const sel=document.getElementById('nxStore'); if(!sel) return;
   const cur=sel.value;
-  sel.innerHTML=(S.stores||[]).map(st=>`<option value="${st.n}">${st.n} (기본 ${st.need}명)</option>`).join('');
+  sel.innerHTML=(S.stores||[]).map(st=>`<option value="${st.n}">${st.n} (기본 ${nxBase(st.n)}명)</option>`).join('');
   if(cur&&[...sel.options].some(o=>o.value===cur)) sel.value=cur;
+}
+/* 날짜 입력: 기존 형식(7 · 15-17 · 0902 · 2,9,16) + 요일(화수목 · 주말 · 평일) */
+function nxParseDays(str,maxD,y,m){
+  const t=String(str||'').trim(); if(!t) return [];
+  const W={'일':0,'월':1,'화':2,'수':3,'목':4,'금':5,'토':6};
+  let wd=null;
+  if(/평일/.test(t)) wd=[1,2,3,4,5];
+  else if(/주말/.test(t)) wd=[0,6];
+  else if(/^[일월화수목금토\s,·]+$/.test(t)) wd=[...t].filter(c=>c in W).map(c=>W[c]);
+  if(wd){ const out=[]; for(let d=1;d<=maxD;d++) if(wd.includes(new Date(y,m-1,d).getDay())) out.push(d); return out; }
+  return parseDays(t,maxD,m);
 }
 function addNeedX(){
   const mk=monthKey(); if(!mk){ alert('상단에서 대상 월을 먼저 선택하세요.'); return; }
@@ -703,35 +721,83 @@ function addNeedX(){
   const need=parseInt(document.getElementById('nxNeed').value,10);
   if(!store){ alert('매장을 고르세요.'); return; }
   if(!(need>=0&&need<=5)){ alert('인원은 0~5 사이로 입력하세요.'); return; }
-  const days=parseDays(document.getElementById('nxDays').value,maxD,m);
-  if(!days.length){ alert('날짜를 입력하세요. 예: 2,9,16 · 15-17 · 0902'); return; }
+  const days=nxParseDays(document.getElementById('nxDays').value,maxD,y,m);
+  if(!days.length){ alert('날짜를 입력하세요. 예: 화수목 · 주말 · 2,9,16 · 15-17'); return; }
   if(!S.needX) S.needX={};
   if(!S.needX[mk]) S.needX[mk]=[];
+  const base=nxBase(store);
   days.forEach(day=>{
     S.needX[mk]=S.needX[mk].filter(x=>!(x.store===store&&x.day===day));
-    S.needX[mk].push({store,day,need});
+    if(need!==base) S.needX[mk].push({store,day,need}); // 기본과 같으면 예외 해제
   });
   S.needX[mk].sort((a,b)=>a.store.localeCompare(b.store)||a.day-b.day);
   document.getElementById('nxDays').value='';
   save(); renderNeedX(); try{ renderCapacity(); }catch(e){}
 }
 function delNeedX(i){ const mk=monthKey(); S.needX[mk].splice(i,1); save(); renderNeedX(); try{ renderCapacity(); }catch(e){} }
+function delNeedXGroup(store,need){
+  const mk=monthKey();
+  if(!confirm(`${store} ${need===0?'휴점':need+'명'} 예외를 모두 지울까요?`)) return;
+  S.needX[mk]=(S.needX[mk]||[]).filter(x=>!(x.store===store&&x.need===need));
+  save(); renderNeedX(); try{ renderCapacity(); }catch(e){}
+}
+function nxCss(){
+  if(document.getElementById('nxCss')) return;
+  const st=document.createElement('style'); st.id='nxCss';
+  st.textContent=[
+    '.nx-row{border:1px solid #e6e8ef;border-radius:12px;padding:10px 12px;margin-top:10px;background:#fff}',
+    '.nx-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}',
+    '.nx-store{font-size:14px;font-weight:800;color:#14151f}',
+    '.nx-arrow{font-size:12.5px;color:#6b6d7a}',
+    '.nx-arrow b{font-size:13px}',
+    '.nx-tag{font-size:11px;font-weight:800;border-radius:6px;padding:2px 7px}',
+    '.nx-tag.dn{background:#fff3dc;color:#9a6200;border:1px solid #f0d49b}',
+    '.nx-tag.up{background:#e7f6ee;color:#1f7a5a;border:1px solid #bfe3cf}',
+    '.nx-tag.cl{background:#23262e;color:#fff;border:1px solid #23262e}',
+    '.nx-cnt{margin-left:auto;font-size:11.5px;color:#9a9ba6}',
+    '.nx-clr{border:0;background:none;color:#c5221f;font-size:11.5px;cursor:pointer;padding:0 2px}',
+    '.nx-days{display:flex;flex-wrap:wrap;gap:4px}',
+    '.nx-d{display:inline-flex;align-items:center;gap:3px;border-radius:7px;padding:3px 4px 3px 8px;font-size:12.5px;font-weight:700;border:1px solid #e3e6ee;background:#f7f8fb;color:#2b2d42}',
+    '.nx-d i{font-style:normal;font-weight:600;font-size:11px;color:#8a8f9c}',
+    '.nx-d.sat i{color:#3b82f6}.nx-d.sun i{color:#e5484d}',
+    '.nx-d b{cursor:pointer;color:#c0c3cc;font-size:12px;padding:0 3px;border-radius:4px}',
+    '.nx-d b:hover{color:#e94560;background:#fde8ec}',
+    '.nx-wk{font-size:11.5px;color:#6b6d7a;margin:0 0 6px}'
+  ].join('');
+  document.head.appendChild(st);
+}
 function renderNeedX(){
-  renderNeedXStores();
+  nxCss(); renderNeedXStores();
   const mk=monthKey();
   const box=document.getElementById('nxList'); if(!box) return;
   const list=(S.needX&&S.needX[mk])||[];
   if(!list.length){ box.innerHTML='<p class="hint">등록된 매장 인원 예외가 없습니다.</p>'; return; }
   const [y,m]=mk.split('-').map(Number);
-  const dow=['일','월','화','수','목','금','토'];
-  const by={}; list.forEach((x,i)=>{ (by[x.store]=by[x.store]||[]).push({...x,i}); });
-  box.innerHTML='<table class="reqtbl"><thead><tr><th style="width:90px">매장</th><th>날짜 (✕로 삭제)</th><th style="width:50px">건수</th></tr></thead><tbody>'+
-    Object.keys(by).map(stn=>{
-      const base=(S.stores.find(s=>s.n===stn)||{}).need;
-      return `<tr><td><b>${stn}</b> <span class="hint">기본 ${base}명</span></td><td>`+
-        by[stn].map(x=>`<span class="daychip ${x.need<base?'t-vac':(x.need>base?'t-fix':'')}"><span class="dnum">${x.day}일<small style="margin-left:2px">${dow[new Date(y,m-1,x.day).getDay()]}</small></span><small>${x.need===0?'휴점':x.need+'명'}</small><b onclick="delNeedX(${x.i})">✕</b></span>`).join('')+
-        `</td><td class="cnt">${by[stn].length}</td></tr>`;
-    }).join('')+'</tbody></table>';
+  const DOW='일월화수목금토';
+  // 매장 × 인원별로 묶는다
+  const groups={}; list.forEach((x,i)=>{ const k=x.store+'|'+x.need; (groups[k]=groups[k]||{store:x.store,need:x.need,items:[]}).items.push({...x,i}); });
+  box.innerHTML=Object.values(groups).map(g=>{
+    const base=nxBase(g.store);
+    const kind=g.need===0?'cl':(g.need<base?'dn':'up');
+    const tag=g.need===0?'휴점':(g.need<base?'줄임':'늘림');
+    // 요일 요약: 해당 요일이 달 전체에 빠짐없이 들어있으면 "매주 화·수·목"
+    const byW={}; g.items.forEach(x=>{ const w=new Date(y,m-1,x.day).getDay(); (byW[w]=byW[w]||[]).push(x.day); });
+    const maxD=new Date(y,m,0).getDate();
+    const full=Object.keys(byW).map(Number).filter(w=>{ let n=0; for(let d=1;d<=maxD;d++) if(new Date(y,m-1,d).getDay()===w) n++; return byW[w].length===n; });
+    const allFull=full.length&&full.length===Object.keys(byW).length;
+    const wk=allFull?'매주 '+[1,2,3,4,5,6,0].filter(w=>full.includes(w)).map(w=>DOW[w]).join('·'):'';
+    const chips=g.items.sort((a,b)=>a.day-b.day).map(x=>{
+      const w=new Date(y,m-1,x.day).getDay();
+      return `<span class="nx-d${w===6?' sat':w===0?' sun':''}">${x.day}<i>${DOW[w]}</i><b title="이 날만 지우기" onclick="delNeedX(${x.i})">✕</b></span>`;
+    }).join('');
+    return `<div class="nx-row"><div class="nx-head"><span class="nx-store">${g.store}</span>`+
+      `<span class="nx-arrow">기본 ${base}명 → <b>${g.need===0?'휴점':g.need+'명'}</b></span>`+
+      `<span class="nx-tag ${kind}">${tag}</span>`+
+      `<span class="nx-cnt">${g.items.length}일</span>`+
+      `<button class="nx-clr" onclick="delNeedXGroup('${g.store}',${g.need})">전체 삭제</button></div>`+
+      (wk?`<div class="nx-wk">${wk}</div>`:'')+
+      `<div class="nx-days">${chips}</div></div>`;
+  }).join('');
 }
 // ---------- 특이사항 임시 저장 ----------
 function saveReqDraft(){
