@@ -3148,6 +3148,35 @@ function wvCapOffs(sc){
       arr[d2] = val; over--; fixed++;
     }
   });
+  /* 휴무가 지정보다 적은 사람: 그날 잉여 근무(순환 · 필요 인원 초과 매장)를 휴무로 돌린다
+     · 매장 공백은 만들지 않음 · 휴무 3일 연속은 피함 · 공휴일 칸은 건드리지 않음 */
+  var restRun = function(arr, d){ var L = 1, k; for(k = d - 1; k >= 0 && !isW(arr[k]); k--) L++; for(k = d + 1; k < nD && !isW(arr[k]); k++) L++; return L; };
+  var needOn = function(stn, d){ return (typeof needAtN === 'function') ? needAtN(stn, d, mk) : ((S.stores.find(function(x){ return x.n === stn; }) || {}).need || 1); };
+  S.emps.forEach(function(e){
+    if(e.role === '교육' || !cells[e.name]) return;
+    var arr = cells[e.name];
+    var tgt = (typeof offTarget === 'function' ? offTarget(e) : (e.offN == null ? 10 : e.offN)) + (bonus[e.name] || 0);
+    var under = tgt - arr.filter(function(v){ return v === ''; }).length;
+    if(under <= 0) return;
+    var cand = [];
+    for(var d = 0; d < nD; d++){
+      var v = arr[d];
+      if(hol[d] || !isW(v)) continue;
+      if(v === '순환'){ cand.push({ d: d, p: 0, v0: v }); continue; }
+      var b = base(v); if(staffOn(b, d) > needOn(b, d)) cand.push({ d: d, p: 1, b: b, v0: v });
+    }
+    cand.sort(function(x, y){ return (restRun(arr, x.d) - restRun(arr, y.d)) || (x.p - y.p); });
+    for(var i = 0; i < cand.length && under > 0; i++){
+      var c = cand[i];
+      if(c.b && staffOn(c.b, c.d) <= needOn(c.b, c.d)) continue;   // 앞에서 이미 빠졌으면 건너뜀
+      arr[c.d] = '';
+      if(restRun(arr, c.d) >= 3 && cand.length - i - 1 >= under){ arr[c.d] = c.v0; continue; }   // 다른 후보가 충분하면 3연휴는 피한다
+      under--; fixed++;
+      if(c.b && needOn(c.b, c.d) < 2){   // 1인 날: 남은 사람의 OP/CL 표시 정리
+        S.emps.forEach(function(q){ var qv = cells[q.name] && cells[q.name][c.d]; if(qv && base(qv) === c.b && qv !== c.b && /\((OP|CL)\)$/.test(qv)) cells[q.name][c.d] = c.b; });
+      }
+    }
+  });
   return fixed;
 }
 var WV_PATROL = 1;
@@ -3249,6 +3278,10 @@ function wvPatrol(sc, opts){
           lockedDay: preset ? function(nm, d){ return d < preset.fromIdx || (preset.locked && preset.locked.has(nm)); } : null
         });
         if(n && typeof renderSched === 'function') renderSched();
+        /* 순환 맞교환으로 새로 생긴 잉여까지 반영해 휴무 일수를 한 번 더 맞춘다 */
+        var cap2 = 0;
+        try{ cap2 = wvCapOffs(sched); }catch(e3){ console.warn('휴무 일수 재확인 건너뜀:', e3); }
+        if(cap2 && typeof renderSched === 'function') renderSched();
       }
     }catch(e){ console.warn('지점 순환 건너뜀:', e); }
     return r;
