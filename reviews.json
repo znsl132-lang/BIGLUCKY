@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-28 00:08",
+  "updatedAt": "2026-10-28 10:03",
   "branches": {
     "구월 로데오점": {
       "naver": 2483,
@@ -20,7 +20,7 @@
       "tmap": null
     },
     "부천 신중동점": {
-      "naver": 1161,
+      "naver": 1162,
       "kakao": 9,
       "daangn": 0,
       "tmap": null
@@ -44,7 +44,7 @@
       "tmap": null
     },
     "인천 논현점": {
-      "naver": 1073,
+      "naver": 1074,
       "kakao": 30,
       "daangn": 14,
       "tmap": null
@@ -5845,7 +5845,7 @@
         "tmap": null
       },
       "부천 신중동점": {
-        "naver": 1161,
+        "naver": 1162,
         "kakao": 9,
         "daangn": 0,
         "tmap": null
@@ -5869,7 +5869,7 @@
         "tmap": null
       },
       "인천 논현점": {
-        "naver": 1073,
+        "naver": 1074,
         "kakao": 30,
         "daangn": 14,
         "tmap": null
