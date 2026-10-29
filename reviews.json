@@ -1,8 +1,8 @@
 {
-  "updatedAt": "2026-10-29 18:18",
+  "updatedAt": "2026-10-29 21:03",
   "branches": {
     "구월 로데오점": {
-      "naver": 2486,
+      "naver": 2487,
       "kakao": 25,
       "daangn": 75,
       "tmap": null
@@ -26,7 +26,7 @@
       "tmap": null
     },
     "인천 검단점": {
-      "naver": 100,
+      "naver": 101,
       "kakao": 1,
       "daangn": 3,
       "tmap": null
@@ -34,7 +34,7 @@
     "인천 계산점": {
       "naver": 913,
       "kakao": 3,
-      "daangn": 14,
+      "daangn": 0,
       "tmap": null
     },
     "인천 공항점": {
@@ -5883,7 +5883,7 @@
     },
     "2026-10-29": {
       "구월 로데오점": {
-        "naver": 2486,
+        "naver": 2487,
         "kakao": 25,
         "daangn": 75,
         "tmap": null
@@ -5907,7 +5907,7 @@
         "tmap": null
       },
       "인천 검단점": {
-        "naver": 100,
+        "naver": 101,
         "kakao": 1,
         "daangn": 3,
         "tmap": null
@@ -5915,7 +5915,7 @@
       "인천 계산점": {
         "naver": 913,
         "kakao": 3,
-        "daangn": 14,
+        "daangn": 0,
         "tmap": null
       },
       "인천 공항점": {
