@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-07 18:03",
+  "updatedAt": "2026-11-07 18:36",
   "branches": {
     "구월 로데오점": {
       "naver": 2489,
@@ -32,7 +32,7 @@
       "tmap": null
     },
     "인천 계산점": {
-      "naver": 914,
+      "naver": 915,
       "kakao": 4,
       "daangn": 15,
       "tmap": null
@@ -6417,7 +6417,7 @@
         "tmap": null
       },
       "인천 계산점": {
-        "naver": 914,
+        "naver": 915,
         "kakao": 4,
         "daangn": 15,
         "tmap": null
