@@ -5018,4 +5018,124 @@ th,td{border-color:var(--ln)!important}
 })();
 
 </script>
+<script>
+/* ===== 테스트판 화면 정리 ② — 매장 목록 · 근무 수급 미리보기 (2026-11-18) =====
+   계산·저장 방식은 원본과 동일, 그리는 모양만 바꾼다. */
+(function(){
+  var css = document.createElement('style');
+  css.textContent = `
+#storeList{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.wvSt{position:relative;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 10px 10px 14px;border:1px solid var(--ln);border-radius:14px;background:var(--s2);transition:border-color .2s,box-shadow .2s}
+.wvSt:hover{border-color:var(--ln2);box-shadow:0 2px 10px rgba(0,0,0,.05)}
+.wvSt .nm{font-weight:800;font-size:14px;white-space:nowrap}
+.wvSt .nm small{display:block;font-weight:600;font-size:11px;color:var(--ink3)}
+.wvStep{display:flex;align-items:center;background:#fff;border:1px solid var(--ln2);border-radius:10px;overflow:hidden}
+.wvStep button{width:28px;height:30px;border:0;background:none;font-size:16px;font-weight:700;color:var(--ink2);cursor:pointer}
+.wvStep button:hover{background:var(--s3)}
+.wvStep b{min-width:22px;text-align:center;font-size:15px;transition:transform .25s var(--spr)}
+.wvStep b.bump{transform:scale(1.35)}
+.wvSt .del{position:absolute;top:-7px;right:-7px;width:20px;height:20px;border-radius:50%;border:1px solid var(--ln2);background:#fff;color:var(--ink3);font-size:11px;line-height:1;display:none;cursor:pointer}
+.wvSt:hover .del{display:block}.wvSt .del:hover{background:var(--dang);color:#fff;border-color:var(--dang)}
+.wvSt.two{background:rgba(242,194,48,.14);border-color:rgba(242,194,48,.55)}
+.wvSt.zero{opacity:.55}
+.wvStSum{margin-top:10px;font-size:12.5px;color:var(--ink3)}
+.wvStSum b{color:var(--ink)}
+/* 수급 미리보기 */
+.wvCapHd{font-size:12.5px;color:var(--ink3);margin-bottom:12px}
+.wvCapK{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.wvCapK>div{border:1px solid var(--ln);border-radius:14px;padding:12px 14px;background:var(--s2)}
+.wvCapK small{display:block;font-size:12px;color:var(--ink3);font-weight:600}
+.wvCapK b{font-size:26px;font-weight:900;letter-spacing:-.02em}
+.wvCapK b span{font-size:13px;font-weight:700;margin-left:2px;color:var(--ink3)}
+.wvCapK .good{background:rgba(17,156,114,.09);border-color:rgba(17,156,114,.3)}.wvCapK .good b{color:#0b6e50}
+.wvCapK .bad{background:rgba(217,58,85,.08);border-color:rgba(217,58,85,.3)}.wvCapK .bad b{color:#b3243f}
+.wvCapBar{position:relative;height:10px;border-radius:99px;background:var(--s3);margin:14px 0 6px;overflow:hidden}
+.wvCapBar i{position:absolute;inset:0 auto 0 0;border-radius:99px;background:linear-gradient(90deg,var(--brand),#3a3d55);transition:width .6s var(--ease)}
+.wvCapBar u{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--dang);text-decoration:none}
+.wvCapLg{display:flex;justify-content:space-between;font-size:11.5px;color:var(--ink3);margin-bottom:14px}
+.wvEmpG{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:8px}
+.wvEm{border:1px solid var(--ln);border-radius:12px;padding:8px 11px;background:#fff}
+.wvEm .n{font-weight:800;font-size:13px;display:flex;justify-content:space-between;align-items:center}
+.wvEm .n small{font-weight:600;font-size:10.5px;color:var(--ink3)}
+.wvEm .w{font-size:12px;color:var(--ink2);margin-top:2px}
+.wvEm .w b{font-size:16px;color:var(--ink)}
+.wvEm .tag{display:inline-block;font-size:10.5px;font-weight:700;padding:1px 6px;border-radius:99px;background:var(--s3);color:var(--ink2);margin-left:4px}
+.wvEm .tag.v{background:rgba(217,58,85,.12);color:#a3203a}
+.wvEm .tag.p{background:rgba(106,87,242,.12);color:#4b3bc4}
+#wvSup{border-radius:14px!important;margin-top:14px!important}
+@media (max-width:760px){.wvCapK{grid-template-columns:1fr 1fr}.wvCapK>div:last-child{grid-column:1/-1}}
+`;
+  document.head.appendChild(css);
+
+  /* ---------- 매장 목록 ---------- */
+  if(typeof renderStores === 'function'){
+    renderStores = function(){
+      try{ if(typeof wvWrapStores === 'function') wvWrapStores(); }catch(e){}
+      var box = document.getElementById('storeList'); if(!box) return;
+      var total = 0;
+      box.innerHTML = S.stores.map(function(st, i){
+        var n = st._need != null ? st._need : (+st.need || 0); total += n;
+        return '<div class="wvSt' + (n >= 2 ? ' two' : '') + (n === 0 ? ' zero' : '') + '">' +
+          '<div class="nm">' + st.n + '<small>' + (n >= 2 ? 'OP+CL ' + n + '인' : n === 0 ? '쉬는 매장' : '1인 근무') + '</small></div>' +
+          '<div class="wvStep"><button type="button" data-i="' + i + '" data-d="-1" aria-label="' + st.n + ' 인원 줄이기">−</button><b>' + n + '</b><button type="button" data-i="' + i + '" data-d="1" aria-label="' + st.n + ' 인원 늘리기">+</button></div>' +
+          '<button type="button" class="del" data-del="' + i + '" title="' + st.n + ' 삭제" aria-label="' + st.n + ' 삭제">✕</button></div>';
+      }).join('');
+      var sum = document.getElementById('wvStSum');
+      if(!sum){ sum = document.createElement('div'); sum.id = 'wvStSum'; sum.className = 'wvStSum'; box.parentNode.insertBefore(sum, box.nextSibling); }
+      sum.innerHTML = '매장 <b>' + S.stores.length + '곳</b> · 하루 필요 인원 <b>' + total + '명</b>';
+      box.querySelectorAll('.wvStep button').forEach(function(b){
+        b.onclick = function(){
+          var i = +b.dataset.i, st = S.stores[i], cur = st._need != null ? st._need : (+st.need || 0);
+          var v = Math.max(0, Math.min(5, cur + (+b.dataset.d))); if(v === cur) return;
+          st.need = v; save(); renderStores();
+          var nb = box.querySelectorAll('.wvStep b')[i]; if(nb){ nb.classList.add('bump'); setTimeout(function(){ nb.classList.remove('bump'); }, 250); }
+          try{ if(typeof renderCapacity === 'function') renderCapacity(); }catch(e){}
+        };
+      });
+      box.querySelectorAll('[data-del]').forEach(function(b){ b.onclick = function(){ if(confirm(S.stores[+b.dataset.del].n + ' 매장을 삭제할까요?')) delStore(+b.dataset.del); }; });
+      var sel = document.getElementById('reqStore');
+      if(sel) sel.innerHTML = S.stores.map(function(st){ return '<option>' + st.n + '</option>'; }).join('');
+    };
+    try{ renderStores(); }catch(e){}
+  }
+
+  /* ---------- 근무 수급 미리보기 ---------- */
+  if(typeof renderCapacity === 'function'){
+    renderCapacity = function(){
+      var box = document.getElementById('capBox'); if(!box) return;
+      var mk = monthKey(), D = 30, H = 0;
+      if(mk){ var p = mk.split('-'); D = new Date(+p[0], +p[1], 0).getDate(); H = ((S.hols && S.hols[mk]) || []).length; }
+      var op = Math.max(0, D - H);
+      var holS = new Set(((S.hols && S.hols[mk]) || []).map(function(x){ return x - 1; }));
+      var required = needTotalDays(D, function(d){ return holS.has(d); }, mk);
+      var totalNeed = S.stores.reduce(function(a, st){ return a + (st._need != null ? st._need : (+st.need || 0)); }, 0);
+      var vac = {}; ((mk && S.reqs && S.reqs[mk]) || []).forEach(function(r){ if(['휴가','병가','훈련','출장'].indexOf(r.type) >= 0) vac[r.emp] = (vac[r.emp] || 0) + 1; });
+      var supply = 0, rows = [];
+      S.emps.forEach(function(e){ if(e.role === '교육') return; var off = offTarget(e), v = vac[e.name] || 0, w = Math.max(0, op - off - v); supply += w; rows.push({ e: e, w: w, off: off, v: v }); });
+      if(typeof __wvD !== 'undefined') __wvD = -1;
+      var diff = supply - required, pct = required ? Math.round(supply / required * 100) : 100;
+      var lbl = mk ? (mk.replace('-', '년 ') + '월') : '(월 미선택 · 30일 가정)';
+      var h = '<div class="wvCapHd">' + lbl + ' · 운영 ' + op + '일' + (H ? ' (전매장 휴무 ' + H + '일 제외)' : '') + ' · 하루 필요 ' + totalNeed + '명 · 직원 ' + rows.length + '명</div>';
+      h += '<div class="wvCapK"><div><small>필요 근무일</small><b>' + required + '<span>일</span></b></div>' +
+           '<div><small>배치 가능 근무일</small><b>' + supply + '<span>일</span></b></div>' +
+           '<div class="' + (diff >= 0 ? 'good' : 'bad') + '"><small>' + (diff >= 0 ? '여유 (추가 휴무로 분배 가능)' : '부족 (공백 예상)') + '</small><b>' + (diff >= 0 ? '+' : '−') + Math.abs(diff) + '<span>일</span></b></div></div>';
+      var fillW = Math.min(100, Math.round(supply / Math.max(supply, required) * 100)), mark = Math.min(100, Math.round(required / Math.max(supply, required) * 100));
+      h += '<div class="wvCapBar"><i style="width:' + fillW + '%"></i><u style="left:calc(' + mark + '% - 1px)" title="필요선"></u></div>';
+      h += '<div class="wvCapLg"><span>가용 ' + supply + '일 (필요 대비 ' + pct + '%)</span><span>빨간 선 = 필요 ' + required + '일</span></div>';
+      h += '<div class="wvEmpG">' + rows.map(function(r){
+        var tags = '';
+        if(r.e.role === '파트') tags += '<span class="tag p">파트</span>';
+        if(r.v) tags += '<span class="tag v">휴가 등 ' + r.v + '</span>';
+        return '<div class="wvEm"><div class="n">' + r.e.name + '<small>' + (r.e.title || '') + '</small></div>' +
+               '<div class="w"><b>' + r.w + '</b>일 근무 · 휴무 ' + r.off + tags + '</div></div>';
+      }).join('') + '</div>';
+      box.innerHTML = h;
+      try{ if(window.wvSupplyAdvice) wvSupplyAdvice(); }catch(e){}
+    };
+    renderCapacity.__wvsup = true;
+    try{ renderCapacity(); }catch(e){}
+  }
+})();
+
+</script>
 </html>
