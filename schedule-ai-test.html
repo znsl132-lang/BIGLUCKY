@@ -4890,7 +4890,7 @@ th,td{border-color:var(--ln)!important}
 #wvToasts{position:fixed;right:18px;bottom:18px;z-index:100000;width:360px;max-width:calc(100vw - 36px);display:flex;flex-direction:column-reverse;gap:8px;pointer-events:none}
 .wvTo{pointer-events:auto;background:var(--brand);color:#fff;border-radius:14px;padding:12px 14px 12px 12px;display:flex;gap:10px;box-shadow:0 12px 34px rgba(0,0,0,.28);font-size:13px;line-height:1.55;animation:wvToIn .45s var(--spr) both;cursor:pointer}
 .wvTo .ic{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-weight:900;font-size:12px;background:#3a3d55}
-.wvTo.ok .ic{background:var(--mint)}.wvTo.warn .ic{background:var(--warnc)}
+.wvTo.k-ok .ic{background:var(--mint)}.wvTo.k-warn .ic{background:var(--warnc)}
 .wvTo .tx{white-space:pre-wrap;max-height:4.7em;overflow:hidden;transition:max-height .3s}
 .wvTo.open .tx{max-height:60vh;overflow:auto}
 .wvTo .more{display:block;color:rgba(255,255,255,.55);font-size:11.5px;margin-top:2px}
@@ -4918,6 +4918,9 @@ th,td{border-color:var(--ln)!important}
 #wvProg .kpi{border:1px solid var(--ln);border-radius:12px;padding:8px 12px}
 #wvProg .kpi small{display:block;color:var(--ink3);font-size:11.5px}#wvProg .kpi b{font-size:20px}
 #wvPrevToast{border-radius:99px!important;background:var(--brand)!important;font-weight:700}
+.btn{white-space:nowrap}
+#empTable td:first-child,#empTable th:first-child{white-space:nowrap;min-width:64px}
+#wvTAsk{flex:1}
 @media (max-width:760px){.tabs{top:52px;margin:10px 10px 4px;max-width:calc(100% - 20px)}.tabs button{padding:8px 12px!important;font-size:13px!important}.panel{padding:10px 10px 40px!important}.card{padding:14px!important;border-radius:14px!important}#wvProg .kpis{grid-template-columns:repeat(2,1fr)}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 `;
@@ -4940,7 +4943,7 @@ th,td{border-color:var(--ln)!important}
   function toast(msg, kind, ms){
     msg = String(msg == null ? '' : msg).replace(/<[^>]+>/g, '');
     kind = kind || (/(경고|부족|없음|실패|못|오류|중복|공백|초과|위반)/.test(msg) ? 'warn' : (/(완료|저장|추가|반영|적용|성공)/.test(msg) ? 'ok' : 'info'));
-    var el = document.createElement('div'); el.className = 'wvTo ' + kind;
+    var el = document.createElement('div'); el.className = 'wvTo k-' + kind;
     var long = msg.split('\n').length > 3 || msg.length > 140;
     el.innerHTML = '<span class="ic">' + (kind === 'ok' ? '✓' : kind === 'warn' ? '!' : 'i') + '</span><div><div class="tx"></div>' + (long ? '<span class="more">눌러서 전체 보기</span>' : '') + '</div>';
     el.querySelector('.tx').textContent = msg;
