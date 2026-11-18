@@ -4278,6 +4278,7 @@ function wvChkInit(){
         reqs.forEach(function(r){ if(r && r.day){ byDay[r.day] = (byDay[r.day] || 0) + 1; } });
         Object.keys(byDay).forEach(function(dd){
           var free = acts.length - byDay[dd];
+          var need = (typeof needSum === 'function') ? needSum(+dd - 1, m) : 0;   // 그날 필요 인원 (매장 인원 예외 반영) — 2026-11-18 복구
           if(free < need) push('warn', m.split('-')[1] + '월 ' + dd + '일 — 휴무 요청 ' + byDay[dd] + '건, 남는 인원 ' + free + '명 (필요 ' + need + '명)',
             '일부 요청은 반영되지 않습니다');
         });
