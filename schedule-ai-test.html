@@ -4829,4 +4829,190 @@ wvChkInit();
 })();
 
 </script>
+<script>
+/* ===== 테스트판 화면 개편 (시안 적용 · 2026-11-18) =====
+   기능·알고리즘은 그대로, 겉모습과 알림 방식만 바꾼다.
+   039 알약 탭 · 070 쌓이는 알림 · 083 생성 진행 막대 · 028/029 입력·칩 · 공통 색/카드/버튼 */
+(function(){
+  var css = document.createElement('style');
+  css.id = 'wvSkin';
+  css.textContent = `
+:root{--pg:#F4F2EE;--sf:#fff;--s2:#F6F4F0;--s3:#ECE9E3;--ink:#16151B;--ink2:#57535F;--ink3:#8E8A97;--ln:rgba(22,21,27,.10);--ln2:rgba(22,21,27,.18);
+--brand:#14151F;--gold:#F2C230;--goldS:rgba(242,194,48,.20);--mint:#119C72;--warnc:#D6731E;--dang:#D93A55;--acc:#6A57F2;
+--sh:0 1px 2px rgba(40,30,80,.06),0 8px 26px rgba(40,30,80,.08);--ease:cubic-bezier(.2,.8,.2,1);--spr:cubic-bezier(.34,1.45,.64,1)}
+body{background:var(--pg)!important;color:var(--ink);font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif!important;-webkit-font-smoothing:antialiased}
+header{background:var(--brand)!important;padding:14px 24px!important}
+header h1{font-size:17px!important;font-weight:800;letter-spacing:-.01em}
+header input[type=month]{background:#232533!important;color:#fff!important;border:1px solid #33364a!important;border-radius:10px!important;padding:7px 10px!important;color-scheme:dark}
+/* 039 알약 탭 */
+.tabs{position:sticky;top:34px;z-index:900;display:flex!important;gap:2px;width:max-content;max-width:calc(100% - 32px);margin:14px auto 4px;padding:4px!important;background:var(--sf)!important;border:1px solid var(--ln)!important;border-radius:99px;box-shadow:var(--sh);overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{position:relative;z-index:1;flex:none!important;border:0!important;border-radius:99px;padding:9px 18px!important;font-size:14px!important;font-weight:700;color:var(--ink2);white-space:nowrap;background:none!important;transition:color .25s}
+.tabs button.active{color:#fff!important;border:0!important}
+.wvPill{position:absolute;top:4px;bottom:4px;left:0;border-radius:99px;background:var(--brand);z-index:0;transition:transform .42s var(--spr),width .42s var(--spr)}
+.panel{padding:12px 20px 40px!important;max-width:1440px}
+body.ready .panel.active{animation:wvIn .38s var(--ease) both!important}
+@keyframes wvIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+/* 카드 */
+.card{background:var(--sf)!important;border:1px solid var(--ln)!important;border-radius:18px!important;padding:18px 20px!important;box-shadow:var(--sh);margin-bottom:16px!important}
+.card h3{font-size:15.5px!important;font-weight:800;letter-spacing:-.01em;margin-bottom:12px!important}
+details.card>summary{font-weight:800;cursor:pointer}
+.hint{color:var(--ink3)!important}
+/* 버튼 */
+.btn{background:var(--brand)!important;color:#fff!important;border-radius:12px!important;font-weight:800;padding:10px 18px!important;min-height:40px;transition:transform .15s,filter .2s;box-shadow:none}
+.btn:hover{filter:brightness(1.15)}.btn:active{transform:scale(.96)}
+.btn.gray{background:var(--s3)!important;color:var(--ink)!important}
+.btn.small{padding:6px 12px!important;min-height:32px;font-size:12.5px!important;border-radius:10px!important}
+#panel2 .rowbtns>.btn:first-child{background:var(--gold)!important;color:#1b1500!important;font-size:15px!important;padding:12px 22px!important}
+.btn:disabled{opacity:.45}
+/* 입력 */
+select,input[type=text],input[type=number],input[type=month],textarea{border:1.5px solid var(--ln2)!important;border-radius:10px!important;padding:8px 10px!important;font-family:inherit;background:#fff;transition:border-color .2s,box-shadow .2s}
+select:focus,input:focus,textarea:focus{outline:none;border-color:var(--ink)!important;box-shadow:0 0 0 4px var(--goldS)}
+/* 표 */
+table{border-radius:12px;overflow:hidden}
+th{background:var(--s2)!important;color:var(--ink2);font-weight:700}
+th,td{border-color:var(--ln)!important}
+#schedTable thead th{background:var(--brand)!important;color:#fff!important}
+#schedTable thead th.namecol{background:var(--brand)!important}
+.schedwrap{border-radius:16px!important;box-shadow:var(--sh)!important;border:1px solid var(--ln)}
+/* 029 칩 */
+.daychip{border-radius:99px!important;border:0!important;background:rgba(17,156,114,.12)!important;color:#0b6e50;font-weight:700;padding:4px 6px 4px 11px!important;animation:wvChip .35s var(--spr) both}
+.daychip small{color:inherit!important;opacity:.75}
+.daychip b{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,.08);color:inherit!important;font-size:10px}
+.daychip.t-vac{background:rgba(217,58,85,.12)!important;color:#a3203a}.daychip.t-train{background:rgba(214,115,30,.14)!important;color:#9a4f0f}
+.daychip.t-trip{background:rgba(47,143,224,.13)!important;color:#1d5f9c}.daychip.t-fix{background:rgba(106,87,242,.12)!important;color:#4b3bc4}.daychip.t-cond{background:#ECE9E3!important;color:#57535F}
+@keyframes wvChip{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:none}}
+.mchip{border-radius:99px!important}
+.warn{background:#fff8e1!important;border:1px solid #f0d27a!important;border-radius:12px!important}
+.reviewnote{border-radius:14px!important}
+#wvTestBar{background:var(--gold)!important}
+/* 070 알림 */
+#wvToasts{position:fixed;right:18px;bottom:18px;z-index:100000;width:360px;max-width:calc(100vw - 36px);display:flex;flex-direction:column-reverse;gap:8px;pointer-events:none}
+.wvTo{pointer-events:auto;background:var(--brand);color:#fff;border-radius:14px;padding:12px 14px 12px 12px;display:flex;gap:10px;box-shadow:0 12px 34px rgba(0,0,0,.28);font-size:13px;line-height:1.55;animation:wvToIn .45s var(--spr) both;cursor:pointer}
+.wvTo .ic{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-weight:900;font-size:12px;background:#3a3d55}
+.wvTo.ok .ic{background:var(--mint)}.wvTo.warn .ic{background:var(--warnc)}
+.wvTo .tx{white-space:pre-wrap;max-height:4.7em;overflow:hidden;transition:max-height .3s}
+.wvTo.open .tx{max-height:60vh;overflow:auto}
+.wvTo .more{display:block;color:rgba(255,255,255,.55);font-size:11.5px;margin-top:2px}
+.wvTo.out{opacity:0;transform:translateX(40px);transition:.3s}
+@keyframes wvToIn{from{opacity:0;transform:translateY(20px) scale(.97)}to{opacity:1;transform:none}}
+#wvTToast{display:none!important}
+/* 083 생성 진행 */
+#wvProg{display:none;margin:4px 0 14px;padding:14px 16px;border-radius:16px;background:var(--sf);border:1px solid var(--ln);box-shadow:var(--sh)}
+#wvProg.on{display:block;animation:wvIn .3s var(--ease)}
+#wvProg .top{display:flex;align-items:center;gap:12px}
+#wvProg .bar{position:relative;flex:1;height:10px;border-radius:99px;background:var(--s3);overflow:hidden}
+#wvProg .fill{position:absolute;inset:0 auto 0 0;width:0;border-radius:99px;background:linear-gradient(90deg,var(--brand),#3a3d55);transition:width .45s var(--ease)}
+#wvProg.wait .seg{position:absolute;top:0;bottom:0;border-radius:99px;background:var(--brand);animation:wvSeg 1.4s var(--ease) infinite}
+@keyframes wvSeg{0%{left:-35%;width:35%}100%{left:100%;width:12%}}
+#wvProg .st{font-size:12px;font-weight:800;padding:4px 10px;border-radius:99px;background:var(--goldS);color:#5a4300;white-space:nowrap}
+#wvProg.done .st{background:rgba(17,156,114,.13);color:#0b6e50}
+#wvProg ol{list-style:none;margin:10px 0 0;padding:0;display:flex;gap:16px;flex-wrap:wrap}
+#wvProg li{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink3)}
+#wvProg li i{width:16px;height:16px;border-radius:50%;border:2px solid var(--ln2);display:grid;place-items:center;font-size:9px;font-style:normal}
+#wvProg li.run{color:var(--ink)}#wvProg li.run i{border-color:var(--ink);border-top-color:transparent;animation:wvSpin .8s linear infinite}
+#wvProg li.ok{color:var(--ink)}#wvProg li.ok i{background:var(--mint);border-color:var(--mint);color:#fff}
+@keyframes wvSpin{to{transform:rotate(360deg)}}
+#wvProg .kpis{display:none;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px}
+#wvProg.done .kpis{display:grid}
+#wvProg .kpi{border:1px solid var(--ln);border-radius:12px;padding:8px 12px}
+#wvProg .kpi small{display:block;color:var(--ink3);font-size:11.5px}#wvProg .kpi b{font-size:20px}
+#wvPrevToast{border-radius:99px!important;background:var(--brand)!important;font-weight:700}
+@media (max-width:760px){.tabs{top:52px;margin:10px 10px 4px;max-width:calc(100% - 20px)}.tabs button{padding:8px 12px!important;font-size:13px!important}.panel{padding:10px 10px 40px!important}.card{padding:14px!important;border-radius:14px!important}#wvProg .kpis{grid-template-columns:repeat(2,1fr)}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+`;
+  document.head.appendChild(css);
+
+  /* ---------- 039 탭 알약 ---------- */
+  var tabs = document.querySelector('.tabs');
+  if(tabs){
+    // 탭 이름 짧게 (번호 + 핵심어)
+    var short = ['직원·매장','특이사항','생성','변경','사용법'];
+    [].forEach.call(tabs.querySelectorAll('button'), function(b, i){ if(short[i]) b.innerHTML = '<span style="opacity:.55;margin-right:5px">' + (i + 1) + '</span>' + short[i]; });
+    var pill = document.createElement('span'); pill.className = 'wvPill'; tabs.insertBefore(pill, tabs.firstChild);
+    var move = function(){ var a = tabs.querySelector('button.active'); if(!a) return; pill.style.width = a.offsetWidth + 'px'; pill.style.transform = 'translateX(' + (a.offsetLeft - 4) + 'px)'; };
+    new MutationObserver(move).observe(tabs, { subtree: true, attributes: true, attributeFilter: ['class'] });
+    window.addEventListener('resize', move); setTimeout(move, 50); setTimeout(move, 600);
+  }
+
+  /* ---------- 070 알림: alert → 쌓이는 알림 ---------- */
+  var box = document.createElement('div'); box.id = 'wvToasts'; document.body.appendChild(box);
+  function toast(msg, kind, ms){
+    msg = String(msg == null ? '' : msg).replace(/<[^>]+>/g, '');
+    kind = kind || (/(경고|부족|없음|실패|못|오류|중복|공백|초과|위반)/.test(msg) ? 'warn' : (/(완료|저장|추가|반영|적용|성공)/.test(msg) ? 'ok' : 'info'));
+    var el = document.createElement('div'); el.className = 'wvTo ' + kind;
+    var long = msg.split('\n').length > 3 || msg.length > 140;
+    el.innerHTML = '<span class="ic">' + (kind === 'ok' ? '✓' : kind === 'warn' ? '!' : 'i') + '</span><div><div class="tx"></div>' + (long ? '<span class="more">눌러서 전체 보기</span>' : '') + '</div>';
+    el.querySelector('.tx').textContent = msg;
+    box.appendChild(el);
+    var t = setTimeout(close, ms || (long ? 14000 : 6000));
+    function close(){ el.classList.add('out'); setTimeout(function(){ el.remove(); }, 320); }
+    el.onclick = function(){ if(long && !el.classList.contains('open')){ el.classList.add('open'); clearTimeout(t); t = setTimeout(close, 30000); el.querySelector('.more').textContent = '다시 누르면 닫힘'; } else close(); };
+    while(box.children.length > 5) box.firstChild.remove();
+  }
+  window.wvToast = toast;
+  window.wvTestToast = function(m){ toast(m); };
+  window.alert = function(m){ toast(m); };
+
+  /* ---------- 083 생성 진행 ---------- */
+  var p2 = document.getElementById('panel2');
+  if(p2){
+    var pg = document.createElement('div'); pg.id = 'wvProg';
+    pg.innerHTML = '<div class="top"><div class="bar"><span class="seg"></span><span class="fill"></span></div><span class="st">대기</span></div>' +
+      '<ol><li><i></i>전월 확인</li><li><i></i>특이사항·조건 반영</li><li><i></i>편성·최적화</li><li><i></i>휴무 맞춤·순환·연속근무</li><li><i></i>점검</li></ol>' +
+      '<div class="kpis"><div class="kpi"><small>매장 공백</small><b id="wvK1">-</b></div><div class="kpi"><small>휴무 ≠ 지정</small><b id="wvK2">-</b></div><div class="kpi"><small>최대 연속근무</small><b id="wvK3">-</b></div><div class="kpi"><small>휴무 요청 반영</small><b id="wvK4">-</b></div></div>';
+    var rb = p2.querySelector('.rowbtns'); p2.insertBefore(pg, rb ? rb.nextSibling : p2.firstChild);
+  }
+  function stats(){
+    if(typeof sched === 'undefined' || !sched || !sched.cells) return null;
+    var c = sched.cells, nD = sched.nDays, mk = sched.year + '-' + String(sched.month).padStart(2, '0');
+    var ABS = ['휴가','병가','훈련','출장','전휴무','제외'], isW = function(v){ return !!v && ABS.indexOf(v) < 0; }, base = function(v){ return String(v).replace(/\((OP|CL|PT)\)$/, ''); };
+    var pd = new Date(sched.year, sched.month - 2, 1), pk = pd.getFullYear() + '-' + String(pd.getMonth() + 1).padStart(2, '0');
+    var gap = 0, mis = 0, mx = 0, who = '';
+    S.emps.forEach(function(e){ var a = c[e.name]; if(!a) return; var p = (S.lastSched && S.lastSched[pk] && S.lastSched[pk][e.name]) || [], r = 0, off = 0;
+      for(var k = p.length - 1; k >= 0 && isW(p[k]); k--) r++;
+      a.forEach(function(v){ if(v === '') off++; if(isW(v)){ r++; if(r > mx){ mx = r; who = e.name; } } else r = 0; });
+      if(typeof offTarget === 'function' && e.role !== '교육' && off !== offTarget(e)) mis++; });
+    for(var d = 0; d < nD; d++) S.stores.forEach(function(st){ var need = needAtN(st.n, d, mk), n = 0; S.emps.forEach(function(e){ var v = (c[e.name] || [])[d]; if(isW(v) && v !== '순환' && base(v) === st.n) n++; }); if(n < need) gap += need - n; });
+    if(typeof __wvD !== 'undefined') __wvD = -1;
+    var rq = ((S.reqs && S.reqs[mk]) || []).filter(function(r){ return r.type === '휴무요청'; }), ok = rq.filter(function(r){ return (c[r.emp] || [])[r.day - 1] === ''; }).length;
+    return { gap: gap, mis: mis, mx: mx, who: who, req: ok + '/' + rq.length };
+  }
+  if(typeof generate === 'function'){
+    var _g = generate;
+    var running = false;
+    generate = function(){
+      var self = this, args = arguments, s0 = (typeof sched !== 'undefined') ? sched : null;
+      if(running || !pg) return _g.apply(self, args);
+      running = true;
+      var li = pg.querySelectorAll('li'), fill = pg.querySelector('.fill'), st = pg.querySelector('.st');
+      pg.className = 'on wait'; fill.style.width = '0'; [].forEach.call(li, function(l){ l.className = ''; l.querySelector('i').textContent = ''; });
+      li[0].className = 'run'; st.textContent = '전월 확인 중';
+      var r; try{ r = _g.apply(self, args); }catch(e){ running = false; pg.className = 'on'; st.textContent = '오류'; toast('생성 중 오류: ' + e.message, 'warn'); throw e; }
+      var t0 = Date.now();
+      (function wait(){
+        var changed = (typeof sched !== 'undefined') && sched && sched !== s0;
+        if(!changed && Date.now() - t0 < 30000){ setTimeout(wait, 200); return; }
+        pg.classList.remove('wait');
+        var k = 0;
+        (function step(){
+          if(k < li.length){ li[k].className = 'ok'; li[k].querySelector('i').textContent = '✓'; k++; fill.style.width = (k / li.length * 100) + '%'; if(k < li.length){ li[k].className = 'run'; st.textContent = li[k].textContent; } setTimeout(step, 160); return; }
+          running = false;
+          if(!changed){ pg.className = 'on'; st.textContent = '생성되지 않음'; toast('스케줄이 생성되지 않았습니다. 설정 점검 창에서 취소했거나 오류가 났을 수 있습니다.', 'warn'); return; }
+          pg.className = 'on done'; st.textContent = '완료';
+          var s = stats();
+          if(s){
+            var K = function(id, v, good){ var b = document.getElementById(id); b.textContent = v; b.style.color = good ? '#119C72' : '#D93A55'; };
+            K('wvK1', s.gap + '건', s.gap === 0); K('wvK2', s.mis + '명', s.mis === 0); K('wvK3', s.mx + '일', s.mx <= 5); K('wvK4', s.req, s.req.split('/')[0] === s.req.split('/')[1]);
+            document.getElementById('wvK3').title = s.who;
+            toast(sched.month + '월 스케줄 생성 완료 · 공백 ' + s.gap + ' · 최대 연속 ' + s.mx + '일' + (s.mx > 5 ? ' (' + s.who + ')' : ''), s.gap || s.mx > 5 ? 'warn' : 'ok');
+          }
+        })();
+      })();
+      return r;
+    };
+  }
+})();
+
+</script>
 </html>
