@@ -5408,7 +5408,7 @@ window.WV_AI_URL = window.WV_AI_URL || 'https://script.google.com/macros/s/AKfyc
     if(!window.WV_AI_URL) return Promise.reject(new Error('다리 주소 없음'));
     var A = aliasMap(), sent = mask(body, A);
     var ctl = ('AbortController' in window) ? new AbortController() : null, t = setTimeout(function(){ if(ctl) ctl.abort(); }, 45000);
-    return fetch(window.WV_AI_URL, { __wvAI: true, body: JSON.stringify(sent), signal: ctl ? ctl.signal : undefined })
+    return fetch(window.WV_AI_URL, { __wvAI: true, method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(sent), signal: ctl ? ctl.signal : undefined })
       .then(function(r){ return r.text(); })
       .then(function(t2){ clearTimeout(t); var j; try{ j = JSON.parse(t2); }catch(e){ throw new Error('응답을 읽지 못함'); } if(!j.ok) throw new Error(j.why + (j.msg ? ' — ' + j.msg : '')); j.data = walk(j.data, A.back); return j; })
       .catch(function(e){ clearTimeout(t); throw (e && e.name === 'AbortError') ? new Error('45초 안에 답이 없음') : e; });
