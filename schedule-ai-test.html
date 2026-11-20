@@ -5065,6 +5065,8 @@ th,td{border-color:var(--ln)!important}
 .wvCapLg{display:flex;justify-content:space-between;font-size:11.5px;color:var(--ink3);margin-bottom:14px}
 .wvEmpG{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:8px}
 .wvEm{border:1px solid var(--ln);border-radius:12px;padding:8px 11px;background:#fff}
+.wvEm.part{background:var(--s2);border-style:dashed}
+.wvEm.part .w b{color:var(--ink3)}
 .wvEm .n{font-weight:800;font-size:13px;display:flex;justify-content:space-between;align-items:center}
 .wvEm .n small{font-weight:600;font-size:10.5px;color:var(--ink3)}
 .wvEm .w{font-size:12px;color:var(--ink2);margin-top:2px}
@@ -5121,11 +5123,12 @@ th,td{border-color:var(--ln)!important}
       var totalNeed = S.stores.reduce(function(a, st){ return a + (st._need != null ? st._need : (+st.need || 0)); }, 0);
       var vac = {}; ((mk && S.reqs && S.reqs[mk]) || []).forEach(function(r){ if(['휴가','병가','훈련','출장'].indexOf(r.type) >= 0) vac[r.emp] = (vac[r.emp] || 0) + 1; });
       var supply = 0, rows = [];
-      S.emps.forEach(function(e){ if(e.role === '교육') return; var off = offTarget(e), v = vac[e.name] || 0, w = Math.max(0, op - off - v); supply += w; rows.push({ e: e, w: w, off: off, v: v }); });
+      var isPart = function(e){ return e.role === '파트' || e.type === '파트타임'; }, partN = 0, partW = 0;
+      S.emps.forEach(function(e){ if(e.role === '교육') return; var off = offTarget(e), v = vac[e.name] || 0, w = Math.max(0, op - off - v); if(isPart(e)){ partN++; partW += w; rows.push({ e: e, w: w, off: off, v: v, part: true }); return; } supply += w; rows.push({ e: e, w: w, off: off, v: v }); });
       if(typeof __wvD !== 'undefined') __wvD = -1;
       var diff = supply - required, pct = required ? Math.round(supply / required * 100) : 100;
       var lbl = mk ? (mk.replace('-', '년 ') + '월') : '(월 미선택 · 30일 가정)';
-      var h = '<div class="wvCapHd">' + lbl + ' · 운영 ' + op + '일' + (H ? ' (전매장 휴무 ' + H + '일 제외)' : '') + ' · 하루 필요 ' + totalNeed + '명 · 직원 ' + rows.length + '명</div>';
+      var h = '<div class="wvCapHd">' + lbl + ' · 운영 ' + op + '일' + (H ? ' (전매장 휴무 ' + H + '일 제외)' : '') + ' · 하루 필요 ' + totalNeed + '명 · 직원 ' + (rows.length - partN) + '명' + (partN ? ' <span style="color:#4b3bc4">(파트 ' + partN + '명 · ' + partW + '일은 가용에서 제외)</span>' : '') + '</div>';
       h += '<div class="wvCapK"><div><small>필요 근무일</small><b>' + required + '<span>일</span></b></div>' +
            '<div><small>배치 가능 근무일</small><b>' + supply + '<span>일</span></b></div>' +
            '<div class="' + (diff >= 0 ? 'good' : 'bad') + '"><small>' + (diff >= 0 ? '여유 (추가 휴무로 분배 가능)' : '부족 (공백 예상)') + '</small><b>' + (diff >= 0 ? '+' : '−') + Math.abs(diff) + '<span>일</span></b></div></div>';
@@ -5134,13 +5137,14 @@ th,td{border-color:var(--ln)!important}
       h += '<div class="wvCapLg"><span>가용 ' + supply + '일 (필요 대비 ' + pct + '%)</span><span>빨간 선 = 필요 ' + required + '일</span></div>';
       h += '<div class="wvEmpG">' + rows.map(function(r){
         var tags = '';
-        if(r.e.role === '파트') tags += '<span class="tag p">파트</span>';
+        if(r.part) tags += '<span class="tag p">파트 · 가용 제외</span>';
         if(r.v) tags += '<span class="tag v">휴가 등 ' + r.v + '</span>';
-        return '<div class="wvEm"><div class="n">' + r.e.name + '<small>' + (r.e.title || '') + '</small></div>' +
+        return '<div class="wvEm' + (r.part ? ' part' : '') + '"><div class="n">' + r.e.name + '<small>' + (r.e.title || '') + '</small></div>' +
                '<div class="w"><b>' + r.w + '</b>일 근무 · 휴무 ' + r.off + tags + '</div></div>';
       }).join('') + '</div>';
       box.innerHTML = h;
-      try{ if(window.wvSupplyAdvice) wvSupplyAdvice(); }catch(e){}
+      // 하단 수급 분석도 파트 제외 기준으로 (분석이 S.emps를 읽는 동안만 파트를 빼고 바로 되돌림)
+      try{ if(window.wvSupplyAdvice){ var all = S.emps; try{ S.emps = all.filter(function(e){ return !isPart(e); }); wvSupplyAdvice(); } finally { S.emps = all; } } }catch(e){}
     };
     renderCapacity.__wvsup = true;
     try{ renderCapacity(); }catch(e){}
