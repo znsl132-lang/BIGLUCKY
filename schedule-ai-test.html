@@ -23,6 +23,7 @@
   }
   var of = window.fetch;
   window.fetch = function(u, o){
+    if(o && o.__wvAI && window.WV_AI_URL && String(u) === window.WV_AI_URL) return of.call(this, u, { method: 'POST', body: o.body, headers: { 'Content-Type': 'text/plain;charset=utf-8' } });
     if(o && o.method && String(o.method).toUpperCase() !== 'GET'){
       note('테스트판이라 시트에 저장하지 않았습니다');
       return Promise.resolve(new Response('{"ok":false,"test":true}', { headers:{'Content-Type':'application/json'} }));
@@ -4649,8 +4650,10 @@ wvChkInit();
       if(o.days.length){ lines.push(name + ' ' + o.days.map(function(d){ return P.m + '/' + d; }).join(' ')); n += o.days.length; }
       o.dup.forEach(function(d){ notes.push('<span class="wvT-chip wvT-mute">' + name + ' ' + P.m + '/' + d + ' 이미 있음 · 뺌</span>'); });
       o.other.forEach(function(d){ notes.push('<span class="wvT-chip wvT-warn">' + name + ' ' + d + '일 — ' + P.m + '월 아님 · 뺌</span>'); });
-      o.miss.forEach(function(msg){ notes.push('<span class="wvT-chip wvT-ai">' + name + ' 날짜를 못 읽음 — "' + esc(msg.slice(0, 30)) + '" (AI 연결 후 자동)</span>'); });
+      o.miss.forEach(function(msg){ notes.push('<span class="wvT-chip wvT-ai">' + name + ' 날짜를 못 읽음 — "' + esc(msg.slice(0, 30)) + '"</span>'); });
     });
+    var missAll = []; order.forEach(function(name){ map[name].miss.forEach(function(msg){ missAll.push({ name: name, msg: msg }); }); });
+    if(missAll.length && window.wvAIDates && window.WV_AI_URL){ window.wvAIDates(missAll, P); notes = notes.filter(function(x){ return x.indexOf('날짜를 못 읽음') < 0; }); notes.push('<span class="wvT-chip wvT-ai" id="wvTAiWait">AI가 ' + missAll.length + '줄 해석 중…</span>'); }
     var out = document.getElementById('wvTOut'); out.value = lines.join('\n');
     document.getElementById('wvTRes').style.display = 'block';
     document.getElementById('wvTCnt').textContent = order.length ? (lines.length + '명 · 휴무 ' + n + '건') : '읽은 요청 없음';
@@ -4687,6 +4690,7 @@ wvChkInit();
     var st = document.getElementById('wvTStat');
     if(st) st.innerHTML = last ? ('마지막 생성: 연속근무 조정 <b>' + last.moves + '칸</b>' + (last.left.length ? ' · <span style="color:#c62828">못 지킨 사람 ' + esc(last.left.join(', ')) + '</span>' : ' · 상한 초과 <b style="color:#137333">0명</b>')) : '';
   }
+  window.wvRenderRules = function(){ renderRules(); };
   function say(cls, html){ var d = document.createElement('div'); d.className = 'wvT-msg ' + cls; d.innerHTML = html; var log = document.getElementById('wvTLog'); log.appendChild(d); log.scrollTop = log.scrollHeight; return d; }
   function ask(q){
     q = (q || document.getElementById('wvTAsk').value).trim(); if(!q) return;
@@ -4706,6 +4710,7 @@ wvChkInit();
       };
       return;
     }
+    if(window.wvAIRule && window.WV_AI_URL){ window.wvAIRule(q, say); return; }
     say('wvT-bot', '테스트판은 아직 Claude API 연결 전이라 <b>연속근무 조건</b>만 알아듣습니다. 예: "6일 연속 근무 발생하지 않게 해줘", "연속근무 최대 4일까지". 다른 문장은 API 연결 후 처리됩니다.');
   }
 
@@ -5211,6 +5216,7 @@ th,td{border-color:var(--ln)!important}
     document.getElementById('wvAdvIn').value = '';
     say('me', esc(q));
     if(typeof sched === 'undefined' || !sched || !sched.cells){ say('bot', '먼저 스케줄을 생성하거나 저장본을 불러와 주세요. 지금 표를 기준으로 대안을 만듭니다.'); return; }
+    if(!/연속/.test(q) && window.wvAIAdvise && window.WV_AI_URL){ window.wvAIAdvise(q, say, ask); return; }
     if(!/연속/.test(q)){ say('bot', '테스트판은 아직 Claude API 연결 전이라 <b>연속근무 해소</b> 요청만 처리합니다. 예: "장현진 연속근무 8일 해소한 버전 만들어줘", "6일 이상 연속근무 전부 해소해줘". 다른 조언은 API 연결 후 가능합니다.'); return; }
     var sc = sched, names = findNames(q);
     var mm = q.match(/최대\s*(\d{1,2})\s*일/), r0 = (Array.isArray(S.aiRules) ? S.aiRules : []).filter(function(x){ return x.type === 'maxRun'; })[0];
@@ -5308,6 +5314,162 @@ th,td{border-color:var(--ln)!important}
     if(typeof renderSched === 'function'){ var _rs = renderSched; renderSched = function(){ var r = _rs.apply(this, arguments); try{ suggestions(); }catch(e){} return r; }; }
   }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount();
+})();
+
+</script>
+<script>
+/* ===== 테스트판 — Claude API 연결 (스케줄 AI 다리 · 2026-11-20) =====
+   다리: 별도 앱스크립트 프로젝트 "위베이프 스케줄 AI 다리" (00-수집함/schedule-ai-bridge/Code.gs)
+   ② AI 요청사항: 규칙으로 못 읽은 문장 → rule 모드 → 동작 미리보기 → [적용]
+   ② 카톡: 날짜를 못 읽은 줄 → dates 모드 → 자동 기입칸에 합침
+   ③ AI 조언: 연속근무 외 질문 → advise 모드 → 답 + (가능하면) 대안 만들기 버튼 */
+window.WV_AI_URL = window.WV_AI_URL || 'https://script.google.com/macros/s/AKfycbwmS4fFTBZjfBwuybJCt9IbExoqHXap8Leb-TkwCSFbOiPEY7eeL_j7eBdYMmyjNoV-5w/exec';   // ← 다리 배포 주소(…/exec)
+(function(){
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function mk(){ var v = monthKey(), p = (v || '').split('-').map(Number); return { mk: v, y: p[0], m: p[1], nD: p[0] ? new Date(p[0], p[1], 0).getDate() : 31 }; }
+  var DOW = '일월화수목금토';
+  function md(P, d){ return P.m + '/' + d + '(' + DOW[new Date(P.y, P.m - 1, d).getDay()] + ')'; }
+  /* ---------- 이름 자동 가림 ----------
+     AI로 나가는 모든 글에서 직원 실명(성 뺀 이름 포함)을 "직원01"처럼 바꾸고,
+     돌아온 답의 "직원01"은 화면에서만 실명으로 되돌린다. Anthropic에는 실명이 가지 않는다. */
+  function aliasMap(){
+    var full = [], short = [];
+    S.emps.forEach(function(e, i){
+      var a = '직원' + String(i + 1).padStart(2, '0');
+      full.push([e.name, a]);
+      if(e.name.length === 3) short.push([e.name.slice(1), a]);
+    });
+    full.sort(function(x, y){ return y[0].length - x[0].length; });
+    // 성 뺀 이름이 두 사람 이상 겹치면 쓰지 않음
+    short = short.filter(function(s){ return short.filter(function(t){ return t[0] === s[0]; }).length === 1; });
+    return { full: full, short: short, back: function(s){ return String(s).replace(/직원(\d{2})/g, function(m, n){ var e = S.emps[+n - 1]; return e ? e.name : m; }); } };
+  }
+  function walk(v, f){
+    if(typeof v === 'string') return f(v);
+    if(Array.isArray(v)) return v.map(function(x){ return walk(x, f); });
+    if(v && typeof v === 'object'){ var o = {}; Object.keys(v).forEach(function(k){ o[f(k)] = walk(v[k], f); }); return o; }
+    return v;
+  }
+  function mask(body, A){
+    return walk(body, function(s){
+      A.full.forEach(function(p){ s = s.split(p[0]).join(p[1]); });
+      A.short.forEach(function(p){ s = s.split(p[0]).join(p[1]); });
+      return s;
+    });
+  }
+  window.wvAIMaskPreview = function(obj){ return mask(obj, aliasMap()); };   // 확인용
+  function call(body){
+    if(!window.WV_AI_URL) return Promise.reject(new Error('다리 주소 없음'));
+    var A = aliasMap(), sent = mask(body, A);
+    var ctl = ('AbortController' in window) ? new AbortController() : null, t = setTimeout(function(){ if(ctl) ctl.abort(); }, 45000);
+    return fetch(window.WV_AI_URL, { __wvAI: true, body: JSON.stringify(sent), signal: ctl ? ctl.signal : undefined })
+      .then(function(r){ return r.text(); })
+      .then(function(t2){ clearTimeout(t); var j; try{ j = JSON.parse(t2); }catch(e){ throw new Error('응답을 읽지 못함'); } if(!j.ok) throw new Error(j.why + (j.msg ? ' — ' + j.msg : '')); j.data = walk(j.data, A.back); return j; })
+      .catch(function(e){ clearTimeout(t); throw (e && e.name === 'AbortError') ? new Error('45초 안에 답이 없음') : e; });
+  }
+  function wait(say){ return say('wvT-bot', '<span class="wvT-chip wvT-ai">AI 생각 중…</span>'); }
+  function names(){ return S.emps.map(function(e){ return e.name; }); }
+  function stores(){ return S.stores.map(function(s){ return s.n; }); }
+  function okDays(ds, P){ return (ds || []).map(Number).filter(function(d, i, a){ return d >= 1 && d <= P.nD && a.indexOf(d) === i; }).sort(function(a, b){ return a - b; }); }
+
+  /* ---------- ② AI 요청사항 ---------- */
+  function label(a, P){
+    if(a.type === 'maxRun') return '전 직원 연속근무 최대 ' + a.max + '일';
+    if(a.type === 'reqOff') return a.emp + ' 휴무 요청 · ' + a.days.map(function(d){ return md(P, d); }).join(' ');
+    if(a.type === 'fixWork') return a.emp + ' ' + a.store + ' 근무 고정 · ' + a.days.map(function(d){ return md(P, d); }).join(' ');
+    if(a.type === 'needX') return a.store + ' 필요 인원 ' + a.need + '명 · ' + a.days.map(function(d){ return md(P, d); }).join(' ');
+    return '';
+  }
+  function valid(a, P){
+    if(!a || !a.type) return null;
+    if(a.type === 'maxRun'){ var m = +a.max; return (m >= 3 && m <= 10) ? { type: 'maxRun', max: m } : null; }
+    var d = okDays(a.days, P); if(!d.length) return null;
+    if(a.type === 'reqOff') return names().indexOf(a.emp) >= 0 ? { type: 'reqOff', emp: a.emp, days: d } : null;
+    if(a.type === 'fixWork') return (names().indexOf(a.emp) >= 0 && stores().indexOf(a.store) >= 0) ? { type: 'fixWork', emp: a.emp, store: a.store, days: d } : null;
+    if(a.type === 'needX'){ var n = +a.need; return (stores().indexOf(a.store) >= 0 && n >= 0 && n <= 5) ? { type: 'needX', store: a.store, need: n, days: d } : null; }
+    return null;
+  }
+  function apply(a, P){
+    if(a.type === 'maxRun'){
+      var rs = (Array.isArray(S.aiRules) ? S.aiRules : []).filter(function(r){ return r.type !== 'maxRun'; });
+      rs.push({ type: 'maxRun', max: a.max, label: '전 직원 연속근무 최대 ' + a.max + '일 (전월 이월 포함)', text: 'AI' }); S.aiRules = rs;
+    } else if(a.type === 'reqOff' || a.type === 'fixWork'){
+      if(!S.reqs[P.mk]) S.reqs[P.mk] = [];
+      a.days.forEach(function(d){
+        S.reqs[P.mk] = S.reqs[P.mk].filter(function(r){ return !(r.emp === a.emp && r.day === d); });
+        S.reqs[P.mk].push(a.type === 'reqOff' ? { emp: a.emp, type: '휴무요청', day: d, store: '' } : { emp: a.emp, type: '근무지정', day: d, store: a.store });
+      });
+    } else if(a.type === 'needX'){
+      if(!S.needX) S.needX = {}; if(!S.needX[P.mk]) S.needX[P.mk] = [];
+      a.days.forEach(function(d){ S.needX[P.mk] = S.needX[P.mk].filter(function(x){ return !(x.store === a.store && x.day === d); }); S.needX[P.mk].push({ store: a.store, day: d, need: a.need }); });
+    }
+    save(); try{ renderReqs(); }catch(e){} try{ renderCapacity(); }catch(e){}
+    try{ if(typeof window.wvRenderRules === 'function') window.wvRenderRules(); }catch(e){}
+  }
+  window.wvAIRule = function(q, say){
+    var P = mk(); if(!P.mk){ say('wvT-bot', '상단에서 대상 월을 먼저 선택하세요.'); return; }
+    var w = wait(say);
+    call({ mode: 'rule', q: q, ctx: { y: P.y, m: P.m, nDays: P.nD, emps: names(), stores: stores() } }).then(function(j){
+      var acts = (j.data.actions || []), good = [], bad = [];
+      acts.forEach(function(a){ if(a.type === 'unsupported'){ bad.push(a.reason || '지원하지 않는 요청'); return; } var v = valid(a, P); if(v) good.push(v); else bad.push('확인 안 된 항목: ' + JSON.stringify(a).slice(0, 80)); });
+      var h = esc(j.data.say || '');
+      if(good.length) h += good.map(function(a, i){ return '<div class="wvT-rule"><b>적용할 조건</b> ' + esc(label(a, P)) + '<button class="btn small" data-i="' + i + '">적용</button></div>'; }).join('');
+      if(bad.length) h += '<div class="hint" style="margin-top:6px">' + bad.map(esc).join('<br>') + '</div>';
+      h += '<div class="hint" style="margin-top:6px">AI · ' + (j.ms / 1000).toFixed(1) + '초 · 오늘 남은 횟수 ' + j.left + '</div>';
+      w.innerHTML = h;
+      w.querySelectorAll('[data-i]').forEach(function(b){ b.onclick = function(){ var a = good[+b.dataset.i]; apply(a, P); b.parentNode.innerHTML = '✓ 적용됨 — ' + esc(label(a, P)); wvToast('AI 조건 적용: ' + label(a, P), 'ok'); }; });
+    }).catch(function(e){ w.innerHTML = '<span style="color:#b3243f">AI 연결 실패: ' + esc(e.message) + '</span>'; });
+  };
+
+  /* ---------- ② 카톡 날짜 해석 ---------- */
+  window.wvAIDates = function(lines, P){
+    call({ mode: 'dates', lines: lines, ctx: { y: P.y, m: P.m, nDays: P.nD } }).then(function(j){
+      var out = document.getElementById('wvTOut'), notes = document.getElementById('wvTNotes'); if(!out) return;
+      var cur = {}; out.value.split('\n').forEach(function(l){ var p = l.trim().split(/\s+/); if(p[0]) cur[p[0]] = p.slice(1); });
+      var add = [];
+      (j.data.results || []).forEach(function(r){
+        var d = okDays(r.days, P); if(names().indexOf(r.name) < 0) return;
+        if(d.length){ cur[r.name] = (cur[r.name] || []).concat(d.map(function(x){ return P.m + '/' + x; })).filter(function(x, i, a){ return a.indexOf(x) === i; }); }
+        add.push('<span class="wvT-chip wvT-ai">' + esc(r.name) + ' · AI ' + (d.length ? esc(d.map(function(x){ return md(P, x); }).join(' ')) : '날짜 없음') + (r.note ? ' — ' + esc(r.note) : '') + ' · 맞는지 확인</span>');
+      });
+      out.value = Object.keys(cur).map(function(k){ return k + ' ' + cur[k].join(' '); }).join('\n');
+      var wt = document.getElementById('wvTAiWait'); if(wt) wt.remove();
+      notes.insertAdjacentHTML('beforeend', add.join(''));
+    }).catch(function(e){ var wt = document.getElementById('wvTAiWait'); if(wt) wt.textContent = 'AI 해석 실패: ' + e.message + ' — 직접 입력해 주세요'; });
+  };
+
+  /* ---------- ③ AI 조언 ---------- */
+  window.wvAIAdvise = function(q, say, localAsk){
+    if(typeof sched === 'undefined' || !sched || !sched.cells){ say('bot', '먼저 스케줄을 생성해 주세요.'); return; }
+    var sc = sched, P = { y: sc.year, m: sc.month, nD: sc.nDays };
+    var rows = S.emps.filter(function(e){ return sc.cells[e.name]; }).map(function(e){
+      return { 이름: e.name, 직책: e.title || '', 소속: e.home, 휴무지정: offTarget(e), 칸: sc.cells[e.name].map(function(v){ return v === '' ? '휴' : String(v).replace(/\((OP|CL|PT)\)$/, ''); }).join(',') };
+    });
+    var mkS = sc.year + '-' + String(sc.month).padStart(2, '0');
+    var need = S.stores.map(function(s){ return s.n + ':' + (s._need != null ? s._need : s.need); }).join(' ');
+    var ex = ((S.needX && S.needX[mkS]) || []).map(function(x){ return x.store + ' ' + x.day + '일 ' + x.need + '명'; }).join(', ');
+    var reqs = ((S.reqs && S.reqs[mkS]) || []).map(function(r){ return r.emp + ' ' + r.day + '일 ' + r.type + (r.store ? '(' + r.store + ')' : ''); }).join(', ');
+    var w = say('bot', '<span class="dots"></span>AI 생각 중…');
+    call({ mode: 'advise', q: q, ctx: { y: P.y, m: P.m, nDays: P.nD, 첫날요일: DOW[new Date(P.y, P.m - 1, 1).getDay()], 매장필요인원: need, 인원예외: ex, 특이사항: reqs, rows: rows } }).then(function(j){
+      var a = j.data.action, h = esc(j.data.answer || '').replace(/\n/g, '<br>');
+      if(a && a.type === 'maxRun'){
+        var only = (a.only || []).filter(function(n){ return names().indexOf(n) >= 0; }), mx = +a.max || 5;
+        h += '<div class="wvAdvBtns"><button class="btn" data-go="1">' + (only.length ? esc(only.join('·')) + ' ' : '') + '연속근무 최대 ' + mx + '일 대안 만들기</button></div>';
+        w.innerHTML = h + '<div class="hint" style="margin-top:6px">AI · ' + (j.ms / 1000).toFixed(1) + '초 · 오늘 남은 횟수 ' + j.left + '</div>';
+        w.querySelector('[data-go]').onclick = function(){ localAsk((only.length ? only.join(' ') + ' ' : '6일 이상 ') + '연속근무 최대 ' + mx + '일 해소한 버전 만들어줘'); };
+        return;
+      }
+      w.innerHTML = h + '<div class="hint" style="margin-top:6px">AI · ' + (j.ms / 1000).toFixed(1) + '초 · 오늘 남은 횟수 ' + j.left + '</div>';
+    }).catch(function(e){ w.innerHTML = '<span style="color:#b3243f">AI 연결 실패: ' + esc(e.message) + '</span>'; });
+  };
+
+  /* 안내 문구 갱신 */
+  function relabel(){
+    if(!window.WV_AI_URL) return;
+    var h2 = document.querySelector('#wvTAI h3 .hint'); if(h2) h2.textContent = '테스트 · Claude 연결됨 · 이름은 가려서 보냄';
+    var h3 = document.querySelector('#wvAdv h3 .hint'); if(h3) h3.textContent = '테스트 · Claude 연결됨 · 이름은 가려서 보냄';
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', relabel); else setTimeout(relabel, 0);
 })();
 
 </script>
