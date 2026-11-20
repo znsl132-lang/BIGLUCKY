@@ -6912,6 +6912,33 @@ window.WV_TOOLS_TABS = true;
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function(){ setTimeout(boot, 0); }); else setTimeout(boot, 0);
   window.wvRuleListRender = function(){ render(); };
 })();
+/* ===== 새 버전 자동 확인 (2026-11-20)
+   GitHub Pages는 페이지를 브라우저에 최대 10분 저장해 두므로, 배포 직후 열면 옛 화면이 뜰 수 있다.
+   열 때·탭으로 돌아올 때·10분마다 서버의 빌드 번호와 비교 → 다르면 열자마자(아직 아무것도 안 만졌으면) 자동 새로고침, 작업 중이면 아래 알림 */
+(function(){
+  var B = 'P20261120-183843';/*WVBUILD*/
+  window.WV_BUILD = B; if(B === 'DEV') return;
+  var t0 = Date.now(), touched = false, shown = false;
+  ['keydown', 'input', 'pointerdown'].forEach(function(ev){ document.addEventListener(ev, function(){ touched = true; }, { capture: true, once: true }); });
+  function go(v){ try{ sessionStorage.setItem('wvReload', v); }catch(e){} location.replace(location.pathname + '?v=' + encodeURIComponent(v) + location.hash); }
+  function banner(v){
+    if(shown) return; shown = true;
+    var d = document.createElement('div'); d.id = 'wvNewVer';
+    d.style.cssText = 'position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:9800;background:#16131f;color:#fff;border-radius:999px;padding:10px 10px 10px 18px;display:flex;gap:12px;align-items:center;box-shadow:0 8px 30px rgba(0,0,0,.25);font-size:13.5px;max-width:calc(100vw - 24px)';
+    d.innerHTML = '<span>새 버전이 올라왔어요 · 저장한 뒤 새로고침하세요</span><button type="button" style="border:0;background:#7c5cff;color:#fff;border-radius:999px;padding:6px 14px;font:inherit;font-weight:700;cursor:pointer">새로고침</button><button type="button" aria-label="닫기" style="border:0;background:none;color:#aaa;cursor:pointer;font-size:15px">✕</button>';
+    d.children[1].onclick = function(){ go(v); }; d.children[2].onclick = function(){ d.remove(); };
+    document.body.appendChild(d);
+  }
+  function check(){
+    fetch(location.pathname + '?vc=' + Date.now(), { cache: 'no-store' }).then(function(r){ return r.ok ? r.text() : ''; }).then(function(t){
+      var m = t && t.match(/var B = '([^']+)';\/\*WVBUILD\*\//); if(!m || m[1] === B) return;
+      var tried = ''; try{ tried = sessionStorage.getItem('wvReload') || ''; }catch(e){}
+      if(!touched && Date.now() - t0 < 20000 && tried !== m[1]) go(m[1]); else banner(m[1]);
+    }).catch(function(){});
+  }
+  setTimeout(check, 1500); setInterval(check, 10 * 60 * 1000);
+  document.addEventListener('visibilitychange', function(){ if(document.visibilityState === 'visible') check(); });
+})();
 
 </script>
 </html>
