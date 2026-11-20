@@ -4690,6 +4690,15 @@ wvChkInit();
     document.getElementById('wvTRes').style.display = 'block';
     document.getElementById('wvTCnt').textContent = (ppl || order.length) ? (ppl + '명 · 휴무 ' + n + '건') : '읽은 요청 없음';
     document.getElementById('wvTNotes').innerHTML = notes.join('');
+    // 읽고 나면 붙여넣은 대화는 지운다 (AI 판단용 원문은 메모리에만 보관)
+    var tin = document.getElementById('wvTIn'), raw = tin.value, nLines = raw.split('\n').filter(function(l){ return splitLine(l.trim()); }).length;
+    if(raw.trim()){
+      window.__wvKakaoRaw = raw; tin.value = '';
+      tin.placeholder = '대화 ' + nLines + '줄을 읽었습니다 — 새 대화를 붙여넣으면 다시 읽습니다';
+      var rb = document.createElement('button'); rb.type = 'button'; rb.className = 'wvT-chip wvT-mute'; rb.style.border = '0'; rb.style.cursor = 'pointer';
+      rb.textContent = '붙여넣은 대화 다시 보기'; rb.onclick = function(){ tin.value = window.__wvKakaoRaw || ''; rb.remove(); };
+      document.getElementById('wvTNotes').appendChild(rb);
+    }
   }
   function apply(){
     var P = mkParts(); if(!P.mk) return;
@@ -4708,7 +4717,7 @@ wvChkInit();
     var by = Object.keys(added).map(function(m){ return m + '월 ' + added[m] + '건'; }).join(' · ');
     var other = Object.keys(added).some(function(m){ return +m !== P.m; });
     wvTestToast('특이사항 ' + total + '건 추가' + (by ? ' (' + by + ')' : '') + (other ? ' — 다른 달은 상단에서 그 달을 고르면 보입니다' : '') + (bad.length ? ' · 이름 못 찾음: ' + bad.join(', ') : ''));
-    document.getElementById('wvTIn').value = ''; document.getElementById('wvTRes').style.display = 'none';
+    document.getElementById('wvTIn').value = ''; window.__wvKakaoRaw = ''; document.getElementById('wvTIn').placeholder = '단톡방 대화를 붙여넣으세요'; document.getElementById('wvTRes').style.display = 'none';
   }
 
   /* ---------- ② AI 요청사항 (규칙 해석) ---------- */
@@ -5534,7 +5543,7 @@ window.WV_AI_URL = window.WV_AI_URL || 'https://script.google.com/macros/s/AKfyc
     pend.forEach(function(l){ var p = l.trim().split(/\s+/); p.slice(1).forEach(function(k){ (dayMap[k] = dayMap[k] || []).push(p[0] + '(카톡)'); }); });
     var overlap = Object.keys(dayMap).filter(function(k){ return dayMap[k].length > 1; }).map(function(k){ return k + ' ' + dayMap[k].join('·'); });
     var offs = S.emps.map(function(e){ return e.name + ' ' + offTarget(e) + '일'; }).join(', ');
-    var kraw = ((document.getElementById('wvTIn') || {}).value || '').split('\n').filter(function(l){ return /^\[.+?\]\s*\[(오전|오후)/.test(l) || / : /.test(l); }).slice(-30).map(function(l){ return l.replace(/\[(오전|오후)\s*[\d:]+\]\s*/, '').slice(0, 160); });
+    var kraw = ((document.getElementById('wvTIn') || {}).value || window.__wvKakaoRaw || '').split('\n').filter(function(l){ return /^\[.+?\]\s*\[(오전|오후)/.test(l) || / : /.test(l); }).slice(-30).map(function(l){ return l.replace(/\[(오전|오후)\s*[\d:]+\]\s*/, '').slice(0, 160); });
     return { 카톡정리_미반영: pend, 특이사항: now.slice(0, 120), 겹치는날: overlap, 지정휴무: offs, 카톡원문: kraw, 다른달: Object.keys(months).filter(function(m){ return +m !== P.m; }).map(function(m){ return m + '월'; }) };
   }
   window.wvAIRule = function(q, say){
