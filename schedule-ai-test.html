@@ -5437,67 +5437,115 @@ window.WV_AI_URL = window.WV_AI_URL || 'https://script.google.com/macros/s/AKfyc
   function okDays(ds, P){ return (ds || []).map(Number).filter(function(d, i, a){ return d >= 1 && d <= P.nD && a.indexOf(d) === i; }).sort(function(a, b){ return a - b; }); }
 
   /* ---------- ② AI 요청사항 ---------- */
-  function label(a, P){
+  /* 달 지정(a.m)이 있으면 그 달 기준으로 */
+  function monthP(P, m){
+    if(!m || +m === P.m) return P;
+    m = +m; var y = P.y; if(m - P.m > 6) y--; else if(P.m - m > 6) y++;
+    return { mk: y + '-' + String(m).padStart(2, '0'), y: y, m: m, nD: new Date(y, m, 0).getDate() };
+  }
+  function ds(a){ var Q = a.P; return a.days.map(function(d){ return md(Q, d); }).join(' '); }
+  function label(a){
     if(a.type === 'maxRun') return '전 직원 연속근무 최대 ' + a.max + '일';
-    if(a.type === 'reqOff') return a.emp + ' 휴무 요청 · ' + a.days.map(function(d){ return md(P, d); }).join(' ');
-    if(a.type === 'fixWork') return a.emp + ' ' + a.store + ' 근무 고정 · ' + a.days.map(function(d){ return md(P, d); }).join(' ');
-    if(a.type === 'needX') return a.store + ' 필요 인원 ' + a.need + '명 · ' + a.days.map(function(d){ return md(P, d); }).join(' ');
+    if(a.type === 'reqOff') return a.emp + ' 휴무 요청 · ' + ds(a);
+    if(a.type === 'removeOff') return a.emp + ' 특이사항에서 빼기 · ' + ds(a);
+    if(a.type === 'fixWork') return a.emp + ' ' + a.store + ' 근무 고정 · ' + ds(a);
+    if(a.type === 'needX') return a.store + ' 필요 인원 ' + a.need + '명 · ' + ds(a);
     if(a.type === 'condOff') return a.emp + ' 조건부 휴무(가급적) · ' + a.cond;
-    if(a.type === 'absence') return a.emp + ' ' + a.kind + ' · ' + a.days.map(function(d){ return md(P, d); }).join(' ');
-    if(a.type === 'hol') return '전매장 휴무일 · ' + a.days.map(function(d){ return md(P, d); }).join(' ');
+    if(a.type === 'absence') return a.emp + ' ' + a.kind + ' · ' + ds(a);
+    if(a.type === 'hol') return '전매장 휴무일 · ' + ds(a);
+    if(a.type === 'offAdj') return a.emp + ' ' + a.P.m + '월 휴무 +' + a.n + '일 (지정 ' + a.base + ' → ' + (a.base + a.n) + '일)';
+    if(a.type === 'kakaoEdit') return '카톡 정리칸 · ' + a.emp + (a.add.length ? ' 추가 ' + a.add.join(' ') : '') + (a.remove.length ? ' 빼기 ' + a.remove.join(' ') : '');
     return '';
   }
-  function valid(a, P){
+  function valid(a, P0){
     if(!a || !a.type) return null;
-    if(a.type === 'maxRun'){ var m = +a.max; return (m >= 3 && m <= 10) ? { type: 'maxRun', max: m } : null; }
-    if(a.type === 'condOff') return (names().indexOf(a.emp) >= 0 && ['연속 2일','주말 포함 연속 2일','주말 1일'].indexOf(a.cond) >= 0) ? { type: 'condOff', emp: a.emp, cond: a.cond } : null;
+    var P = monthP(P0, a.m), E = names().indexOf(a.emp) >= 0;
+    if(a.type === 'maxRun'){ var m = +a.max; return (m >= 3 && m <= 10) ? { type: 'maxRun', max: m, P: P } : null; }
+    if(a.type === 'condOff') return (E && ['연속 2일','주말 포함 연속 2일','주말 1일'].indexOf(a.cond) >= 0) ? { type: 'condOff', emp: a.emp, cond: a.cond, P: P } : null;
+    if(a.type === 'offAdj'){ var n = Math.round(+a.n); if(!E || !(n >= 1 && n <= 5)) return null; var e = S.emps.filter(function(x){ return x.name === a.emp; })[0]; return { type: 'offAdj', emp: a.emp, n: n, base: offTarget(e), P: P }; }
+    if(a.type === 'kakaoEdit'){
+      var fx = function(L){ return (L || []).map(String).filter(function(t){ return /^\d{1,2}\/\d{1,2}$/.test(t); }); };
+      var ad = fx(a.add), rm = fx(a.remove); return (E && (ad.length || rm.length)) ? { type: 'kakaoEdit', emp: a.emp, add: ad, remove: rm, P: P } : null;
+    }
     var d = okDays(a.days, P); if(!d.length) return null;
-    if(a.type === 'reqOff') return names().indexOf(a.emp) >= 0 ? { type: 'reqOff', emp: a.emp, days: d } : null;
-    if(a.type === 'fixWork') return (names().indexOf(a.emp) >= 0 && stores().indexOf(a.store) >= 0) ? { type: 'fixWork', emp: a.emp, store: a.store, days: d } : null;
-    if(a.type === 'needX'){ var n = +a.need; return (stores().indexOf(a.store) >= 0 && n >= 0 && n <= 5) ? { type: 'needX', store: a.store, need: n, days: d } : null; }
-    if(a.type === 'absence') return (names().indexOf(a.emp) >= 0 && ['휴가','병가','훈련','출장'].indexOf(a.kind) >= 0) ? { type: 'absence', emp: a.emp, kind: a.kind, days: d } : null;
-    if(a.type === 'hol') return { type: 'hol', days: d };
+    if(a.type === 'reqOff') return E ? { type: 'reqOff', emp: a.emp, days: d, P: P } : null;
+    if(a.type === 'removeOff') return E ? { type: 'removeOff', emp: a.emp, days: d, P: P } : null;
+    if(a.type === 'fixWork') return (E && stores().indexOf(a.store) >= 0) ? { type: 'fixWork', emp: a.emp, store: a.store, days: d, P: P } : null;
+    if(a.type === 'needX'){ var nn = +a.need; return (stores().indexOf(a.store) >= 0 && nn >= 0 && nn <= 5) ? { type: 'needX', store: a.store, need: nn, days: d, P: P } : null; }
+    if(a.type === 'absence') return (E && ['휴가','병가','훈련','출장'].indexOf(a.kind) >= 0) ? { type: 'absence', emp: a.emp, kind: a.kind, days: d, P: P } : null;
+    if(a.type === 'hol') return { type: 'hol', days: d, P: P };
     return null;
   }
-  function apply(a, P){
+  function apply(a){
+    var K = a.P.mk;
+    var R = function(){ if(!S.reqs[K]) S.reqs[K] = []; return S.reqs[K]; };
     if(a.type === 'maxRun'){
       var rs = (Array.isArray(S.aiRules) ? S.aiRules : []).filter(function(r){ return r.type !== 'maxRun'; });
       rs.push({ type: 'maxRun', max: a.max, label: '전 직원 연속근무 최대 ' + a.max + '일 (전월 이월 포함)', text: 'AI' }); S.aiRules = rs;
+    } else if(a.type === 'offAdj'){
+      var rs2 = (Array.isArray(S.aiRules) ? S.aiRules : []).filter(function(r){ return !(r.type === 'offAdj' && r.emp === a.emp && r.mk === K); });
+      rs2.push({ type: 'offAdj', emp: a.emp, n: a.n, mk: K, label: a.emp + ' ' + a.P.m + '월 휴무 +' + a.n + '일' }); S.aiRules = rs2;
     } else if(a.type === 'reqOff' || a.type === 'fixWork'){
-      if(!S.reqs[P.mk]) S.reqs[P.mk] = [];
       a.days.forEach(function(d){
-        S.reqs[P.mk] = S.reqs[P.mk].filter(function(r){ return !(r.emp === a.emp && r.day === d); });
-        S.reqs[P.mk].push(a.type === 'reqOff' ? { emp: a.emp, type: '휴무요청', day: d, store: '' } : { emp: a.emp, type: '근무지정', day: d, store: a.store });
+        S.reqs[K] = R().filter(function(r){ return !(r.emp === a.emp && r.day === d); });
+        S.reqs[K].push(a.type === 'reqOff' ? { emp: a.emp, type: '휴무요청', day: d, store: '' } : { emp: a.emp, type: '근무지정', day: d, store: a.store });
       });
+    } else if(a.type === 'removeOff'){
+      S.reqs[K] = R().filter(function(r){ return !(r.emp === a.emp && a.days.indexOf(r.day) >= 0); });
     } else if(a.type === 'condOff'){
-      if(!S.reqs[P.mk]) S.reqs[P.mk] = [];
-      S.reqs[P.mk] = S.reqs[P.mk].filter(function(r){ return !(r.emp === a.emp && r.type === '조건부'); });
-      S.reqs[P.mk].push({ emp: a.emp, type: '조건부', day: 0, store: '', cond: a.cond });
+      S.reqs[K] = R().filter(function(r){ return !(r.emp === a.emp && r.type === '조건부'); });
+      S.reqs[K].push({ emp: a.emp, type: '조건부', day: 0, store: '', cond: a.cond });
     } else if(a.type === 'absence'){
-      if(!S.reqs[P.mk]) S.reqs[P.mk] = [];
-      a.days.forEach(function(d){ S.reqs[P.mk] = S.reqs[P.mk].filter(function(r){ return !(r.emp === a.emp && r.day === d); }); S.reqs[P.mk].push({ emp: a.emp, type: a.kind, day: d, store: '' }); });
+      a.days.forEach(function(d){ S.reqs[K] = R().filter(function(r){ return !(r.emp === a.emp && r.day === d); }); S.reqs[K].push({ emp: a.emp, type: a.kind, day: d, store: '' }); });
     } else if(a.type === 'hol'){
-      if(!S.hols) S.hols = {}; if(!S.hols[P.mk]) S.hols[P.mk] = [];
-      a.days.forEach(function(d){ if(S.hols[P.mk].indexOf(d) < 0) S.hols[P.mk].push(d); }); S.hols[P.mk].sort(function(x, y){ return x - y; });
+      if(!S.hols) S.hols = {}; if(!S.hols[K]) S.hols[K] = [];
+      a.days.forEach(function(d){ if(S.hols[K].indexOf(d) < 0) S.hols[K].push(d); }); S.hols[K].sort(function(x, y){ return x - y; });
     } else if(a.type === 'needX'){
-      if(!S.needX) S.needX = {}; if(!S.needX[P.mk]) S.needX[P.mk] = [];
-      a.days.forEach(function(d){ S.needX[P.mk] = S.needX[P.mk].filter(function(x){ return !(x.store === a.store && x.day === d); }); S.needX[P.mk].push({ store: a.store, day: d, need: a.need }); });
+      if(!S.needX) S.needX = {}; if(!S.needX[K]) S.needX[K] = [];
+      a.days.forEach(function(d){ S.needX[K] = S.needX[K].filter(function(x){ return !(x.store === a.store && x.day === d); }); S.needX[K].push({ store: a.store, day: d, need: a.need }); });
+    } else if(a.type === 'kakaoEdit'){
+      var out = document.getElementById('wvTOut'); if(!out) return;
+      var lines = out.value.split('\n').filter(function(l){ return l.trim(); }), found = false;
+      lines = lines.map(function(l){ var p = l.trim().split(/\s+/); if(p[0] !== a.emp) return l; found = true;
+        var t = p.slice(1).filter(function(x){ return a.remove.indexOf(x) < 0; }); a.add.forEach(function(x){ if(t.indexOf(x) < 0) t.push(x); });
+        t.sort(function(x, y){ var X = x.split('/').map(Number), Y = y.split('/').map(Number); return X[0] - Y[0] || X[1] - Y[1]; });
+        return t.length ? p[0] + ' ' + t.join(' ') : ''; }).filter(Boolean);
+      if(!found && a.add.length) lines.push(a.emp + ' ' + a.add.join(' '));
+      out.value = lines.join('\n'); out.dispatchEvent(new Event('input'));
+      return;
     }
     save(); try{ renderReqs(); }catch(e){} try{ renderCapacity(); }catch(e){}
     try{ if(typeof window.wvRenderRules === 'function') window.wvRenderRules(); }catch(e){}
   }
+  /* AI가 지금 상황(카톡 정리칸·이미 들어간 특이사항·겹치는 날·휴무 일수)을 알고 답하도록 */
+  function ruleCtx(P){
+    var out = document.getElementById('wvTOut'), res = document.getElementById('wvTRes');
+    var pend = (out && res && res.style.display !== 'none') ? out.value.split('\n').filter(function(l){ return l.trim(); }) : [];
+    var months = {}; months[P.m] = 1; pend.forEach(function(l){ l.split(/\s+/).slice(1).forEach(function(t){ var m = t.split('/')[0]; if(+m) months[+m] = 1; }); });
+    var now = [], dayMap = {};
+    Object.keys(months).forEach(function(m){ var Q = monthP(P, +m); ((S.reqs && S.reqs[Q.mk]) || []).forEach(function(r){
+      if(r.type === '조건부'){ now.push(r.emp + ' ' + Q.m + '월 조건부(' + r.cond + ')'); return; }
+      now.push(r.emp + ' ' + Q.m + '/' + r.day + ' ' + (r.type === '휴무요청' ? '휴무' : r.type) + (r.store ? '(' + r.store + ')' : ''));
+      if(r.type === '휴무요청'){ var k = Q.m + '/' + r.day; (dayMap[k] = dayMap[k] || []).push(r.emp); } }); });
+    pend.forEach(function(l){ var p = l.trim().split(/\s+/); p.slice(1).forEach(function(k){ (dayMap[k] = dayMap[k] || []).push(p[0] + '(카톡)'); }); });
+    var overlap = Object.keys(dayMap).filter(function(k){ return dayMap[k].length > 1; }).map(function(k){ return k + ' ' + dayMap[k].join('·'); });
+    var offs = S.emps.map(function(e){ return e.name + ' ' + offTarget(e) + '일'; }).join(', ');
+    var kraw = ((document.getElementById('wvTIn') || {}).value || '').split('\n').filter(function(l){ return /^\[.+?\]\s*\[(오전|오후)/.test(l) || / : /.test(l); }).slice(-30).map(function(l){ return l.replace(/\[(오전|오후)\s*[\d:]+\]\s*/, '').slice(0, 160); });
+    return { 카톡정리_미반영: pend, 특이사항: now.slice(0, 120), 겹치는날: overlap, 지정휴무: offs, 카톡원문: kraw, 다른달: Object.keys(months).filter(function(m){ return +m !== P.m; }).map(function(m){ return m + '월'; }) };
+  }
   window.wvAIRule = function(q, say){
     var P = mk(); if(!P.mk){ say('wvT-bot', '상단에서 대상 월을 먼저 선택하세요.'); return; }
     var w = wait(say);
-    call({ mode: 'rule', q: q, ctx: { y: P.y, m: P.m, nDays: P.nD, cal: cal(P.y, P.m), emps: names(), stores: stores() } }).then(function(j){
+    var X = ruleCtx(P);
+    call({ mode: 'rule', q: q, ctx: { y: P.y, m: P.m, nDays: P.nD, cal: cal(P.y, P.m), emps: names(), stores: stores(), extra: X } }).then(function(j){
       var acts = (j.data.actions || []), good = [], bad = [];
       acts.forEach(function(a){ if(a.type === 'unsupported'){ bad.push(a.reason || '지원하지 않는 요청'); return; } var v = valid(a, P); if(v) good.push(v); else bad.push('확인 안 된 항목: ' + JSON.stringify(a).slice(0, 80)); });
       var h = esc(j.data.say || '');
-      if(good.length) h += good.map(function(a, i){ return '<div class="wvT-rule"><b>적용할 조건</b> ' + esc(label(a, P)) + '<button class="btn small" data-i="' + i + '">적용</button></div>'; }).join('');
+      if(good.length) h += good.map(function(a, i){ return '<div class="wvT-rule"><b>적용할 조건</b> ' + esc(label(a)) + '<button class="btn small" data-i="' + i + '">적용</button></div>'; }).join('');
       if(bad.length) h += '<div class="hint" style="margin-top:6px">' + bad.map(esc).join('<br>') + '</div>';
       h += '<div class="hint" style="margin-top:6px">AI · ' + (j.ms / 1000).toFixed(1) + '초 · 오늘 남은 횟수 ' + j.left + '</div>';
       w.innerHTML = h;
-      w.querySelectorAll('[data-i]').forEach(function(b){ b.onclick = function(){ var a = good[+b.dataset.i]; apply(a, P); b.parentNode.innerHTML = '✓ 적용됨 — ' + esc(label(a, P)); wvToast('AI 조건 적용: ' + label(a, P), 'ok'); }; });
+      w.querySelectorAll('[data-i]').forEach(function(b){ b.onclick = function(){ var a = good[+b.dataset.i]; apply(a); b.parentNode.innerHTML = '✓ 적용됨 — ' + esc(label(a)); wvToast('AI 적용: ' + label(a), 'ok'); }; });
     }).catch(function(e){ w.innerHTML = '<span style="color:#b3243f">AI 연결 실패: ' + esc(e.message) + '</span>'; });
   };
 
@@ -5544,6 +5592,23 @@ window.WV_AI_URL = window.WV_AI_URL || 'https://script.google.com/macros/s/AKfyc
     }).catch(function(e){ w.innerHTML = '<span style="color:#b3243f">AI 연결 실패: ' + esc(e.message) + '</span>'; });
   };
 
+  /* AI 조건 offAdj → 생성할 때 그 달 '추가 휴무'(③탭 일괄 부여와 같은 방식)로 넣는다 */
+  if(typeof generate === 'function'){
+    var _gen = generate;
+    generate = function(keepExtra, preset){
+      try{
+        var mkx = monthKey(), adj = (Array.isArray(S.aiRules) ? S.aiRules : []).filter(function(r){ return r.type === 'offAdj' && r.mk === mkx; });
+        if(adj.length){
+          if(!S.extraLog) S.extraLog = {};
+          var keep = keepExtra ? (S.extraLog[mkx] || []).filter(function(x){ return !x.wvAI; }) : [];
+          adj.forEach(function(r){ for(var i = 0; i < r.n; i++) keep.push({ name: r.emp, day: -1, bulk: true, wvAI: true }); });
+          S.extraLog[mkx] = keep;
+          return _gen.call(this, true, preset);
+        }
+      }catch(e){ console.warn('AI 휴무 추가 건너뜀', e); }
+      return _gen.apply(this, arguments);
+    };
+  }
   /* 안내 문구 갱신 */
   function relabel(){
     if(!window.WV_AI_URL) return;
