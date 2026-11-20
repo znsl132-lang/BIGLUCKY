@@ -5217,7 +5217,9 @@ th,td{border-color:var(--ln)!important}
     document.getElementById('wvAdvIn').value = '';
     say('me', esc(q));
     if(typeof sched === 'undefined' || !sched || !sched.cells){ say('bot', '먼저 스케줄을 생성하거나 저장본을 불러와 주세요. 지금 표를 기준으로 대안을 만듭니다.'); return; }
-    if(!/연속/.test(q) && window.wvAIAdvise && window.WV_AI_URL){ window.wvAIAdvise(q, say, ask); return; }
+    // '연속근무만' 푸는 요청은 로컬 알고리즘, 다른 요구가 섞인 복합 요청(바꿔·보내·중복·휴무 등)은 AI가 표를 직접 고침
+    var pureRun = /연속/.test(q) && !/(바꿔|바꾸|교체|보내|옮겨|옮기|중복|휴무|쉬게|대신|넣어|빼|,|그리고|하고\s|랑\s)/.test(q.replace(/연속\s*근무|연속/g, ''));
+    if(!pureRun && window.wvAIAdvise && window.WV_AI_URL){ window.wvAIAdvise(q, say, ask); return; }
     if(!/연속/.test(q)){ say('bot', '테스트판은 아직 Claude API 연결 전이라 <b>연속근무 해소</b> 요청만 처리합니다. 예: "장현진 연속근무 8일 해소한 버전 만들어줘", "6일 이상 연속근무 전부 해소해줘". 다른 조언은 API 연결 후 가능합니다.'); return; }
     var sc = sched, names = findNames(q);
     var mm = q.match(/최대\s*(\d{1,2})\s*일/), r0 = (Array.isArray(S.aiRules) ? S.aiRules : []).filter(function(x){ return x.type === 'maxRun'; })[0];
@@ -5372,14 +5374,14 @@ window.WV_AI_URL = window.WV_AI_URL || 'https://script.google.com/macros/s/AKfyc
       else { if(c === '"') inS = true; o += c; } }
     return o;
   }
-  function call(body){
+  function call(body, limitMs){
     if(!window.WV_AI_URL) return Promise.reject(new Error('다리 주소 없음'));
     var A = aliasMap(), sent = mask(body, A);
-    var ctl = ('AbortController' in window) ? new AbortController() : null, t = setTimeout(function(){ if(ctl) ctl.abort(); }, 45000);
+    var ctl = ('AbortController' in window) ? new AbortController() : null, lim = limitMs || 45000, t = setTimeout(function(){ if(ctl) ctl.abort(); }, lim);
     return fetch(window.WV_AI_URL, { __wvAI: true, method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(sent), signal: ctl ? ctl.signal : undefined })
       .then(function(r){ return r.text(); })
       .then(function(t2){ clearTimeout(t); var j; try{ j = JSON.parse(t2); }catch(e){ throw new Error('응답을 읽지 못함'); } if(!j.ok && j.why === '형식 오류' && j.raw){ try{ j = { ok: true, data: JSON.parse(fixJson(j.raw)) }; }catch(e3){} } if(!j.ok) throw new Error(j.why + (j.msg ? ' — ' + j.msg : '')); j.data = walk(j.data, A.back); return j; })
-      .catch(function(e){ clearTimeout(t); throw (e && e.name === 'AbortError') ? new Error('45초 안에 답이 없음') : e; });
+      .catch(function(e){ clearTimeout(t); throw (e && e.name === 'AbortError') ? new Error(Math.round(lim / 1000) + '초 안에 답이 없음') : e; });
   }
   function wait(say){ return say('wvT-bot', '<span class="wvT-chip wvT-ai">AI 생각 중…</span>'); }
   function cal(y, m){ var n = new Date(y, m, 0).getDate(), o = []; for(var d = 1; d <= n; d++) o.push(d + '(' + DOW[new Date(y, m - 1, d).getDay()] + ')'); return o.join(' '); }
@@ -5539,8 +5541,79 @@ window.WV_AI_URL = window.WV_AI_URL || 'https://script.google.com/macros/s/AKfyc
   };
 
   /* ---------- ③ AI 조언 ---------- */
+  /* 요청 의도 나누기 — 바꾸려는 뜻이 보이면 표를 직접 고치는 쪽(Sonnet, 복잡하면 Opus), 순수 질문만 Haiku 조언 */
+  var CHANGE = /(바꿔|바꾸|바꿀|옮겨|옮기|옮길|빼\s*줘|빼고|빼서|넣어|넣고|줄여|늘려|고쳐|조정|조절|해소|메워|메꿔|채워|분배|수정|교체|대신|취소|되돌|돌려|풀어|맞춰|당겨|미뤄|땡겨|재편성|다시\s*짜|짜\s*줘|해\s*줘|해줄래|해\s*봐|해\s*줄|해\s*주|수\s*있|가능|쉬게|근무하게|일하게|서게|보내|될까|되나|어때|하자|줘$|주세요|싶어|싶은데|원해)/;
+  var HEAVY = /(재편성|다시\s*짜|전체|전부|모든|모두|싹|전\s*직원|매주|주간|일주일|한\s*주|한\s*달|골고루|공평|균등|여러)/;
+  function routeOf(q){
+    var t = String(q || '');
+    var nm = names().filter(function(n){ return t.indexOf(n) >= 0 || t.indexOf(n.slice(1)) >= 0; }).length;
+    var multi = /(,|그리고|하고\s|고\s|보내|바꾸고|풀어주고)/.test(t);
+    if(/(중복|남는)/.test(t) && /(휴무|쉬)/.test(t) && !nm && !multi) return 'advise';   // 중복→휴무 단독 요청은 검증된 알고리즘(dupToOff)
+    if(!CHANGE.test(t)) return 'advise';
+    if(multi && nm >= 2) return 'opus';
+    var nd = (t.match(/\d{1,2}\s*일/g) || []).length;
+    return (HEAVY.test(t) || nm >= 3 || nd >= 5 || t.length > 140) ? 'opus' : 'sonnet';
+  }
+  window.wvAIRoute = routeOf;
+  var HIST = [];   // 최근 대화(요청·답·바뀐 칸·적용 여부) — 같은 달 표에서만 이어 말하기
+  var histKey = '';
+  function fmtAns(txt){
+    var lines = String(txt || '').split('\n').map(function(l){ return l.trim(); }).filter(Boolean).filter(function(l){ return !/아래\s*버튼/.test(l); });
+    var fb = lines.findIndex(function(l){ return /^[-·•]/.test(l); }); if(fb < 0) fb = lines.length;
+    var head = lines.slice(0, Math.max(fb, 1)).filter(function(l){ return !/^[-·•]/.test(l); }), bul = lines.slice(Math.max(fb, 1)).map(function(l){ return l.replace(/^[-·•]\s*/, ''); });
+    return (head.length ? '<div class="ans-h">' + esc(head.join(' ')) + '</div>' : '') + (bul.length ? '<ul class="ans">' + bul.map(function(b){ return '<li>' + esc(b) + '</li>'; }).join('') + '</ul>' : '');
+  }
+  var TIER_NAME = { haiku: 'Haiku', sonnet: 'Sonnet', opus: 'Opus' };
+  window.wvAIEdit = function(q, say, tier, prev, noFallback){
+    if(typeof sched === 'undefined' || !sched || !sched.cells){ say('bot', '먼저 스케줄을 생성해 주세요.'); return; }
+    var sc = sched, P = { y: sc.year, m: sc.month, nD: sc.nDays }, mkS = sc.year + '-' + String(sc.month).padStart(2, '0');
+    if(histKey !== mkS){ HIST = []; histKey = mkS; }
+    var EC = window.wvEditCtx(sc);
+    var rows = S.emps.filter(function(e){ return sc.cells[e.name]; }).map(function(e){
+      return { 이름: e.name, 직책: e.title || '', 소속: e.home, 근무가능: EC.근무가능[e.name] || [], 휴무지정: offTarget(e), 칸: sc.cells[e.name].map(function(v){ return v === '' ? '휴' : String(v).replace(/\((OP|CL|PT)\)$/, ''); }).join(',') };
+    });
+    var need = S.stores.map(function(s){ return s.n + ':' + (s._need != null ? s._need : s.need); }).join(' ');
+    var ex = ((S.needX && S.needX[mkS]) || []).map(function(x){ return x.store + ' ' + x.day + '일 ' + x.need + '명'; }).join(', ');
+    var reqs = ((S.reqs && S.reqs[mkS]) || []).map(function(r){ return r.emp + ' ' + r.day + '일 ' + r.type + (r.store ? '(' + r.store + ')' : ''); }).join(', ');
+    var SM = summary(sc);
+    var w = say('bot', '<span class="dots"></span>' + (prev ? '검사에서 걸려 Opus가 다시 짜는 중…' : (tier === 'opus' ? '복잡한 요청이라 Opus가 표를 고치는 중…' : 'AI가 표를 읽고 고치는 중…')));
+    var cx = { y: P.y, m: P.m, nDays: P.nD, 달력: cal(P.y, P.m), 매장필요인원: need, 인원예외: ex, 특이사항: reqs, 요약: SM.rows, 지표: SM.kpi, 일별: EC.일별, rows: rows, 대화: HIST.slice(-4) };
+    if(prev) cx.검사결과 = { 이전수정안: prev.edits, 문제: prev.problems };
+    call({ mode: 'edit', tier: tier, q: q, ctx: cx }, 110000).then(function(j){
+      w.remove();
+      if(sched !== sc){ say('bot', '그사이 표가 바뀌었어요. 다시 요청해 주세요.'); return; }
+      var D = j.data || {}, edits = Array.isArray(D.edits) ? D.edits : [];
+      var meta = '<div class="meta">AI · ' + TIER_NAME[j.tier || tier] + (j.ms ? ' · ' + (j.ms / 1000).toFixed(1) + '초' : '') + (j.left != null ? ' · 오늘 남은 ' + j.left + '회' : '') + '</div>';
+      var intent = D.intent ? '<div class="wvIntent">이해한 요청 · ' + esc(D.intent) + '</div>' : '';
+      if(!edits.length){
+        say('bot', intent + fmtAns(D.answer || '') + (D.ask ? '<div class="ans-h" style="margin-top:6px">' + esc(D.ask) + '</div>' : '') + meta);
+        HIST.push({ 요청: q, 답: String(D.answer || D.ask || '').split('\n')[0].slice(0, 120), 바뀐칸: [], 적용: false });
+        return;
+      }
+      var res = window.wvApplyEdits(sc, edits);
+      if(res.problems.length && tier === 'sonnet' && !prev && !noFallback){
+        say('bot', '<div class="meta">Sonnet 수정안 검사: ' + esc(res.problems.join(' / ')) + '</div>');
+        window.wvAIEdit(q, say, 'opus', { edits: edits, problems: res.problems });
+        return;
+      }
+      res.title = '수정안';
+      var turn = { 요청: q, 답: String(D.answer || '').split('\n')[0].slice(0, 120), 바뀐칸: [], 적용: false };
+      HIST.push(turn);
+      window.wvShowAlt(sc, res, say, { head: intent + fmtAns(D.answer || ''), meta: meta, onApply: function(diffs){
+        turn.적용 = true; turn.바뀐칸 = diffs.slice(0, 40).map(function(x){ return { 직원: x.n, 일: x.d + 1, 전: x.o === '' ? '휴' : String(x.o).replace(/\((OP|CL|PT)\)$/, ''), 후: x.v === '' ? '휴' : String(x.v).replace(/\((OP|CL|PT)\)$/, '') }; });
+      } });
+    }).catch(function(e){
+      if(tier === 'opus' && !noFallback && !/한도/.test(e.message)){   // Opus가 늦거나 실패하면 Sonnet으로 한 번 더(다리 60초 제한 대비)
+        w.innerHTML = '<span class="meta">Opus 응답 실패(' + esc(e.message) + ') — Sonnet으로 다시 시도해요</span>';
+        window.wvAIEdit(q, say, 'sonnet', null, true); return;
+      }
+      w.innerHTML = '<span style="color:#b3243f">AI 연결 실패: ' + esc(e.message) + '</span>';
+    });
+  };
+
   window.wvAIAdvise = function(q, say, localAsk){
     if(typeof sched === 'undefined' || !sched || !sched.cells){ say('bot', '먼저 스케줄을 생성해 주세요.'); return; }
+    var rt = routeOf(q); if(rt !== 'advise' && window.wvApplyEdits){ window.wvAIEdit(q, say, rt); return; }
     var sc = sched, P = { y: sc.year, m: sc.month, nD: sc.nDays };
     var rows = S.emps.filter(function(e){ return sc.cells[e.name]; }).map(function(e){
       return { 이름: e.name, 직책: e.title || '', 소속: e.home, 휴무지정: offTarget(e), 칸: sc.cells[e.name].map(function(v){ return v === '' ? '휴' : String(v).replace(/\((OP|CL|PT)\)$/, ''); }).join(',') };
@@ -6348,18 +6421,18 @@ window.WV_TOOLS_TABS = true;
     },
     // 공백 메우기 — ① 같은 날 남는 자리 사람 이동 ② 쉬는 사람 투입 + 그 사람 휴무는 다른 남는 날로
     fillGap: function(sc, a){
-      var C = ctx(sc), cells = clone(sc.cells), days = (a.days && a.days.length) ? a.days.map(Number) : null, notes = [], fixed = 0, left = [];
+      var C = ctx(sc), cells = clone(sc.cells), days = (a.days && a.days.length) ? a.days.map(Number) : null, notes = [], fixed = 0, left = [], LK = a.lock || {};
       for(var d = 0; d < C.nD; d++){
         if(C.hol[d] || (days && days.indexOf(d + 1) < 0)) continue;
         S.stores.forEach(function(st){
           var guard = 0;
           while(cnt(C, cells, st.n, d) < need(C, st.n, d) && guard++ < 4){
-            var mv = C.acts.filter(function(q){ var v = cells[q.name][d]; if(!isW(v) || !allowed(q, st.n) || C.lockWork[q.name + '|' + d]) return false; if(v === '순환') return true; var b = base(v); return b !== st.n && cnt(C, cells, b, d) > need(C, b, d); })[0];
+            var mv = C.acts.filter(function(q){ var v = cells[q.name][d]; if(!isW(v) || !allowed(q, st.n) || C.lockWork[q.name + '|' + d] || LK[q.name + '|' + d]) return false; if(v === '순환') return true; var b = base(v); return b !== st.n && cnt(C, cells, b, d) > need(C, b, d); })[0];
             if(mv){ var from = base(cells[mv.name][d]); cells[mv.name][d] = st.n; relabel(C, cells, st.n, d); if(from !== '순환') relabel(C, cells, from, d); notes.push((d + 1) + '일 ' + st.n + ': ' + mv.name + ' ' + from + ' → ' + st.n + ' 이동'); fixed++; continue; }
             var ok = false;
-            C.acts.filter(function(q){ return cells[q.name][d] === '' && !C.lockOff[q.name + '|' + d] && allowed(q, st.n); }).some(function(q){
+            C.acts.filter(function(q){ return cells[q.name][d] === '' && !C.lockOff[q.name + '|' + d] && !LK[q.name + '|' + d] && allowed(q, st.n); }).some(function(q){
               cells[q.name][d] = st.n; if(runAt(C, cells, q.name, d) > 5){ cells[q.name][d] = ''; return false; }
-              var back = surplusCells(C, cells).filter(function(x){ return x.n === q.name && x.d !== d; }).sort(function(p, r){ return runAt(C, cells, q.name, r.d) - runAt(C, cells, q.name, p.d); })[0];
+              var back = surplusCells(C, cells).filter(function(x){ return x.n === q.name && x.d !== d && !LK[x.n + '|' + x.d]; }).sort(function(p, r){ return runAt(C, cells, q.name, r.d) - runAt(C, cells, q.name, p.d); })[0];
               if(!back){ cells[q.name][d] = ''; return false; }
               cells[q.name][back.d] = ''; relabel(C, cells, back.st, back.d); relabel(C, cells, st.n, d);
               notes.push((d + 1) + '일 ' + st.n + ': 쉬던 ' + q.name + ' 투입, 대신 ' + (back.d + 1) + '일(' + back.st + ' 중복) 휴무'); fixed++; ok = true; return true;
@@ -6446,32 +6519,223 @@ window.WV_TOOLS_TABS = true;
     var fn = ALG[action.type]; if(!fn){ say('bot', '이 작업은 아직 지원하지 않아요.'); return; }
     var sc = sched, res = fn(sc, action);
     if(res.error){ say('bot', '<div class="ans-h">못 바꿨어요</div>' + esc(res.error)); return; }
-    var diffs = []; Object.keys(res.cells).forEach(function(n){ for(var d = 0; d < sc.nDays; d++) if(res.cells[n][d] !== sc.cells[n][d]) diffs.push({ n: n, d: d, o: sc.cells[n][d], v: res.cells[n][d] }); });
-    if(!diffs.length){ say('bot', '<div class="ans-h">바꿀 칸이 없어요</div>' + res.notes.map(esc).join('<br>')); return; }
-    var k0 = kpi(sc, sc.cells), k1 = kpi(sc, res.cells);
+    showAlt(sc, res, say, {});
+  };
+  /* ===== 개선안 팝업 · 임시 저장(보류) · 되돌리기/다시 앞으로 ===== */
+  var DRAFT_KEY = 'wvDrafts', drafts = [], REDO = [], XSNAP = {};
+  try{ drafts = JSON.parse(localStorage.getItem(DRAFT_KEY) || '[]') || []; }catch(e){ drafts = []; }
+  function saveDrafts(){ try{ localStorage.setItem(DRAFT_KEY, JSON.stringify(drafts.slice(-12))); }catch(e){ wvToast('임시 저장 공간이 부족해요', 'warn'); } renderDraftBar(); }
+  function mkOf(sc){ return sc.year + '-' + String(sc.month).padStart(2, '0'); }
+  function sv(v){ return v === '' ? '휴' : String(v).replace(/\((OP|CL|PT)\)$/, ''); }
+  function diffOf(sc, cells){ var o = []; Object.keys(cells).forEach(function(n){ if(!sc.cells[n]) return; for(var d = 0; d < sc.nDays; d++) if(cells[n][d] !== sc.cells[n][d]) o.push({ n: n, d: d, o: sc.cells[n][d], v: cells[n][d] }); }); return o; }
+  function kpiHtml(k0, k1){
     var cell = function(a, b, good){ return '<b>' + a + '</b><span class="ar">→</span><b class="' + (a === b ? '' : (good ? 'up' : 'dn')) + '">' + b + '</b>'; };
-    var h = '<div class="ans-h">' + esc(res.title) + ' · 바뀐 칸 ' + diffs.length + '개</div>';
-    h += '<div class="wvCmpK"><div><small>매장 공백</small>' + cell(k0.gap + '건', k1.gap + '건', k1.gap <= k0.gap) + '</div>' +
-         '<div><small>중복 근무</small>' + cell(k0.dup + '칸', k1.dup + '칸', k1.dup <= k0.dup) + '</div>' +
-         '<div><small>전체 휴무</small>' + cell(k0.offs + '일', k1.offs + '일', true) + '</div>' +
-         '<div><small>최대 연속</small>' + cell(k0.mx + '일', k1.mx + '일', k1.mx <= k0.mx) + '</div></div>';
-    h += '<table class="wvCmpT"><thead><tr><th>직원</th><th>날짜</th><th>기존</th><th>변경</th></tr></thead><tbody>' +
-      diffs.sort(function(p, q){ return p.n.localeCompare(q.n) || p.d - q.d; }).map(function(x){ return '<tr><td class="who">' + esc(x.n) + '</td><td>' + md(sc, x.d) + '</td><td class="o">' + esc(val(x.o)) + '</td><td class="n">' + esc(val(x.v)) + '</td></tr>'; }).join('') + '</tbody></table>';
-    h += '<ul class="ans">' + res.notes.map(function(n){ return '<li>' + esc(n) + '</li>'; }).join('') + '</ul>';
-    if(k1.gap > k0.gap) h += '<div style="color:#b3243f;font-weight:700;margin-top:6px">⚠ 공백이 늘어요 — 적용 전 확인하세요</div>';
-    h += '<div class="wvAdvBtns"><button class="btn" data-a="apply">이 버전 적용</button><button class="btn gray" data-a="cancel">취소</button></div><div class="meta">적용해도 [↩ 되돌리기]로 원래대로 돌릴 수 있어요</div>';
-    var box = say('bot', h);
-    box.querySelector('[data-a=apply]').onclick = function(){
-      if(sched !== sc){ wvToast('표가 그사이 바뀌었어요. 다시 요청해 주세요.', 'warn'); return; }
-      cellHist.push(JSON.stringify(sched.cells)); if(cellHist.length > 50) cellHist.shift();
-      if(res.extraOff){ var mk = sc.year + '-' + String(sc.month).padStart(2, '0'); if(!S.extraLog) S.extraLog = {}; if(!S.extraLog[mk]) S.extraLog[mk] = [];
-        diffs.forEach(function(x){ if(x.v === '' && x.o !== '') S.extraLog[mk].push({ name: x.n, day: x.d, val: x.o, ai: true }); }); save(); }
-      Object.keys(res.cells).forEach(function(k){ sched.cells[k] = res.cells[k]; });
-      renderSched(typeof lastWarns !== 'undefined' ? lastWarns : undefined); if(typeof updateUndoBtn === 'function') updateUndoBtn();
-      var t = document.getElementById('schedTable'); if(t) diffs.forEach(function(x){ var tr = t.querySelector('tr[data-n="' + x.n + '"]'); if(tr && tr.children[x.d + 2]) tr.children[x.d + 2].classList.add('wvChg'); });
-      this.parentNode.innerHTML = '✓ 적용했어요 — 바뀐 칸은 보라색 테두리'; wvToast(res.title + ' 적용 (되돌리기 가능)', 'ok');
+    return '<div class="wvCmpK"><div><small>매장 공백</small>' + cell(k0.gap + '건', k1.gap + '건', k1.gap <= k0.gap) + '</div>' +
+      '<div><small>중복 근무</small>' + cell(k0.dup + '칸', k1.dup + '칸', k1.dup <= k0.dup) + '</div>' +
+      '<div><small>전체 휴무</small>' + cell(k0.offs + '일', k1.offs + '일', true) + '</div>' +
+      '<div><small>최대 연속</small>' + cell(k0.mx + '일', k1.mx + '일', k1.mx <= k0.mx) + '</div></div>';
+  }
+  function updateRedo(){
+    var u = document.getElementById('undoBtn'); if(!u) return;
+    var r = document.getElementById('redoBtn');
+    if(!r){ r = document.createElement('button'); r.type = 'button'; r.className = 'btn gray'; r.id = 'redoBtn'; r.onclick = function(){ window.redoCell(); }; u.insertAdjacentElement('afterend', r); }
+    r.disabled = !REDO.length; r.textContent = '↪ 다시 앞으로' + (REDO.length ? ' (' + REDO.length + ')' : '');
+  }
+  // 적용: 이전 표는 되돌리기 목록으로, 추가 휴무 기록도 같이 기억(되돌리면 함께 원복)
+  function applyCells(sc, cells, diffs, res){
+    var mk = mkOf(sc), cur = JSON.stringify(sched.cells);
+    if(!S.extraLog) S.extraLog = {};
+    XSNAP[cur] = JSON.stringify(S.extraLog[mk] || []);
+    cellHist.push(cur); if(cellHist.length > 50) cellHist.shift();
+    REDO.length = 0;
+    if(!S.extraLog[mk]) S.extraLog[mk] = [];
+    if(res.extraOff) diffs.forEach(function(x){ if(x.v === '' && x.o !== '') S.extraLog[mk].push({ name: x.n, day: x.d, val: x.o, ai: true }); });
+    else if(res.offDelta) Object.keys(res.offDelta).forEach(function(n){ var k = res.offDelta[n]; if(k <= 0) return; diffs.filter(function(x){ return x.n === n && x.v === '' && isW(x.o); }).slice(0, k).forEach(function(x){ S.extraLog[mk].push({ name: x.n, day: x.d, val: x.o, ai: true }); }); });
+    save();
+    Object.keys(cells).forEach(function(k){ if(sched.cells[k]) sched.cells[k] = cells[k].slice(); });
+    renderSched(typeof lastWarns !== 'undefined' ? lastWarns : undefined); if(typeof updateUndoBtn === 'function') updateUndoBtn(); updateRedo();
+    var t = document.getElementById('schedTable'); if(t) diffs.forEach(function(x){ var tr = t.querySelector('tr[data-n="' + x.n + '"]'); if(tr && tr.children[x.d + 2]) tr.children[x.d + 2].classList.add('wvChg'); });
+  }
+  if(typeof undoCell === 'function'){
+    var _undo = undoCell;
+    undoCell = function(){
+      if(!cellHist.length || !sched) return;
+      var mk = mkOf(sched), prev = cellHist[cellHist.length - 1];
+      REDO.push({ cells: JSON.stringify(sched.cells), extra: JSON.stringify((S.extraLog && S.extraLog[mk]) || []) });
+      if(XSNAP[prev] != null){ if(!S.extraLog) S.extraLog = {}; S.extraLog[mk] = JSON.parse(XSNAP[prev]); save(); }
+      _undo.apply(this, arguments); updateRedo();
     };
-    box.querySelector('[data-a=cancel]').onclick = function(){ this.parentNode.innerHTML = '취소했어요 — 표는 그대로예요'; };
+    window.undoCell = undoCell;
+  }
+  window.redoCell = function(){
+    if(!REDO.length || !sched) return;
+    var r = REDO.pop(), mk = mkOf(sched), cur = JSON.stringify(sched.cells);
+    if(!S.extraLog) S.extraLog = {};
+    XSNAP[cur] = JSON.stringify(S.extraLog[mk] || []);
+    cellHist.push(cur); if(cellHist.length > 50) cellHist.shift();
+    sched.cells = JSON.parse(r.cells); S.extraLog[mk] = JSON.parse(r.extra); save();
+    renderSched(typeof lastWarns !== 'undefined' ? lastWarns : undefined); if(typeof updateUndoBtn === 'function') updateUndoBtn(); updateRedo();
+  };
+  if(typeof setCell === 'function'){ var _set = setCell; setCell = function(){ REDO.length = 0; var r = _set.apply(this, arguments); updateRedo(); return r; }; window.setCell = setCell; }
+  if(typeof generate === 'function'){ var _gen5 = generate; generate = function(){ REDO.length = 0; var r = _gen5.apply(this, arguments); setTimeout(function(){ updateRedo(); renderDraftBar(); }, 0); return r; }; window.generate = generate; }
+
+  // 미리보기 표: 기본은 바뀐 직원만, 체크 해제하면 전체
+  function previewTable(sc, cells, diffs, onlyChanged){
+    var ch = {}, who = {}; diffs.forEach(function(x){ ch[x.n + '|' + x.d] = x; who[x.n] = 1; });
+    var emps = S.emps.filter(function(e){ return cells[e.name] && (!onlyChanged || who[e.name]); });
+    var h = '<table class="wvPv"><thead><tr><th class="nm">직원</th>';
+    for(var d = 0; d < sc.nDays; d++){ var w = new Date(sc.year, sc.month - 1, d + 1).getDay(); h += '<th class="' + (w === 0 ? 'sun' : w === 6 ? 'sat' : '') + '">' + (d + 1) + '<small>' + DOW[w] + '</small></th>'; }
+    h += '</tr></thead><tbody>';
+    emps.forEach(function(e){
+      h += '<tr><td class="nm">' + esc(e.name) + '</td>';
+      for(var d = 0; d < sc.nDays; d++){ var v = cells[e.name][d], x = ch[e.name + '|' + d], t = sv(v);
+        h += '<td class="' + (v === '' ? 'off ' : '') + (x ? 'chg' : '') + '"' + (x ? ' title="' + esc(sv(x.o)) + ' → ' + esc(t) + '"' : '') + '>' + esc(t.length > 2 ? t.slice(0, 2) : t) + (x ? '<i>' + esc(sv(x.o).slice(0, 2)) + '</i>' : '') + '</td>'; }
+      h += '</tr>';
+    });
+    return h + '</tbody></table>';
+  }
+  function closeModal(){ var m = document.getElementById('wvAltM'); if(m) m.remove(); document.removeEventListener('keydown', escKey); }
+  function escKey(e){ if(e.key === 'Escape') closeModal(); }
+  // 팝업 열기 — P = { sc, cells, diffs, res, head, title, onDone(status), draft }
+  function openModal(P){
+    closeModal();
+    var sc = P.sc, k0 = kpi(sc, sc.cells), k1 = kpi(sc, P.cells);
+    var m = document.createElement('div'); m.id = 'wvAltM';
+    m.innerHTML = '<div class="box" role="dialog" aria-modal="true"><div class="hd"><div><b>' + esc(P.title) + '</b><span>바뀐 칸 ' + P.diffs.length + '개 · 기준: 지금 표</span></div><button type="button" class="x" aria-label="닫기">✕</button></div>' +
+      '<div class="bd">' + (P.head || '') + kpiHtml(k0, k1) +
+      (k1.gap > k0.gap ? '<div class="warn">⚠ 공백이 늘어요 — 적용 전 확인하세요</div>' : '') +
+      '<div class="pvh"><b>개선된 표</b><label><input type="checkbox" checked> 바뀐 직원만</label><span class="lg"><i class="c"></i>바뀐 칸(작은 글씨 = 원래 값)</span></div><div class="pv"></div>' +
+      '<details class="dl"><summary>바뀐 칸 목록 ' + P.diffs.length + '개</summary><table class="wvCmpT"><thead><tr><th>직원</th><th>날짜</th><th>기존</th><th>변경</th></tr></thead><tbody>' +
+      P.diffs.slice().sort(function(p, q){ return p.n.localeCompare(q.n) || p.d - q.d; }).map(function(x){ return '<tr><td class="who">' + esc(x.n) + '</td><td>' + md(sc, x.d) + '</td><td class="o">' + esc(val(x.o)) + '</td><td class="n">' + esc(val(x.v)) + '</td></tr>'; }).join('') + '</tbody></table></details>' +
+      (P.res.notes && P.res.notes.length ? '<ul class="ans">' + P.res.notes.map(function(n){ return '<li>' + esc(n) + '</li>'; }).join('') + '</ul>' : '') +
+      '</div><div class="ft"><span class="hint">적용 후에도 ↩ 되돌리기 · ↪ 다시 앞으로 가능</span><button type="button" class="btn gray" data-a="close">닫기</button><button type="button" class="btn gray" data-a="hold">' + (P.draft ? '보류 유지' : '보류 · 임시 저장') + '</button><button type="button" class="btn" data-a="apply">이 버전 적용</button></div></div>';
+    document.body.appendChild(m);
+    var pv = m.querySelector('.pv'), cb = m.querySelector('.pvh input');
+    var draw = function(){ pv.innerHTML = previewTable(sc, P.cells, P.diffs, cb.checked); };
+    cb.onchange = draw; draw();
+    m.querySelector('.x').onclick = closeModal; m.querySelector('[data-a=close]').onclick = closeModal;
+    m.addEventListener('click', function(e){ if(e.target === m) closeModal(); });
+    document.addEventListener('keydown', escKey);
+    m.querySelector('[data-a=apply]').onclick = function(){
+      applyCells(sc, P.cells, P.diffs, P.res); closeModal();
+      if(P.draft){ drafts = drafts.filter(function(x){ return x.id !== P.draft.id; }); saveDrafts(); }
+      wvToast(P.title + ' 적용 · 되돌리기 가능', 'ok'); if(P.onDone) P.onDone('applied');
+    };
+    m.querySelector('[data-a=hold]').onclick = function(){
+      if(!P.draft){
+        var mk = mkOf(sc), nums = drafts.filter(function(x){ return x.mk === mk; }).map(function(x){ return x.no; });
+        var no = (nums.length ? Math.max.apply(null, nums) : 0) + 1;
+        P.draft = { id: Date.now(), no: no, name: '개선안 ' + no + ' [임시]', mk: mk, title: P.title, base: JSON.stringify(sc.cells), cells: P.cells, notes: P.res.notes || [], head: P.head || '', offDelta: P.res.offDelta || null, extraOff: !!P.res.extraOff, at: new Date().toISOString() };
+        drafts.push(P.draft); saveDrafts();
+        wvToast(P.draft.name + '(으)로 임시 저장했어요 · 표 위에서 다시 열 수 있어요', 'ok'); if(P.onDone) P.onDone('held:' + P.draft.name);
+      }
+      closeModal();
+    };
+  }
+  // 임시 저장 목록(표 위)
+  function renderDraftBar(){
+    var box = document.getElementById('schedBox'); if(!box) return;
+    var bar = document.getElementById('wvDraftBar');
+    var mk = (typeof sched !== 'undefined' && sched) ? mkOf(sched) : (typeof monthKey === 'function' ? monthKey() : '');
+    var list = drafts.filter(function(x){ return x.mk === mk; });
+    if(!list.length){ if(bar) bar.remove(); return; }
+    if(!bar){ bar = document.createElement('div'); bar.id = 'wvDraftBar'; box.parentNode.insertBefore(bar, box); }
+    bar.innerHTML = '<span class="t">보류한 개선안</span>' + list.map(function(x){ return '<span class="dc" data-id="' + x.id + '"><button type="button" class="o">' + esc(x.name) + '<small>' + esc(x.title) + '</small></button><button type="button" class="d" aria-label="삭제" title="삭제">✕</button></span>'; }).join('');
+    bar.querySelectorAll('.dc').forEach(function(el){
+      var id = +el.dataset.id;
+      el.querySelector('.o').onclick = function(){ openDraft(id); };
+      el.querySelector('.d').onclick = function(){ var x = drafts.filter(function(y){ return y.id === id; })[0]; if(x){ drafts = drafts.filter(function(y){ return y.id !== id; }); saveDrafts(); wvToast(x.name + ' 삭제', 'ok'); } };
+    });
+  }
+  // 보류한 개선안 다시 열기 — 기준 표가 그대로면 통째로, 바뀌었으면 원래 값이 같은 칸만 옮겨 담고 나머지는 충돌로 알림
+  function openDraft(id){
+    var x = drafts.filter(function(y){ return y.id === id; })[0]; if(!x) return;
+    if(typeof sched === 'undefined' || !sched || mkOf(sched) !== x.mk){ wvToast(x.mk.replace('-', '년 ') + '월 표를 먼저 열어 주세요', 'warn'); return; }
+    var sc = sched, base = JSON.parse(x.base), cells, notes = (x.notes || []).slice(), conflict = 0;
+    if(JSON.stringify(sc.cells) === x.base) cells = x.cells;
+    else {
+      cells = clone(sc.cells);
+      Object.keys(x.cells).forEach(function(n){ if(!cells[n] || !base[n]) return; for(var d = 0; d < sc.nDays; d++){ if(x.cells[n][d] === base[n][d]) continue; if(cells[n][d] === base[n][d]) cells[n][d] = x.cells[n][d]; else conflict++; } });
+      notes.unshift('보류 뒤에 표가 바뀌어서, 그 사이 손대지 않은 칸만 옮겨 담았어요' + (conflict ? ' — 충돌 ' + conflict + '칸은 지금 표 값 유지' : '') + '.');
+    }
+    var diffs = diffOf(sc, cells);
+    if(!diffs.length){ wvToast('지금 표와 다른 칸이 없어요 — 이미 적용된 개선안이에요', 'warn'); return; }
+    openModal({ sc: sc, cells: cells, diffs: diffs, res: { notes: notes, offDelta: x.offDelta, extraOff: x.extraOff }, head: x.head, title: x.name.replace(' [임시]', '') + ' · ' + x.title, draft: x });
+  }
+  window.wvDrafts = function(){ return drafts.slice(); };
+
+  // 비교 결과 — 대화창엔 요약 카드, 자세한 표는 팝업으로 바로 띄움
+  function showAlt(sc, res, say, opt){
+    opt = opt || {};
+    var diffs = diffOf(sc, res.cells);
+    if(!diffs.length){ say('bot', (opt.head || '') + '<div class="ans-h">바꿀 칸이 없어요</div>' + (res.notes || []).map(esc).join('<br>') + (opt.meta || '')); return; }
+    var k0 = kpi(sc, sc.cells), k1 = kpi(sc, res.cells), title = res.title || '개선안';
+    var h = (opt.head || '') + '<div class="ans-h">' + esc(title) + ' · 바뀐 칸 ' + diffs.length + '개</div>' + kpiHtml(k0, k1) +
+      '<div class="wvAdvBtns"><button class="btn" data-a="open">개선안 크게 보기</button></div><div class="st meta">팝업에서 적용 · 보류를 고르세요</div>';
+    var box = say('bot', h);
+    if(opt.meta) box.insertAdjacentHTML('beforeend', opt.meta);
+    var st = box.querySelector('.st');
+    var P = { sc: sc, cells: res.cells, diffs: diffs, res: res, head: opt.head, title: title, onDone: function(s){
+      if(s === 'applied'){ st.textContent = '✓ 적용했어요 — 바뀐 칸은 보라색 테두리 · ↩ 되돌리기 가능'; box.querySelector('[data-a=open]').remove(); if(opt.onApply) try{ opt.onApply(diffs); }catch(e){} }
+      else if(/^held:/.test(s)) st.textContent = '⏸ ' + s.slice(5) + '(으)로 보류했어요 — 표 위 목록에서 다시 열 수 있어요';
+    } };
+    box.querySelector('[data-a=open]').onclick = function(){ if(sched !== sc){ wvToast('표가 그사이 바뀌었어요. 다시 요청해 주세요.', 'warn'); return; } openModal(P); };
+    openModal(P);
+    return box;
+  }
+  window.wvShowAlt = showAlt;
+  // AI 수정 요청에 같이 보내는 표 정보: 날짜별 매장 인원/필요(공백·중복 표시), 직원별 근무 가능 매장
+  window.wvEditCtx = function(sc){
+    var C = ctx(sc), day = [], can = {};
+    for(var d = 0; d < C.nD; d++){
+      if(C.hol[d]){ day.push((d + 1) + '(' + DOW[new Date(sc.year, sc.month - 1, d + 1).getDay()] + ') 전 매장 휴일'); continue; }
+      var parts = []; S.stores.forEach(function(st){ var c = cnt(C, sc.cells, st.n, d), n = need(C, st.n, d); if(!n && !c) return; parts.push(st.n + ' ' + c + '/' + n + (c < n ? '공백' : c > n ? '중복' : '')); });
+      day.push((d + 1) + '(' + DOW[new Date(sc.year, sc.month - 1, d + 1).getDay()] + ') ' + parts.join(', '));
+    }
+    C.acts.forEach(function(e){ can[e.name] = S.stores.map(function(s){ return s.n; }).filter(function(s){ return allowed(e, s); }); });
+    return { 일별: day, 근무가능: can };
+  };
+
+  /* AI 칸 수정안 검사·반영 — 막힌 칸은 거절, 새로 생긴 공백은 기존 알고리즘으로 자동 보정, 남은 문제는 problems로 */
+  window.wvApplyEdits = function(sc, edits){
+    var C = ctx(sc), cells = clone(sc.cells), rej = [], ok = [], touched = {}, LK = {}, notes = [], seen = {};
+    var storeN = S.stores.map(function(s){ return s.n; });
+    (edits || []).forEach(function(x){
+      var nm = String(x.emp || '').trim(), dd = +x.day, d = dd - 1, to = String(x.to == null ? '' : x.to).trim();
+      var e = S.emps.filter(function(q){ return q.name === nm; })[0];
+      if(!e || !cells[nm]){ rej.push(nm + ' — 직원 없음'); return; }
+      if(!(d >= 0 && d < C.nD)){ rej.push(nm + ' ' + dd + '일 — 날짜 범위 밖'); return; }
+      if(seen[nm + '|' + d]) return; seen[nm + '|' + d] = 1;
+      if(/^(휴|휴무|off|쉼)$/i.test(to) || to === '') to = '';
+      else { to = base(to); if(to !== '순환' && storeN.indexOf(to) < 0){ rej.push(nm + ' ' + dd + '일 — 없는 매장(' + to + ')'); return; } }
+      var o = cells[nm][d];
+      if(ABS.indexOf(o) >= 0){ rej.push(nm + ' ' + dd + '일 — ' + o + ' 칸은 못 바꿈'); return; }
+      if(to === '' && C.lockWork[nm + '|' + d]){ rej.push(nm + ' ' + dd + '일 — 근무 지정일'); return; }
+      if(to !== '' && C.lockOff[nm + '|' + d]){ rej.push(nm + ' ' + dd + '일 — 휴무 요청일'); return; }
+      if(to !== '' && to !== '순환' && !allowed(e, to)){ rej.push(nm + ' ' + dd + '일 — ' + to + ' 근무 불가'); return; }
+      if(base(o) === to && (o === '') === (to === '')) return;
+      cells[nm][d] = to; LK[nm + '|' + d] = 1; ok.push({ n: nm, d: d });
+      if(isW(o) && o !== '순환') touched[base(o) + '|' + d] = 1; if(to && to !== '순환') touched[to + '|' + d] = 1;
+    });
+    Object.keys(touched).forEach(function(k){ var p = k.split('|'); relabel(C, cells, p[0], +p[1]); });
+    var k0 = kpi(sc, sc.cells), fake = { year: sc.year, month: sc.month, nDays: sc.nDays, cells: cells }, k1 = kpi(sc, cells);
+    if(k1.gap > k0.gap){
+      var gd = []; for(var d = 0; d < C.nD; d++) if(S.stores.some(function(st){ return cnt(C, cells, st.n, d) < need(C, st.n, d) && cnt(C, sc.cells, st.n, d) >= need(C, st.n, d); })) gd.push(d + 1);
+      if(gd.length){ var fx = ALG.fillGap(fake, { days: gd, lock: LK }); cells = fx.cells; fake.cells = cells; k1 = kpi(sc, cells);
+        fx.notes.filter(function(n){ return /^\d+일 /.test(n); }).forEach(function(n){ notes.push('자동 보정 · ' + n); }); }
+    }
+    var problems = [];
+    if(k1.gap > k0.gap){ var g = []; for(var d2 = 0; d2 < C.nD; d2++) S.stores.forEach(function(st){ var c = cnt(C, cells, st.n, d2), n = need(C, st.n, d2); if(c < n && cnt(C, sc.cells, st.n, d2) >= n) g.push((d2 + 1) + '일 ' + st.n + ' ' + c + '/' + n); }); problems.push('새 매장 공백: ' + g.slice(0, 8).join(', ')); }
+    var longs = []; C.acts.forEach(function(e){ var a = cells[e.name], b = sc.cells[e.name], r = C.tail[e.name] || 0, rb = C.tail[e.name] || 0, m = 0, mb = 0; for(var i = 0; i < C.nD; i++){ r = isW(a[i]) ? r + 1 : 0; rb = isW(b[i]) ? rb + 1 : 0; if(r > m) m = r; if(rb > mb) mb = rb; } if(m > 5 && m > mb) longs.push(e.name + ' ' + m + '일'); });
+    if(longs.length) problems.push('6일 이상 연속근무 생김: ' + longs.join(', '));
+    if(rej.length) problems.push('반영 못 한 칸: ' + rej.slice(0, 8).join(', '));
+    var offDelta = {}, od = [];
+    C.acts.forEach(function(e){ var c0 = sc.cells[e.name].filter(function(v){ return v === ''; }).length, c1 = cells[e.name].filter(function(v){ return v === ''; }).length; if(c1 !== c0){ offDelta[e.name] = c1 - c0; od.push(e.name + ' ' + (c1 > c0 ? '+' : '') + (c1 - c0)); } });
+    if(od.length) notes.push('휴무 수 변화: ' + od.join(', '));
+    if(rej.length) notes.push('반영 못 한 칸: ' + rej.join(', '));
+    if(problems.length && !rej.length && !longs.length && k1.gap > k0.gap) notes.push('⚠ 공백이 남아 있어요 — 적용 전 확인');
+    if(longs.length) notes.push('⚠ ' + longs.join(', ') + ' 연속근무');
+    return { cells: cells, notes: notes, problems: problems, applied: ok.length, rejected: rej, offDelta: offDelta, title: 'AI 수정안' };
   };
   window.wvAltLabel = function(a){
     if(a.type === 'dupToOff') return '중복 근무를 휴무로 골고루 바꾼 대안 만들기';
@@ -6482,12 +6746,14 @@ window.WV_TOOLS_TABS = true;
   };
 
   function boot(){
-    mountTools();
+    mountTools(); setTimeout(function(){ updateRedo(); renderDraftBar(); }, 0);
     ['extraBox','absenceCard','rebuildCard'].forEach(function(id){ var el = document.getElementById(id); if(el && !el.dataset.wvObs){ el.dataset.wvObs = '1'; new MutationObserver(function(){ showTools(); }).observe(el, { childList: true, attributes: true, attributeFilter: ['style'] }); } });
   }
   setTimeout(boot, 400); setTimeout(boot, 1600); setTimeout(boot, 3600);
   if(typeof renderSched === 'function'){ var _rs = renderSched; renderSched = function(){ var r = _rs.apply(this, arguments); try{ setTimeout(boot, 0); }catch(e){} return r; }; }
 })();
+/* AI 칸 수정: '이해한 요청' 줄 */
+(function(){ var st = document.createElement('style'); st.textContent = '#wvAltM{position:fixed;inset:0;z-index:9500;background:rgba(20,16,40,.45);display:flex;align-items:center;justify-content:center;padding:16px}#wvAltM .box{background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.25);width:min(1180px,100%);max-height:92vh;display:flex;flex-direction:column;overflow:hidden}#wvAltM .hd{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 18px;border-bottom:1px solid #eee}#wvAltM .hd b{font-size:16px;margin-right:8px}#wvAltM .hd span{color:#888;font-size:12px}#wvAltM .x{border:0;background:#f3f3f6;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:14px}#wvAltM .bd{padding:14px 18px;overflow:auto;flex:1}#wvAltM .ft{display:flex;align-items:center;gap:8px;padding:12px 18px;border-top:1px solid #eee;justify-content:flex-end;flex-wrap:wrap}#wvAltM .ft .hint{margin-right:auto;color:#888;font-size:12px}#wvAltM .warn{color:#b3243f;font-weight:700;margin:6px 0}#wvAltM .pvh{display:flex;align-items:center;gap:12px;margin:12px 0 6px;font-size:13px;flex-wrap:wrap}#wvAltM .pvh label{display:flex;align-items:center;gap:4px;cursor:pointer;color:#555}#wvAltM .lg{color:#888;font-size:12px;display:flex;align-items:center;gap:4px}#wvAltM .lg .c{display:inline-block;width:12px;height:12px;border-radius:3px;background:#efe9ff;border:2px solid #7c5cff}#wvAltM .pv{overflow:auto;border:1px solid #eee;border-radius:10px;max-height:46vh}.wvPv{border-collapse:separate;border-spacing:0;font-size:12px;min-width:100%}.wvPv th,.wvPv td{padding:4px 3px;text-align:center;border-bottom:1px solid #f0f0f3;white-space:nowrap;min-width:30px}.wvPv thead th{position:sticky;top:0;background:#fafafc;z-index:1;font-weight:600}.wvPv th small{display:block;font-weight:400;color:#999;font-size:10px}.wvPv th.sun{color:#d33}.wvPv th.sat{color:#36c}.wvPv .nm{position:sticky;left:0;background:#fff;text-align:left;padding-left:8px;font-weight:600;z-index:2;min-width:58px}.wvPv thead .nm{z-index:3;background:#fafafc}.wvPv td.off{color:#aaa;background:#fafafa}.wvPv td.chg{background:#efe9ff;box-shadow:inset 0 0 0 2px #7c5cff;color:#3d2a99;font-weight:700}.wvPv td i{display:block;font-style:normal;font-size:9px;color:#9a8fcf;font-weight:400;text-decoration:line-through}#wvAltM .dl{margin-top:10px}#wvAltM .dl summary{cursor:pointer;font-size:13px;color:#555}#wvDraftBar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0;padding:8px 10px;background:#faf8ff;border:1px dashed #c9bdfc;border-radius:12px;font-size:13px}#wvDraftBar .t{font-weight:700;color:#5b3fd6}#wvDraftBar .dc{display:inline-flex;align-items:stretch;border:1px solid #d8cffd;border-radius:999px;overflow:hidden;background:#fff}#wvDraftBar .o{border:0;background:none;padding:4px 10px;cursor:pointer;font-weight:600;color:#3d2a99}#wvDraftBar .o small{font-weight:400;color:#888;margin-left:6px}#wvDraftBar .d{border:0;border-left:1px solid #eee;background:none;padding:0 8px;cursor:pointer;color:#999}#wvDraftBar .d:hover{color:#b3243f}@media(max-width:640px){#wvAltM{padding:0}#wvAltM .box{max-height:100vh;height:100%;border-radius:0}#wvAltM .ft .hint{width:100%}}.wvIntent{display:inline-block;margin:0 0 6px;padding:3px 9px;border-radius:999px;background:#f1edff;color:#5b3fd6;font-size:12px;font-weight:600;line-height:1.5}'; (document.head || document.documentElement).appendChild(st); })();
 
 </script>
 </html>
