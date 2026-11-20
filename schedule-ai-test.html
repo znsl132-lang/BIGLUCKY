@@ -6784,7 +6784,7 @@ window.WV_TOOLS_TABS = true;
     var longs = []; C.acts.forEach(function(e){ var a = cells[e.name], b = sc.cells[e.name], r = C.tail[e.name] || 0, rb = C.tail[e.name] || 0, m = 0, mb = 0; for(var i = 0; i < C.nD; i++){ r = isW(a[i]) ? r + 1 : 0; rb = isW(b[i]) ? rb + 1 : 0; if(r > m) m = r; if(rb > mb) mb = rb; } if(m > 5 && m > mb) longs.push(e.name + ' ' + m + '일'); });
     if(longs.length) problems.push('6일 이상 연속근무 생김: ' + longs.join(', '));
     if(rej.length) problems.push('반영 못 한 칸: ' + rej.slice(0, 8).join(', '));
-    if(k1.dup > k0.dup){ var dd2 = []; for(var d3 = 0; d3 < C.nD; d3++) S.stores.forEach(function(st){ var a1 = cnt(C, cells, st.n, d3), a0 = cnt(C, sc.cells, st.n, d3), n1 = need(C, st.n, d3); if(a1 > n1 && a1 > a0) dd2.push((d3 + 1) + '일 ' + st.n + ' ' + a1 + '/' + n1); }); problems.push('중복 근무 ' + k0.dup + '→' + k1.dup + '칸으로 늘어남: ' + dd2.slice(0, 10).join(', ')); notes.push('⚠ 중복 근무가 ' + k0.dup + '→' + k1.dup + '칸으로 늘어요'); }
+    if(k1.dup > k0.dup){ var dd2 = []; for(var d3 = 0; d3 < C.nD; d3++) S.stores.forEach(function(st){ var a1 = cnt(C, cells, st.n, d3), a0 = cnt(C, sc.cells, st.n, d3), n1 = need(C, st.n, d3); if(a1 > n1 && a1 > a0) dd2.push((d3 + 1) + '일 ' + st.n + ' ' + a1 + '/' + n1); }); notes.push('⚠ 중복 근무 ' + k0.dup + '→' + k1.dup + '칸 (늘어난 곳: ' + dd2.slice(0, 8).join(', ') + ') — 요청대로 옮기며 생긴 것인지 확인하세요'); }   // 요청 자체가 만드는 중복일 수 있어 재시도하지 않고 경고만
     var offDelta = {}, od = [];
     C.acts.forEach(function(e){ var c0 = sc.cells[e.name].filter(function(v){ return v === ''; }).length, c1 = cells[e.name].filter(function(v){ return v === ''; }).length; if(c1 !== c0){ offDelta[e.name] = c1 - c0; od.push(e.name + ' ' + (c1 > c0 ? '+' : '') + (c1 - c0)); } });
     if(od.length) notes.push('휴무 수 변화: ' + od.join(', '));
