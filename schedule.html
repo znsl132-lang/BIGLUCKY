@@ -5584,7 +5584,8 @@ window.WV_AI_URL = window.WV_AI_URL || 'https://script.google.com/macros/s/AKfyc
     var reqs = ((S.reqs && S.reqs[mkS]) || []).map(function(r){ return r.emp + ' ' + r.day + '일 ' + r.type + (r.store ? '(' + r.store + ')' : ''); }).join(', ');
     var SM = summary(sc);
     var w = say('bot', '<span class="dots"></span>' + (prev ? '검사에서 걸린 점을 고쳐 Opus가 다시 짜는 중… (1~2분 걸릴 수 있어요)' : (tier === 'opus' ? '복잡한 요청이라 Opus가 꼼꼼히 고치는 중… (1~2분 걸릴 수 있어요)' : 'AI가 표를 읽고 고치는 중…')));
-    var cx = { y: P.y, m: P.m, nDays: P.nD, 달력: cal(P.y, P.m), 매장필요인원: need, 인원예외: ex, 특이사항: reqs, 요약: SM.rows, 지표: SM.kpi, 일별: EC.일별, rows: rows, 대화: HIST.slice(-4) };
+    var PT = (window.WV_PATROL_TITLES || ['팀장', '실장']), patrol = S.emps.filter(function(e){ return PT.indexOf(String(e.title || '').trim()) >= 0 && sc.cells[e.name]; }).map(function(e){ return e.name; });
+    var cx = { 순환규칙: '칸 값 "순환"은 매장 순회 근무다. 팀장·실장만 가능: ' + (patrol.join(', ') || '없음') + '. 다른 직원은 절대 순환으로 바꾸지 않는다. 이미 순환인 칸을 매장으로 바꾸는 것은 가능.', y: P.y, m: P.m, nDays: P.nD, 달력: cal(P.y, P.m), 매장필요인원: need, 인원예외: ex, 특이사항: reqs, 요약: SM.rows, 지표: SM.kpi, 일별: EC.일별, rows: rows, 대화: HIST.slice(-4) };
     if(prev) cx.검사결과 = { 이전수정안: prev.edits, 문제: prev.problems };
     call({ mode: 'edit', tier: tier, q: q, ctx: cx }, tier === 'opus' ? 330000 : 120000).then(function(j){
       w.remove();
@@ -5611,6 +5612,10 @@ window.WV_AI_URL = window.WV_AI_URL || 'https://script.google.com/macros/s/AKfyc
         turn.적용 = true; turn.바뀐칸 = diffs.slice(0, 40).map(function(x){ return { 직원: x.n, 일: x.d + 1, 전: x.o === '' ? '휴' : String(x.o).replace(/\((OP|CL|PT)\)$/, ''), 후: x.v === '' ? '휴' : String(x.v).replace(/\((OP|CL|PT)\)$/, '') }; });
       } });
     }).catch(function(e){
+      if(tier === 'sonnet' && !prev && !noFallback && !/한도/.test(e.message)){   // Sonnet이 글자 수 한도 등으로 실패하면 Opus가 한 번 더
+        w.innerHTML = '<span class="meta">Sonnet 응답 실패(' + esc(e.message) + ') — Opus로 다시 시도해요 (1~2분)</span>';
+        window.wvAIEdit(q, say, 'opus', { edits: [], problems: ['직전 시도가 답을 끝내지 못했다(글자 수 한도). edits와 answer를 짧게.'], n: 1 }, false); return;
+      }
       if(tier === 'opus' && !noFallback && !/한도/.test(e.message)){   // Opus가 늦거나 실패하면 Sonnet으로 한 번 더(다리 60초 제한 대비)
         w.innerHTML = '<span class="meta">Opus 응답 실패(' + esc(e.message) + ') — Sonnet으로 다시 시도해요</span>';
         window.wvAIEdit(q, say, 'sonnet', null, true); return;
@@ -6721,6 +6726,7 @@ window.WV_TOOLS_TABS = true;
       if(to === '' && C.lockWork[nm + '|' + d]){ rej.push(nm + ' ' + dd + '일 — 근무 지정일'); return; }
       if(to !== '' && C.lockOff[nm + '|' + d]){ rej.push(nm + ' ' + dd + '일 — 휴무 요청일'); return; }
       if(to !== '' && to !== '순환' && !allowed(e, to)){ rej.push(nm + ' ' + dd + '일 — ' + to + ' 근무 불가'); return; }
+      if(to === '순환' && o !== '순환' && (window.WV_PATROL_TITLES || ['팀장', '실장']).indexOf(String(e.title || '').trim()) < 0){ rej.push(nm + ' ' + dd + '일 — 순환(매장 순회)은 팀장·실장만'); return; }
       if(base(o) === to && (o === '') === (to === '')) return;
       cells[nm][d] = to; LK[nm + '|' + d] = 1; ok.push({ n: nm, d: d });
       if(isW(o) && o !== '순환') touched[base(o) + '|' + d] = 1; if(to && to !== '순환') touched[to + '|' + d] = 1;
@@ -6919,7 +6925,7 @@ window.WV_TOOLS_TABS = true;
    GitHub Pages는 페이지를 브라우저에 최대 10분 저장해 두므로, 배포 직후 열면 옛 화면이 뜰 수 있다.
    열 때·탭으로 돌아올 때·10분마다 서버의 빌드 번호와 비교 → 다르면 열자마자(아직 아무것도 안 만졌으면) 자동 새로고침, 작업 중이면 아래 알림 */
 (function(){
-  var B = 'P20261120-202836';/*WVBUILD*/
+  var B = 'P20261120-212847';/*WVBUILD*/
   window.WV_BUILD = B; if(B === 'DEV') return;
   var t0 = Date.now(), touched = false, shown = false;
   ['keydown', 'input', 'pointerdown'].forEach(function(ev){ document.addEventListener(ev, function(){ touched = true; }, { capture: true, once: true }); });
@@ -7026,12 +7032,12 @@ var S=[
   at(400,function(){$('r1').classList.add('on');});at(1800,function(){$('r2').classList.add('on');var c=$('rv').querySelectorAll('td.c');c[3].textContent='';c[3].className='c s-휴 chg';c[9].textContent='연수';c[9].className='c s-연 chg';});}},
 {t:'한눈에 보는 향상',cap:'같은 설정 · 같은 휴무 요청으로 <b>10번씩 생성</b>해 비교한 실측 결과입니다',dur:7000,
  bf:function(b){b.innerHTML='<div class="lbl">기존 생성기 · 10회</div><div class="metric"><div>생성 중 확인창<div class="big">5번</div><small style="color:#888">10회 중 5회 멈춤</small></div><div>6일 이상 연속근무<div class="big">5건</div><small style="color:#888">최대 8일 연속</small></div><div>중복 근무 (회당 평균)<div class="big">15.9칸</div></div><div>매장 공백 (10회 합)<div class="big">1건</div></div></div>';},
- af:function(a){a.innerHTML='<div class="lbl">지금 · 같은 조건 10회</div><div class="metric"><div>생성 중 확인창<div class="big" style="color:#1f7a45">0번 <small style="font-size:12px">▼ 5 → 0</small></div></div><div>6일 이상 연속근무<div class="big" style="color:#1f7a45">0건 <small style="font-size:12px">▼ 5 → 0 · 최대 5일</small></div></div><div>중복 근무 (회당 평균)<div class="big">15.9칸</div><small style="color:#b3243f">초안은 그대로지만 <b style="color:#1f7a45">생성 후 AI 검토에서 15 → 0칸</b> (실제 시험 1회 · 남는 순환 인원을 꽉 찬 매장 대신 「순환」으로 · 휴무 일수 그대로)</small></div><div>매장 공백 (10회 합)<div class="big">1건</div><small style="color:#888">같은 날 갈 수 있는 사람이 없던 경우</small></div></div>';}},
+ af:function(a){a.innerHTML='<div class="lbl">지금 · 같은 조건 10회</div><div class="metric"><div>생성 중 확인창<div class="big" style="color:#1f7a45">0번 <small style="font-size:12px">▼ 5 → 0</small></div></div><div>6일 이상 연속근무<div class="big" style="color:#1f7a45">0건 <small style="font-size:12px">▼ 5 → 0 · 최대 5일</small></div></div><div>중복 근무 (회당 평균)<div class="big">15.9칸</div><small style="color:#b3243f">초안 단계는 그대로 — 휴무 일수를 지키면 남는 인원은 줄지 않음. 생성 후 AI 검토가 중복이 몰린 날을 정리(순환은 팀장·실장만)</small></div><div>매장 공백 (10회 합)<div class="big">1건</div><small style="color:#888">같은 날 갈 수 있는 사람이 없던 경우</small></div></div>';}},
 {t:'완성도 비교',full:true,cap:'기존 생성기와 AI 적용 후를 영역별로 비교했어요 — <b>종합 45점 → 72점</b>',dur:9000,
  af:function(a){var D=[['종합 완성도',45,72,1],['입력 자동화 · 카톡·문장으로 입력',30,85],['생성 안정성 · 확인창·연속근무',45,80],['수정 편의 · AI 직접 수정·비교',35,85],['실수 방지 · 검사·보류·되돌리기',40,80],['화면 가독성 · 탭·목록·고정 칸',50,80],['구조·유지보수 · 기능을 덧붙여 복잡해짐',60,45]];
   var h='<div class="lg"><span><i class="g"></i>기존</span><span><i class="v"></i>AI 적용 후</span><span class="u">100점 만점</span></div>';
   D.forEach(function(d,i){h+='<div class="br'+(d[3]?' tot':'')+'"><div class="bl">'+d[0]+'</div><div class="bt"><div class="tr"><i class="f g" id="g'+i+'"></i><b id="gn'+i+'">0</b></div><div class="tr"><i class="f v'+(d[2]<d[1]?' dn':'')+'" id="v'+i+'"></i><b id="vn'+i+'">0</b></div></div><div class="dl" id="dl'+i+'">'+(d[2]>=d[1]?'▲ +':'▼ ')+(d[2]-d[1])+'</div></div>';});
-  h+='<p class="fn">점수는 Claude가 두 버전을 같은 기준으로 비교한 자체 평가입니다(실측 아님). 실측: 같은 조건 10회 생성 — 확인창 5→0번, 6일 이상 연속 5→0건, 최대 연속 8→5일, 중복 근무는 초안 15.9칸 그대로, 생성 후 AI 검토 시험 1회에서 15→0칸. 구조·유지보수는 다음 정리 대상입니다.</p>';
+  h+='<p class="fn">점수는 Claude가 두 버전을 같은 기준으로 비교한 자체 평가입니다(실측 아님). 실측: 같은 조건 10회 생성 — 확인창 5→0번, 6일 이상 연속 5→0건, 최대 연속 8→5일, 중복 근무는 초안 기준 15.9칸 그대로(휴무 일수를 지키면 구조상 남는 인원). 구조·유지보수는 다음 정리 대상입니다.</p>';
   a.innerHTML=h;
   D.forEach(function(d,i){at(250+i*160,function(){$('g'+i).style.width=d[1]+'%';cnt($('gn'+i),d[1]);});at(700+i*160,function(){$('v'+i).style.width=d[2]+'%';cnt($('vn'+i),d[2]);});at(1500+i*160,function(){$('dl'+i).classList.add('on');});});}}
 
@@ -7082,7 +7088,10 @@ function close(){var u=$('up');u.classList.remove('on');clear();setTimeout(funct
   var KEY = 'wvAutoReview';
   function on(){ try{ return localStorage.getItem(KEY) !== '0'; }catch(e){ return true; } }
   function set(v){ try{ localStorage.setItem(KEY, v ? '1' : '0'); }catch(e){} }
-  var Q = '[자동 검토] 방금 만든 초안을 검토해서 고칠 곳을 직접 고쳐줘. 볼 것: 매장 공백, 6일 이상 연속근무, 같은 날 한 매장에 필요보다 2명 이상 몰린 중복, 주말(토·일) 휴무가 0일이거나 한 사람에게 몰린 경우, 소속 외 매장 근무가 지나치게 많은 사람. 휴무 일수·휴무 요청·근무 지정은 지키고 칸은 최소로 바꿔. 고칠 곳이 없으면 edits는 비우고 왜 괜찮은지 짧게.';
+  var KEY2 = 'wvReviewPatrol';
+  function onP(){ try{ return localStorage.getItem(KEY2) !== '0'; }catch(e){ return true; } }
+  function q(){ return '[자동 검토] 방금 만든 초안을 검토해서 고칠 곳을 직접 고쳐줘. 볼 것: 매장 공백, 6일 이상 연속근무, 같은 날 한 매장에 필요보다 2명 이상 몰린 중복, 주말(토·일) 휴무가 0일이거나 한 사람에게 몰린 경우, 소속 외 매장 근무가 지나치게 많은 사람. 휴무 일수·휴무 요청·근무 지정은 지키고 칸은 최소로 바꿔. ' +
+    (onP() ? '중복이 생긴 매장에 팀장·실장이 서 있으면 그 사람을 순환(매장 순회)으로 돌려 정리해도 된다(팀장·실장만). ' : '순환으로 바꾸는 수정은 하지 마. ') + '고칠 곳이 없으면 edits는 비우고 왜 괜찮은지 짧게.'; }
   function say(cls, html){
     var log = document.getElementById('wvAdvLog'); if(!log) return null;
     var e0 = document.getElementById('wvAdvEmpty'); if(e0) e0.style.display = 'none';
@@ -7097,6 +7106,14 @@ function close(){var u=$('up');u.classList.remove('on');clear();setTimeout(funct
     l.title = '초안이 나오면 AI가 공백·연속근무·중복 몰림·주말 휴무 편중을 검토해 고친 안을 팝업으로 보여줍니다 (생성 1번에 약 30~90원)';
     var cb = l.querySelector('input'); cb.checked = on(); cb.onchange = function(){ set(cb.checked); if(typeof wvToast === 'function') wvToast(cb.checked ? '생성 후 AI 검토를 켰어요' : '생성 후 AI 검토를 껐어요', 'ok'); };
     gb.parentNode.insertBefore(l, gb.nextSibling);
+    var l2 = document.createElement('label'); l2.id = 'wvRevPatrol';
+    l2.style.cssText = 'display:inline-flex;align-items:center;gap:6px;margin-left:6px;font-size:12.5px;font-weight:600;color:#555;background:#f3f2f7;border-radius:999px;padding:5px 12px;cursor:pointer;vertical-align:middle';
+    l2.innerHTML = '<input type="checkbox" style="accent-color:#7c5cff;margin:0"> 중복은 순환으로 정리 <small style="color:#888;font-weight:500">팀장·실장만</small>';
+    l2.title = 'AI 검토 때 중복이 생긴 매장에 선 팀장·실장을 순환(매장 순회)으로 돌려 정리합니다. 다른 직원은 순환으로 바꾸지 않습니다';
+    var c2 = l2.querySelector('input'); c2.checked = onP(); c2.onchange = function(){ try{ localStorage.setItem(KEY2, c2.checked ? '1' : '0'); }catch(e){} if(typeof wvToast === 'function') wvToast(c2.checked ? '중복은 순환으로 정리 — 켬 (팀장·실장만)' : '중복은 순환으로 정리 — 끔', 'ok'); };
+    var sync = function(){ l2.style.opacity = cb.checked ? '1' : '.45'; c2.disabled = !cb.checked; };
+    cb.addEventListener('change', sync); sync();
+    l.parentNode.insertBefore(l2, l.nextSibling);
     return true;
   }
   document.addEventListener('wv:generated', function(){
@@ -7107,7 +7124,7 @@ function close(){var u=$('up');u.classList.remove('on');clear();setTimeout(funct
       if(sched !== sc) return;
       var row = document.getElementById('wvSchedRow'); if(row && row.classList.contains('fold')) row.classList.remove('fold');   // AI 패널이 접혀 있으면 펼침
       say('bot', '<div class="ans-h">✦ 초안이 나왔어요 — AI가 한 번 검토할게요</div><div class="meta">공백 · 6일 연속 · 중복 몰림 · 주말 휴무 편중 · 소속 외 근무를 보고, 고칠 곳이 있으면 팝업으로 비교안을 띄워요</div>');
-      window.wvAIEdit(Q, say, 'sonnet');
+      window.wvAIEdit(q(), say, 'sonnet');
     }, 900);
   });
   function boot(){ if(!mountToggle()) setTimeout(boot, 500); }
