@@ -5384,7 +5384,11 @@ window.WV_AI_URL = window.WV_AI_URL || 'https://script.google.com/macros/s/AKfyc
     full.sort(function(x, y){ return y[0].length - x[0].length; });
     // 성 뺀 이름이 두 사람 이상 겹치면 쓰지 않음
     short = short.filter(function(s){ return short.filter(function(t){ return t[0] === s[0]; }).length === 1; });
-    return { full: full, short: short, back: function(s){ return String(s).replace(/직원(\d{2})/g, function(m, n){ var e = S.emps[+n - 1]; return e ? e.name : m; }); } };
+    return { full: full, short: short, back: function(s){ return String(s).replace(/직원(\d{2})(이가|가|이|는|은|를|을|와|과|로|으로|랑|이랑)?(?![가-힣])?/g, function(m, n, j){
+      var e = S.emps[+n - 1]; if(!e) return m; var nm = e.name, c = nm.charCodeAt(nm.length - 1) - 0xAC00, jong = c >= 0 && c < 11172 ? c % 28 : 0;
+      if(!j) return nm;
+      var J = { '가': jong ? '이' : '가', '이': jong ? '이' : '가', '이가': jong ? '이' : '가', '는': jong ? '은' : '는', '은': jong ? '은' : '는', '를': jong ? '을' : '를', '을': jong ? '을' : '를', '와': jong ? '과' : '와', '과': jong ? '과' : '와', '로': (jong && jong !== 8) ? '으로' : '로', '으로': (jong && jong !== 8) ? '으로' : '로', '랑': jong ? '이랑' : '랑', '이랑': jong ? '이랑' : '랑' }[j];
+      return nm + (J || j); }); } };
   }
   function walk(v, f){
     if(typeof v === 'string') return f(v);
