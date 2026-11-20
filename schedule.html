@@ -5345,7 +5345,11 @@ window.WV_AI_URL = window.WV_AI_URL || 'https://script.google.com/macros/s/AKfyc
     full.sort(function(x, y){ return y[0].length - x[0].length; });
     // 성 뺀 이름이 두 사람 이상 겹치면 쓰지 않음
     short = short.filter(function(s){ return short.filter(function(t){ return t[0] === s[0]; }).length === 1; });
-    return { full: full, short: short, back: function(s){ return String(s).replace(/직원(\d{2})(이가|가|이|는|은|를|을|와|과|로|으로|랑|이랑)?(?![가-힣])?/g, function(m, n, j){
+    return { full: full, short: short, back: function(s){
+      // AI가 "직원03"을 "03"·"직원 3"처럼 줄여 쓴 경우도 되돌림(날짜와 헷갈리지 않게 0으로 시작하는 두 자리 + 조사, 또는 '직원 N'만)
+      s = String(s).replace(/직원\s+(\d{1,2})(?!\d)/g, function(m, n){ return '직원' + String(n).padStart(2, '0'); })
+                   .replace(/(^|[·,\s(/])(0[1-9])(이가|가|이|는|은|를|을|와|과|이랑|랑)(?![가-힣\d])/g, function(m, pre, n, j){ return S.emps[+n - 1] ? pre + '직원' + n + j : m; });
+      return String(s).replace(/직원(\d{2})(이가|가|이|는|은|를|을|와|과|로|으로|랑|이랑)?(?![가-힣])?/g, function(m, n, j){
       var e = S.emps[+n - 1]; if(!e) return m; var nm = e.name, c = nm.charCodeAt(nm.length - 1) - 0xAC00, jong = c >= 0 && c < 11172 ? c % 28 : 0;
       if(!j) return nm;
       var J = { '가': jong ? '이' : '가', '이': jong ? '이' : '가', '이가': jong ? '이' : '가', '는': jong ? '은' : '는', '은': jong ? '은' : '는', '를': jong ? '을' : '를', '을': jong ? '을' : '를', '와': jong ? '과' : '와', '과': jong ? '과' : '와', '로': (jong && jong !== 8) ? '으로' : '로', '으로': (jong && jong !== 8) ? '으로' : '로', '랑': jong ? '이랑' : '랑', '이랑': jong ? '이랑' : '랑' }[j];
@@ -5576,10 +5580,10 @@ window.WV_AI_URL = window.WV_AI_URL || 'https://script.google.com/macros/s/AKfyc
     var ex = ((S.needX && S.needX[mkS]) || []).map(function(x){ return x.store + ' ' + x.day + '일 ' + x.need + '명'; }).join(', ');
     var reqs = ((S.reqs && S.reqs[mkS]) || []).map(function(r){ return r.emp + ' ' + r.day + '일 ' + r.type + (r.store ? '(' + r.store + ')' : ''); }).join(', ');
     var SM = summary(sc);
-    var w = say('bot', '<span class="dots"></span>' + (prev ? '검사에서 걸려 Opus가 다시 짜는 중…' : (tier === 'opus' ? '복잡한 요청이라 Opus가 표를 고치는 중…' : 'AI가 표를 읽고 고치는 중…')));
+    var w = say('bot', '<span class="dots"></span>' + (prev ? '검사에서 걸린 점을 고쳐 Opus가 다시 짜는 중… (1~2분 걸릴 수 있어요)' : (tier === 'opus' ? '복잡한 요청이라 Opus가 꼼꼼히 고치는 중… (1~2분 걸릴 수 있어요)' : 'AI가 표를 읽고 고치는 중…')));
     var cx = { y: P.y, m: P.m, nDays: P.nD, 달력: cal(P.y, P.m), 매장필요인원: need, 인원예외: ex, 특이사항: reqs, 요약: SM.rows, 지표: SM.kpi, 일별: EC.일별, rows: rows, 대화: HIST.slice(-4) };
     if(prev) cx.검사결과 = { 이전수정안: prev.edits, 문제: prev.problems };
-    call({ mode: 'edit', tier: tier, q: q, ctx: cx }, 110000).then(function(j){
+    call({ mode: 'edit', tier: tier, q: q, ctx: cx }, tier === 'opus' ? 330000 : 120000).then(function(j){
       w.remove();
       if(sched !== sc){ say('bot', '그사이 표가 바뀌었어요. 다시 요청해 주세요.'); return; }
       var D = j.data || {}, edits = Array.isArray(D.edits) ? D.edits : [];
@@ -5591,9 +5595,10 @@ window.WV_AI_URL = window.WV_AI_URL || 'https://script.google.com/macros/s/AKfyc
         return;
       }
       var res = window.wvApplyEdits(sc, edits);
-      if(res.problems.length && tier === 'sonnet' && !prev && !noFallback){
-        say('bot', '<div class="meta">Sonnet 수정안 검사: ' + esc(res.problems.join(' / ')) + '</div>');
-        window.wvAIEdit(q, say, 'opus', { edits: edits, problems: res.problems });
+      var tries = prev ? (prev.n || 1) : 0;
+      if(res.problems.length && tries < 1 && !noFallback){   // 검사에 걸리면 Opus가 문제를 알고 한 번 더 짠다(Sonnet→Opus, Opus→Opus)
+        say('bot', '<div class="meta">' + TIER_NAME[tier] + ' 수정안 검사: ' + esc(res.problems.join(' / ')) + '</div>');
+        window.wvAIEdit(q, say, 'opus', { edits: edits, problems: res.problems, n: tries + 1 });
         return;
       }
       res.title = '수정안';
@@ -6729,6 +6734,7 @@ window.WV_TOOLS_TABS = true;
     var longs = []; C.acts.forEach(function(e){ var a = cells[e.name], b = sc.cells[e.name], r = C.tail[e.name] || 0, rb = C.tail[e.name] || 0, m = 0, mb = 0; for(var i = 0; i < C.nD; i++){ r = isW(a[i]) ? r + 1 : 0; rb = isW(b[i]) ? rb + 1 : 0; if(r > m) m = r; if(rb > mb) mb = rb; } if(m > 5 && m > mb) longs.push(e.name + ' ' + m + '일'); });
     if(longs.length) problems.push('6일 이상 연속근무 생김: ' + longs.join(', '));
     if(rej.length) problems.push('반영 못 한 칸: ' + rej.slice(0, 8).join(', '));
+    if(k1.dup > k0.dup){ var dd2 = []; for(var d3 = 0; d3 < C.nD; d3++) S.stores.forEach(function(st){ var a1 = cnt(C, cells, st.n, d3), a0 = cnt(C, sc.cells, st.n, d3), n1 = need(C, st.n, d3); if(a1 > n1 && a1 > a0) dd2.push((d3 + 1) + '일 ' + st.n + ' ' + a1 + '/' + n1); }); notes.push('⚠ 중복 근무 ' + k0.dup + '→' + k1.dup + '칸 (늘어난 곳: ' + dd2.slice(0, 8).join(', ') + ') — 요청대로 옮기며 생긴 것인지 확인하세요'); }   // 요청 자체가 만드는 중복일 수 있어 재시도하지 않고 경고만
     var offDelta = {}, od = [];
     C.acts.forEach(function(e){ var c0 = sc.cells[e.name].filter(function(v){ return v === ''; }).length, c1 = cells[e.name].filter(function(v){ return v === ''; }).length; if(c1 !== c0){ offDelta[e.name] = c1 - c0; od.push(e.name + ' ' + (c1 > c0 ? '+' : '') + (c1 - c0)); } });
     if(od.length) notes.push('휴무 수 변화: ' + od.join(', '));
