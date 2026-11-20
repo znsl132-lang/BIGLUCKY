@@ -5440,10 +5440,10 @@ window.WV_AI_URL = window.WV_AI_URL || 'https://script.google.com/macros/s/AKfyc
       if(run > 5) long.push((st < 1 ? '전월말' : sc.month + '/' + st) + '~' + sc.month + '/' + sc.nDays + ' ' + run + '일');
       rows.push({ 이름: e.name, 직책: e.title || '', 소속: e.home, 근무일: work, 휴무: off, 지정휴무: offTarget(e), 최대연속: best.len + '일(' + (best.s < 1 ? '전월말' : sc.month + '/' + best.s) + '~' + sc.month + '/' + best.e + ')', 연속6일이상: long.join(', ') || '없음', 주말휴무: wkOff, 순환: pat, 소속외근무: away });
     });
-    var gap = [], dup = 0;
-    for(var d2 = 0; d2 < sc.nDays; d2++) S.stores.forEach(function(stx){ var need = needAtN(stx.n, d2, mkS), n = 0; S.emps.forEach(function(e){ var v = (sc.cells[e.name] || [])[d2]; if(isW(v) && v !== '순환' && base(v) === stx.n) n++; }); if(n < need) gap.push(sc.month + '/' + (d2 + 1) + ' ' + stx.n); if(n > need) dup += n - need; });
+    var gap = [], dup = 0, dupL = [];
+    for(var d2 = 0; d2 < sc.nDays; d2++) S.stores.forEach(function(stx){ var need = needAtN(stx.n, d2, mkS), n = 0; S.emps.forEach(function(e){ var v = (sc.cells[e.name] || [])[d2]; if(isW(v) && v !== '순환' && base(v) === stx.n) n++; }); if(n < need) gap.push(sc.month + '/' + (d2 + 1) + ' ' + stx.n); if(n > need){ dup += n - need; dupL.push(sc.month + '/' + (d2 + 1) + ' ' + stx.n + ' ' + n + '/' + need + '명'); } });
     if(typeof __wvD !== 'undefined') __wvD = -1;
-    return { rows: rows, kpi: { 매장공백: gap.length ? gap.join(', ') : '없음', 중복근무칸: dup, 휴무불일치: rows.filter(function(r){ return r.휴무 !== r.지정휴무; }).map(function(r){ return r.이름 + ' ' + r.휴무 + '/' + r.지정휴무; }).join(', ') || '없음' } };
+    return { rows: rows, kpi: { 매장공백: gap.length ? gap.join(', ') : '없음', 중복근무칸: dup, 중복목록: dupL.slice(0, 60).join(', ') || '없음', 휴무불일치: rows.filter(function(r){ return r.휴무 !== r.지정휴무; }).map(function(r){ return r.이름 + ' ' + r.휴무 + '/' + r.지정휴무; }).join(', ') || '없음' } };
   }
   function names(){ return S.emps.map(function(e){ return e.name; }); }
   function stores(){ return S.stores.map(function(s){ return s.n; }); }
@@ -5593,15 +5593,26 @@ window.WV_AI_URL = window.WV_AI_URL || 'https://script.google.com/macros/s/AKfyc
     var w = say('bot', '<span class="dots"></span>AI 생각 중…');
     var SM = summary(sc);
     call({ mode: 'advise', q: q, ctx: { y: P.y, m: P.m, nDays: P.nD, 달력: cal(P.y, P.m), 매장필요인원: need, 인원예외: ex, 특이사항: reqs, 요약: SM.rows, 지표: SM.kpi, rows: rows } }).then(function(j){
-      var a = j.data.action, h = esc(j.data.answer || '').replace(/\n/g, '<br>');
+      var a = j.data.action, lines = String(j.data.answer || '').split('\n').map(function(l){ return l.trim(); }).filter(Boolean);
+      var head = lines.filter(function(l){ return !/^[-·•]/.test(l); }), bul = lines.filter(function(l){ return /^[-·•]/.test(l); }).map(function(l){ return l.replace(/^[-·•]\s*/, ''); });
+      var h = (head.length ? '<div class="ans-h">' + esc(head.join(' ')) + '</div>' : '') + (bul.length ? '<ul class="ans">' + bul.map(function(b){ return '<li>' + esc(b) + '</li>'; }).join('') + '</ul>' : '');
+      var meta = '<div class="meta">AI · ' + (j.ms / 1000).toFixed(1) + '초 · 오늘 남은 횟수 ' + j.left + '</div>';
+      if(a && ['dupToOff','fillGap','swapOff','giveOff'].indexOf(a.type) >= 0 && window.wvAltRun){
+        if(a.emp && names().indexOf(a.emp) < 0) a = null;
+      }
+      if(a && ['dupToOff','fillGap','swapOff','giveOff'].indexOf(a.type) >= 0 && window.wvAltRun){
+        w.innerHTML = h + '<button type="button" class="goBtn">✦ ' + esc(window.wvAltLabel(a)) + '</button>' + meta;
+        var A = a; w.querySelector('.goBtn').onclick = function(){ this.disabled = true; this.textContent = '대안 만드는 중…'; window.wvAltRun(A, say); this.textContent = '✓ 아래에 대안을 만들었어요'; };
+        return;
+      }
       if(a && a.type === 'maxRun'){
         var only = (a.only || []).filter(function(n){ return names().indexOf(n) >= 0; }), mx = +a.max || 5;
-        h += '<div class="wvAdvBtns"><button class="btn" data-go="1">' + (only.length ? esc(only.join('·')) + ' ' : '') + '연속근무 최대 ' + mx + '일 대안 만들기</button></div>';
-        w.innerHTML = h + '<div class="hint" style="margin-top:6px">AI · ' + (j.ms / 1000).toFixed(1) + '초 · 오늘 남은 횟수 ' + j.left + '</div>';
+        h += '<button type="button" class="goBtn" data-go="1">✦ ' + (only.length ? esc(only.join('·')) + ' ' : '') + '연속근무 최대 ' + mx + '일 대안 만들기</button>';
+        w.innerHTML = h + meta;
         w.querySelector('[data-go]').onclick = function(){ localAsk((only.length ? only.join(' ') + ' ' : '6일 이상 ') + '연속근무 최대 ' + mx + '일 해소한 버전 만들어줘'); };
         return;
       }
-      w.innerHTML = h + '<div class="hint" style="margin-top:6px">AI · ' + (j.ms / 1000).toFixed(1) + '초 · 오늘 남은 횟수 ' + j.left + '</div>';
+      w.innerHTML = h + meta;
     }).catch(function(e){ w.innerHTML = '<span style="color:#b3243f">AI 연결 실패: ' + esc(e.message) + '</span>'; });
   };
 
@@ -5998,6 +6009,7 @@ mark.wvHl{background:var(--goldS);color:inherit;border-radius:3px;padding:0 1px}
   /* ③ 탭 '추가 휴무 부여' 카드 접기 — 생성 때마다 다시 그려지므로 그릴 때마다 감싼다 (열림 상태 기억) */
   var extraOpen = false;
   function foldExtra(){
+    if(window.WV_TOOLS_TABS) return;
     var box = document.getElementById('extraBox'); if(!box) return;
     var card = box.querySelector(':scope > .card'); if(!card || card.classList.contains('wvAcc')) return;
     var h3 = card.querySelector(':scope > h3'); if(!h3) return;
@@ -6235,6 +6247,263 @@ mark.wvHl{background:var(--goldS);color:inherit;border-radius:3px;padding:0 1px}
   function boot(){ polishAdv(); addHelps(); }
   setTimeout(boot, 300); setTimeout(boot, 1500); setTimeout(boot, 3500);
   new MutationObserver(function(){ clearTimeout(boot._t); boot._t = setTimeout(boot, 200); }).observe(document.body, { childList: true, subtree: false });
+})();
+
+</script>
+<script>
+/* ===== 생성기 확장 ⑤ (2026-11-20) =====
+   1) ③ 편성 도구 3개(추가 휴무 부여 · 긴급 결원 · 결원 분배/월중 재편성)를 탭 하나로
+   2) AI 조언이 "실제로 바꿀 수 있는" 대안 만들기
+      dupToOff(중복 근무 → 휴무로 골고루) · fillGap(공백 메우기) · swapOff(휴무 날짜 옮기기) · giveOff(특정 날 휴무 주기)
+      → 기존과 비교표 + 달라진 점 + [이 버전 적용](되돌리기 가능) */
+window.WV_TOOLS_TABS = true;
+(function(){
+  var css = document.createElement('style');
+  css.textContent = `
+#wvTools{margin:14px 0}
+#wvTools .bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+#wvTools .bar .cap{font-weight:800;font-size:14px;margin-right:6px}
+#wvTools .tb{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--ln2);background:#fff;border-radius:99px;padding:7px 14px;font-weight:700;font-size:13px;color:var(--ink2);cursor:pointer;transition:all .2s}
+#wvTools .tb:hover{border-color:var(--ink);color:var(--ink)}
+#wvTools .tb.on{background:var(--brand);border-color:var(--brand);color:#fff}
+#wvTools .tb .n{font-size:11px;font-weight:800;background:var(--goldS);color:#5a4300;border-radius:99px;padding:0 7px}
+#wvTools .tb.on .n{background:rgba(255,255,255,.18);color:#fff}
+#wvTools .tb[hidden]{display:none}
+#wvTools .body{margin-top:12px}
+#wvTools .body:empty{display:none}
+#wvTools .pane{display:none;animation:wvIn .3s cubic-bezier(.2,.8,.2,1)}
+#wvTools .pane.on{display:block}
+#wvTools .pane>details.card,#wvTools .pane .card{margin:0!important;box-shadow:none!important;border-color:var(--ln)!important}
+#wvTools .pane>details.card>summary{display:none!important}
+#wvTools .pane>#extraBox>.card>h3{cursor:default!important}
+#wvTools .pane>#extraBox>.card>h3 .chev{display:none!important}
+#wvTools .pane>#extraBox>.card>.wvAccBody{grid-template-rows:1fr!important}
+/* AI 답 가독성 */
+#wvAdv .bot .ans-h{font-weight:800;font-size:13.5px;margin-bottom:6px;line-height:1.55}
+#wvAdv .bot ul.ans{margin:0;padding:0;list-style:none}
+#wvAdv .bot ul.ans li{position:relative;padding:3px 0 3px 14px;font-size:13px;line-height:1.6}
+#wvAdv .bot ul.ans li::before{content:"";position:absolute;left:2px;top:11px;width:5px;height:5px;border-radius:50%;background:var(--gold)}
+#wvAdv .bot .meta{font-size:11px;color:var(--ink3);margin-top:8px}
+#wvAdv .goBtn{margin-top:10px;width:100%;border:0;background:var(--brand);color:#fff;border-radius:12px;padding:10px 12px;font-weight:800;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px}
+#wvAdv .goBtn:hover{filter:brightness(1.15)}
+`;
+  document.head.appendChild(css);
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+
+  /* ================= 1) 편성 도구 탭 ================= */
+  var TOOLS = [
+    { key: 'extra', label: '추가 휴무 부여', get: function(){ return document.getElementById('extraBox'); }, visible: function(el){ return !!(el && el.children.length); } },
+    { key: 'abs', label: '긴급 결원 반영', get: function(){ return document.getElementById('absenceCard'); }, visible: function(el){ return !!(el && el.style.display !== 'none'); } },
+    { key: 'rb', label: '결원 분배 · 월중 재편성', get: function(){ return document.getElementById('rebuildCard'); }, visible: function(el){ return !!(el && el.style.display !== 'none'); } }
+  ];
+  var curTool = null;
+  function mountTools(){
+    var row = document.getElementById('wvSchedRow') || document.getElementById('schedBox'); if(!row) return;
+    var box = document.getElementById('wvTools');
+    if(!box){
+      box = document.createElement('div'); box.id = 'wvTools'; box.className = 'card';
+      box.innerHTML = '<div class="bar"><span class="cap">편성 도구</span></div><div class="body"></div>';
+      row.parentNode.insertBefore(box, row.nextSibling);
+      TOOLS.forEach(function(t){
+        var b = document.createElement('button'); b.type = 'button'; b.className = 'tb'; b.dataset.k = t.key; b.innerHTML = esc(t.label) + '<span class="n" hidden></span>';
+        b.onclick = function(){ curTool = curTool === t.key ? null : t.key; showTools(); };
+        box.querySelector('.bar').appendChild(b);
+        var p = document.createElement('div'); p.className = 'pane'; p.dataset.k = t.key; box.querySelector('.body').appendChild(p);
+      });
+    }
+    TOOLS.forEach(function(t){
+      var el = t.get(), pane = box.querySelector('.pane[data-k="' + t.key + '"]');
+      if(el && el.parentNode !== pane){ pane.appendChild(el); if(el.tagName === 'DETAILS') el.open = true; }
+    });
+    showTools();
+  }
+  function showTools(){
+    var box = document.getElementById('wvTools'); if(!box) return;
+    var any = false;
+    TOOLS.forEach(function(t){
+      var el = t.get(), vis = t.visible(el), b = box.querySelector('.tb[data-k="' + t.key + '"]'), pane = box.querySelector('.pane[data-k="' + t.key + '"]');
+      b.hidden = !vis; if(vis) any = true; if(!vis && curTool === t.key) curTool = null;
+      b.classList.toggle('on', curTool === t.key); pane.classList.toggle('on', curTool === t.key);
+      if(t.key === 'extra' && el){ var m = (el.textContent || '').match(/잉여 근무\s*(\d+)일/), n = b.querySelector('.n'); if(m){ n.hidden = false; n.textContent = m[1] + '일'; } else n.hidden = true; }
+      if(el && el.tagName === 'DETAILS') el.open = true;
+    });
+    box.style.display = any ? '' : 'none';
+  }
+
+  /* ================= 2) 바꿀 수 있는 대안 ================= */
+  var ABS = ['휴가','병가','훈련','출장','전휴무','제외'];
+  var isW = function(v){ return !!v && ABS.indexOf(v) < 0; };
+  var base = function(v){ return String(v || '').replace(/\((OP|CL|PT)\)$/, ''); };
+  var DOW = '일월화수목금토';
+  function ctx(sc){
+    var mk = sc.year + '-' + String(sc.month).padStart(2, '0');
+    var lockOff = {}, lockWork = {};
+    ((S.reqs && S.reqs[mk]) || []).forEach(function(r){ if(!r.day) return; if(r.type === '근무지정') lockWork[r.emp + '|' + (r.day - 1)] = 1; else lockOff[r.emp + '|' + (r.day - 1)] = 1; });
+    var hol = {}; ((S.hols && S.hols[mk]) || []).forEach(function(x){ hol[x - 1] = 1; });
+    var pd = new Date(sc.year, sc.month - 2, 1), pk = pd.getFullYear() + '-' + String(pd.getMonth() + 1).padStart(2, '0'), tail = {};
+    S.emps.forEach(function(e){ var p = (S.lastSched && S.lastSched[pk] && S.lastSched[pk][e.name]) || [], t = 0; for(var k = p.length - 1; k >= 0 && isW(p[k]); k--) t++; tail[e.name] = t; });
+    return { mk: mk, lockOff: lockOff, lockWork: lockWork, hol: hol, tail: tail, nD: sc.nDays, acts: S.emps.filter(function(e){ return e.role !== '교육' && sc.cells[e.name]; }) };
+  }
+  function need(C, stn, d){ var v = needAtN(stn, d, C.mk); if(typeof __wvD !== 'undefined') __wvD = -1; return v; }
+  function cnt(C, cells, stn, d){ var n = 0; C.acts.forEach(function(q){ var v = cells[q.name][d]; if(isW(v) && v !== '순환' && base(v) === stn) n++; }); return n; }
+  function runAt(C, cells, nm, d){ var a = cells[nm], L = 1, k; for(k = d - 1; k >= 0 && isW(a[k]); k--) L++; if(k < 0) L += C.tail[nm] || 0; for(k = d + 1; k < C.nD && isW(a[k]); k++) L++; return L; }
+  function offRun(C, cells, nm, d){ var a = cells[nm], L = 1, k; for(k = d - 1; k >= 0 && !isW(a[k]); k--) L++; for(k = d + 1; k < C.nD && !isW(a[k]); k++) L++; return L; }
+  function allowed(q, stn){ if((q.ban || []).indexOf(stn) >= 0) return false; if(q.home === '순환') return true; return q.home === stn || (q.pref || []).indexOf(stn) >= 0; }
+  function relabel(C, cells, stn, d){
+    var ws = C.acts.filter(function(q){ var v = cells[q.name][d]; return isW(v) && v !== '순환' && base(v) === stn; });
+    if(need(C, stn, d) < 2 || ws.length < 2){ ws.forEach(function(q){ cells[q.name][d] = stn; }); return; }
+    var op = ws.filter(function(q){ return q.role === '오픈'; })[0] || ws[0], cl = ws.filter(function(q){ return q !== op && q.role === '마감'; })[0] || ws.filter(function(q){ return q !== op; })[0];
+    ws.forEach(function(q){ cells[q.name][d] = q === op ? stn + '(OP)' : q === cl ? stn + '(CL)' : stn; });
+  }
+  function surplusCells(C, cells, days){
+    var out = [];
+    for(var d = 0; d < C.nD; d++){
+      if(C.hol[d] || (days && days.indexOf(d + 1) < 0)) continue;
+      S.stores.forEach(function(st){ var c = cnt(C, cells, st.n, d), n = need(C, st.n, d); if(c > n){ C.acts.forEach(function(q){ var v = cells[q.name][d]; if(isW(v) && v !== '순환' && base(v) === st.n && !C.lockWork[q.name + '|' + d]) out.push({ n: q.name, d: d, st: st.n }); }); } });
+    }
+    return out;
+  }
+  function clone(c){ var o = {}; Object.keys(c).forEach(function(k){ o[k] = c[k].slice(); }); return o; }
+
+  var ALG = {
+    // 중복 근무 칸을 휴무로 — 사람마다 골고루(maxPer까지), 공백은 절대 안 생김
+    dupToOff: function(sc, a){
+      var C = ctx(sc), cells = clone(sc.cells), maxPer = Math.max(1, Math.min(5, +a.maxPer || 1)), days = (a.days && a.days.length) ? a.days.map(Number) : null, given = {}, notes = [];
+      for(var round = 0; round < maxPer; round++){
+        var progress = true;
+        while(progress){
+          progress = false;
+          var cand = surplusCells(C, cells, days).filter(function(x){ return (given[x.n] || 0) <= round && cnt(C, cells, x.st, x.d) > need(C, x.st, x.d); });
+          if(!cand.length) break;
+          cand.sort(function(p, q){ return (given[p.n] || 0) - (given[q.n] || 0) || (offRun(C, cells, p.n, p.d) - offRun(C, cells, q.n, q.d)) || (runAt(C, cells, q.n, q.d) - runAt(C, cells, p.n, p.d)); });
+          var x = cand[0]; if((given[x.n] || 0) > round) break;
+          cells[x.n][x.d] = ''; relabel(C, cells, x.st, x.d); given[x.n] = (given[x.n] || 0) + 1; progress = true;
+        }
+      }
+      var tot = Object.keys(given).reduce(function(s, k){ return s + given[k]; }, 0);
+      notes.push('중복 근무 칸 ' + tot + '개를 휴무로 바꿨어요 — ' + Object.keys(given).length + '명에게 ' + (maxPer > 1 ? '최대 ' + maxPer + '일씩 ' : '1일씩 ') + '골고루.');
+      notes.push('바꾼 날은 모두 같은 매장에 필요 인원 이상이 남아 있어 공백이 생기지 않아요. 휴무 요청·근무 지정 칸은 건드리지 않았어요.');
+      return { cells: cells, notes: notes, extraOff: true, title: '중복 근무 → 추가 휴무 ' + tot + '일' };
+    },
+    // 공백 메우기 — ① 같은 날 남는 자리 사람 이동 ② 쉬는 사람 투입 + 그 사람 휴무는 다른 남는 날로
+    fillGap: function(sc, a){
+      var C = ctx(sc), cells = clone(sc.cells), days = (a.days && a.days.length) ? a.days.map(Number) : null, notes = [], fixed = 0, left = [];
+      for(var d = 0; d < C.nD; d++){
+        if(C.hol[d] || (days && days.indexOf(d + 1) < 0)) continue;
+        S.stores.forEach(function(st){
+          var guard = 0;
+          while(cnt(C, cells, st.n, d) < need(C, st.n, d) && guard++ < 4){
+            var mv = C.acts.filter(function(q){ var v = cells[q.name][d]; if(!isW(v) || !allowed(q, st.n) || C.lockWork[q.name + '|' + d]) return false; if(v === '순환') return true; var b = base(v); return b !== st.n && cnt(C, cells, b, d) > need(C, b, d); })[0];
+            if(mv){ var from = base(cells[mv.name][d]); cells[mv.name][d] = st.n; relabel(C, cells, st.n, d); if(from !== '순환') relabel(C, cells, from, d); notes.push((d + 1) + '일 ' + st.n + ': ' + mv.name + ' ' + from + ' → ' + st.n + ' 이동'); fixed++; continue; }
+            var ok = false;
+            C.acts.filter(function(q){ return cells[q.name][d] === '' && !C.lockOff[q.name + '|' + d] && allowed(q, st.n); }).some(function(q){
+              cells[q.name][d] = st.n; if(runAt(C, cells, q.name, d) > 5){ cells[q.name][d] = ''; return false; }
+              var back = surplusCells(C, cells).filter(function(x){ return x.n === q.name && x.d !== d; }).sort(function(p, r){ return runAt(C, cells, q.name, r.d) - runAt(C, cells, q.name, p.d); })[0];
+              if(!back){ cells[q.name][d] = ''; return false; }
+              cells[q.name][back.d] = ''; relabel(C, cells, back.st, back.d); relabel(C, cells, st.n, d);
+              notes.push((d + 1) + '일 ' + st.n + ': 쉬던 ' + q.name + ' 투입, 대신 ' + (back.d + 1) + '일(' + back.st + ' 중복) 휴무'); fixed++; ok = true; return true;
+            });
+            if(!ok){ left.push((d + 1) + '일 ' + st.n); break; }
+          }
+        });
+      }
+      if(!fixed && !left.length) notes.push('지금 표에는 메울 공백이 없어요.');
+      if(left.length) notes.push('못 메운 곳: ' + left.join(', ') + ' — 그날 갈 수 있는 사람이 없어요.');
+      notes.push('휴무 일수는 그대로예요(투입한 사람은 다른 날로 휴무를 옮김).');
+      return { cells: cells, notes: notes, title: '공백 메우기 ' + fixed + '곳' };
+    },
+    // 휴무 날짜 옮기기 — from일 휴무를 to일로
+    swapOff: function(sc, a){
+      var C = ctx(sc), cells = clone(sc.cells), e = S.emps.filter(function(x){ return x.name === a.emp; })[0], f = +a.from - 1, t = +a.to - 1, notes = [];
+      if(!e || !cells[e.name]) return { error: '직원을 찾지 못했어요.' };
+      if(cells[e.name][f] !== '') return { error: e.name + ' ' + (f + 1) + '일은 휴무가 아니에요.' };
+      if(!isW(cells[e.name][t])) return { error: e.name + ' ' + (t + 1) + '일은 이미 휴무·휴가예요.' };
+      if(C.lockOff[e.name + '|' + f]) notes.push((f + 1) + '일은 ' + e.name + '의 휴무 요청일이라 요청도 함께 바뀌어요.');
+      var vT = base(cells[e.name][t]);
+      // to일에 빠져도 되나? 아니면 쉬던 사람이 대신
+      if(vT !== '순환' && cnt(C, cells, vT, t) - 1 < need(C, vT, t)){
+        var sub = C.acts.filter(function(q){ return q !== e && cells[q.name][t] === '' && !C.lockOff[q.name + '|' + t] && allowed(q, vT); })
+          .map(function(q){ var back = surplusCells(C, cells).filter(function(x){ return x.n === q.name && x.d !== t; })[0]; return { q: q, back: back }; }).filter(function(o){ return o.back; })[0];
+        if(!sub) return { error: (t + 1) + '일 ' + vT + '에 ' + e.name + ' 대신 설 사람이 없어 옮길 수 없어요.' };
+        cells[sub.q.name][t] = vT; cells[sub.q.name][sub.back.d] = ''; relabel(C, cells, sub.back.st, sub.back.d);
+        notes.push((t + 1) + '일 ' + vT + '은 쉬던 ' + sub.q.name + '이(가) 대신 서고, ' + sub.q.name + '은 ' + (sub.back.d + 1) + '일(중복)에 쉬어요.');
+      }
+      cells[e.name][t] = ''; relabel(C, cells, vT, t);
+      // from일엔 일하기 — 소속 매장 또는 가장 부족한/허용 매장
+      var stores = S.stores.map(function(s){ return s.n; }).filter(function(s){ return allowed(e, s) && need(C, s, f) > 0; }).sort(function(p, q){ return (cnt(C, cells, p, f) - need(C, p, f)) - (cnt(C, cells, q, f) - need(C, q, f)); });
+      var to = (e.home && e.home !== '순환' && stores.indexOf(e.home) >= 0) ? e.home : (stores[0] || '순환');
+      cells[e.name][f] = to; if(to !== '순환') relabel(C, cells, to, f);
+      if(runAt(C, cells, e.name, f) > 5) notes.push('⚠ ' + (f + 1) + '일 근무로 ' + e.name + ' 연속근무가 ' + runAt(C, cells, e.name, f) + '일이 돼요.');
+      notes.unshift(e.name + ' 휴무를 ' + (f + 1) + '일 → ' + (t + 1) + '일로 옮겼어요. ' + (f + 1) + '일엔 ' + to + ' 근무.');
+      return { cells: cells, notes: notes, title: e.name + ' 휴무 ' + (f + 1) + '일 → ' + (t + 1) + '일' };
+    },
+    // 특정 날 휴무 주기(추가 휴무) — 그날 그 사람이 빠져도 공백이 없을 때만
+    giveOff: function(sc, a){
+      var C = ctx(sc), cells = clone(sc.cells), e = S.emps.filter(function(x){ return x.name === a.emp; })[0], notes = [], got = [], no = [];
+      if(!e || !cells[e.name]) return { error: '직원을 찾지 못했어요.' };
+      (a.days || []).map(Number).forEach(function(dd){ var d = dd - 1, v = cells[e.name][d]; if(!isW(v)){ no.push(dd + '일(이미 휴무)'); return; }
+        var b = base(v); if(v !== '순환' && cnt(C, cells, b, d) - 1 < need(C, b, d)){ no.push(dd + '일(' + b + ' 공백 생김)'); return; }
+        cells[e.name][d] = ''; if(v !== '순환') relabel(C, cells, b, d); got.push(dd + '일'); });
+      if(got.length) notes.push(e.name + ' ' + got.join(', ') + ' 휴무 추가(그날 ' + '같은 매장에 사람이 남아 공백 없음).');
+      if(no.length) notes.push('못 준 날: ' + no.join(', '));
+      return { cells: cells, notes: notes, extraOff: true, title: e.name + ' 휴무 추가 ' + got.length + '일' };
+    }
+  };
+
+  function kpi(sc, cells){
+    var C = ctx(sc), gap = 0, dup = 0, mx = 0, n6 = 0, offs = 0;
+    C.acts.forEach(function(e){ var a = cells[e.name], r = C.tail[e.name] || 0, m = r; a.forEach(function(v){ if(v === '') offs++; if(isW(v)){ r++; if(r > m) m = r; } else r = 0; }); if(m > mx) mx = m; if(m > 5) n6++; });
+    for(var d = 0; d < C.nD; d++) S.stores.forEach(function(st){ var c = cnt(C, cells, st.n, d), n = need(C, st.n, d); if(c < n) gap += n - c; if(c > n) dup += c - n; });
+    return { gap: gap, dup: dup, mx: mx, n6: n6, offs: offs };
+  }
+  function md(sc, d){ return sc.month + '/' + (d + 1) + '(' + DOW[new Date(sc.year, sc.month - 1, d + 1).getDay()] + ')'; }
+  function val(v){ return v === '' ? '휴무' : v; }
+  window.wvAltRun = function(action, say){
+    if(typeof sched === 'undefined' || !sched || !sched.cells){ say('bot', '먼저 스케줄을 생성해 주세요.'); return; }
+    var fn = ALG[action.type]; if(!fn){ say('bot', '이 작업은 아직 지원하지 않아요.'); return; }
+    var sc = sched, res = fn(sc, action);
+    if(res.error){ say('bot', '<div class="ans-h">못 바꿨어요</div>' + esc(res.error)); return; }
+    var diffs = []; Object.keys(res.cells).forEach(function(n){ for(var d = 0; d < sc.nDays; d++) if(res.cells[n][d] !== sc.cells[n][d]) diffs.push({ n: n, d: d, o: sc.cells[n][d], v: res.cells[n][d] }); });
+    if(!diffs.length){ say('bot', '<div class="ans-h">바꿀 칸이 없어요</div>' + res.notes.map(esc).join('<br>')); return; }
+    var k0 = kpi(sc, sc.cells), k1 = kpi(sc, res.cells);
+    var cell = function(a, b, good){ return '<b>' + a + '</b><span class="ar">→</span><b class="' + (a === b ? '' : (good ? 'up' : 'dn')) + '">' + b + '</b>'; };
+    var h = '<div class="ans-h">' + esc(res.title) + ' · 바뀐 칸 ' + diffs.length + '개</div>';
+    h += '<div class="wvCmpK"><div><small>매장 공백</small>' + cell(k0.gap + '건', k1.gap + '건', k1.gap <= k0.gap) + '</div>' +
+         '<div><small>중복 근무</small>' + cell(k0.dup + '칸', k1.dup + '칸', k1.dup <= k0.dup) + '</div>' +
+         '<div><small>전체 휴무</small>' + cell(k0.offs + '일', k1.offs + '일', true) + '</div>' +
+         '<div><small>최대 연속</small>' + cell(k0.mx + '일', k1.mx + '일', k1.mx <= k0.mx) + '</div></div>';
+    h += '<table class="wvCmpT"><thead><tr><th>직원</th><th>날짜</th><th>기존</th><th>변경</th></tr></thead><tbody>' +
+      diffs.sort(function(p, q){ return p.n.localeCompare(q.n) || p.d - q.d; }).map(function(x){ return '<tr><td class="who">' + esc(x.n) + '</td><td>' + md(sc, x.d) + '</td><td class="o">' + esc(val(x.o)) + '</td><td class="n">' + esc(val(x.v)) + '</td></tr>'; }).join('') + '</tbody></table>';
+    h += '<ul class="ans">' + res.notes.map(function(n){ return '<li>' + esc(n) + '</li>'; }).join('') + '</ul>';
+    if(k1.gap > k0.gap) h += '<div style="color:#b3243f;font-weight:700;margin-top:6px">⚠ 공백이 늘어요 — 적용 전 확인하세요</div>';
+    h += '<div class="wvAdvBtns"><button class="btn" data-a="apply">이 버전 적용</button><button class="btn gray" data-a="cancel">취소</button></div><div class="meta">적용해도 [↩ 되돌리기]로 원래대로 돌릴 수 있어요</div>';
+    var box = say('bot', h);
+    box.querySelector('[data-a=apply]').onclick = function(){
+      if(sched !== sc){ wvToast('표가 그사이 바뀌었어요. 다시 요청해 주세요.', 'warn'); return; }
+      cellHist.push(JSON.stringify(sched.cells)); if(cellHist.length > 50) cellHist.shift();
+      if(res.extraOff){ var mk = sc.year + '-' + String(sc.month).padStart(2, '0'); if(!S.extraLog) S.extraLog = {}; if(!S.extraLog[mk]) S.extraLog[mk] = [];
+        diffs.forEach(function(x){ if(x.v === '' && x.o !== '') S.extraLog[mk].push({ name: x.n, day: x.d, val: x.o, ai: true }); }); save(); }
+      Object.keys(res.cells).forEach(function(k){ sched.cells[k] = res.cells[k]; });
+      renderSched(typeof lastWarns !== 'undefined' ? lastWarns : undefined); if(typeof updateUndoBtn === 'function') updateUndoBtn();
+      var t = document.getElementById('schedTable'); if(t) diffs.forEach(function(x){ var tr = t.querySelector('tr[data-n="' + x.n + '"]'); if(tr && tr.children[x.d + 2]) tr.children[x.d + 2].classList.add('wvChg'); });
+      this.parentNode.innerHTML = '✓ 적용했어요 — 바뀐 칸은 보라색 테두리'; wvToast(res.title + ' 적용 (되돌리기 가능)', 'ok');
+    };
+    box.querySelector('[data-a=cancel]').onclick = function(){ this.parentNode.innerHTML = '취소했어요 — 표는 그대로예요'; };
+  };
+  window.wvAltLabel = function(a){
+    if(a.type === 'dupToOff') return '중복 근무를 휴무로 골고루 바꾼 대안 만들기';
+    if(a.type === 'fillGap') return '공백 메운 대안 만들기';
+    if(a.type === 'swapOff') return a.emp + ' 휴무 ' + a.from + '일 → ' + a.to + '일 대안 만들기';
+    if(a.type === 'giveOff') return a.emp + ' ' + (a.days || []).join('·') + '일 휴무 대안 만들기';
+    return '대안 만들기';
+  };
+
+  function boot(){
+    mountTools();
+    ['extraBox','absenceCard','rebuildCard'].forEach(function(id){ var el = document.getElementById(id); if(el && !el.dataset.wvObs){ el.dataset.wvObs = '1'; new MutationObserver(function(){ showTools(); }).observe(el, { childList: true, attributes: true, attributeFilter: ['style'] }); } });
+  }
+  setTimeout(boot, 400); setTimeout(boot, 1600); setTimeout(boot, 3600);
+  if(typeof renderSched === 'function'){ var _rs = renderSched; renderSched = function(){ var r = _rs.apply(this, arguments); try{ setTimeout(boot, 0); }catch(e){} return r; }; }
 })();
 
 </script>
