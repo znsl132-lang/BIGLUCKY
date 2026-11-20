@@ -4512,7 +4512,7 @@ wvChkInit();
 })();
 </script>
 <script>
-/* ===== 생성기 확장(2026-11-20 운영 반영) 추가 기능 (schedule-test.html 전용 · 2026-11-18) =====
+/* ===== 생성기 확장 추가 기능 (schedule-test.html 전용 · 2026-11-18) =====
    ① 카톡 붙여넣기 → "이름 월/일 월/일" 자동 기입 → 특이사항 추가
    ② AI 요청사항 (지금은 규칙 해석 · Claude API 연결 전) — "6일 연속 근무 발생하지 않게" → 연속근무 상한
    ③ 연속근무 상한 후처리 wvMaxRun — 생성 각 안의 휴무 맞춤 단계 뒤에 실행 */
@@ -4781,7 +4781,7 @@ wvChkInit();
     wvCapOffs = function(sc){
       var n = _cap.apply(this, arguments);
       try{
-        var r = rules().filter(function(x){ return x.type === 'maxRun'; })[0];
+        var r = rules().filter(function(x){ return x.type === 'maxRun'; })[0] || (window.WV_AUTO_MAXRUN === 0 ? null : { max: window.WV_AUTO_MAXRUN || 5 });   // 2026-11-20: 연속근무 5일 정리는 항상 자동
         if(r && sc && sc.cells){ var res = wvMaxRun(sc, r.max); window.__wvMaxRunLast = res; n += res.moves; setTimeout(renderRules, 0); }
       }catch(e){ console.warn('연속근무 상한 건너뜀:', e); }
       return n;
@@ -4824,7 +4824,7 @@ wvChkInit();
 
 </script>
 <script>
-/* ===== 생성기 확장(2026-11-20 운영 반영) 화면 개편 (시안 적용 · 2026-11-18) =====
+/* ===== 생성기 확장 화면 개편 (시안 적용 · 2026-11-18) =====
    기능·알고리즘은 그대로, 겉모습과 알림 방식만 바꾼다.
    039 알약 탭 · 070 쌓이는 알림 · 083 생성 진행 막대 · 028/029 입력·칩 · 공통 색/카드/버튼 */
 (function(){
@@ -5013,7 +5013,7 @@ th,td{border-color:var(--ln)!important}
 
 </script>
 <script>
-/* ===== 생성기 확장(2026-11-20 운영 반영) 화면 정리 ② — 매장 목록 · 근무 수급 미리보기 (2026-11-18) =====
+/* ===== 생성기 확장 화면 정리 ② — 매장 목록 · 근무 수급 미리보기 (2026-11-18) =====
    계산·저장 방식은 원본과 동일, 그리는 모양만 바꾼다. */
 (function(){
   var css = document.createElement('style');
@@ -5137,7 +5137,7 @@ th,td{border-color:var(--ln)!important}
 
 </script>
 <script>
-/* ===== 생성기 확장(2026-11-20 운영 반영) ③ 생성 탭 — AI 조언 · 대안 만들기 (2026-11-18) =====
+/* ===== 생성기 확장 ③ 생성 탭 — AI 조언 · 대안 만들기 (2026-11-18) =====
    "장현진 연속근무 8일 해소한 버전으로 나머지 다 안 건들고 생성해줘"
    → 지금 표를 복사해 그 사람 연속근무만 최소 칸으로 풀고 → 기존과 비교표 + 달라진 점 해석 → [적용] 시 표 반영(되돌리기 가능)
    ※ Claude API 연결 전: 연속근무 해소 요청만 처리 */
@@ -5310,7 +5310,7 @@ th,td{border-color:var(--ln)!important}
 
 </script>
 <script>
-/* ===== 생성기 확장(2026-11-20 운영 반영) — Claude API 연결 (스케줄 AI 다리 · 2026-11-20) =====
+/* ===== 생성기 확장 — Claude API 연결 (스케줄 AI 다리 · 2026-11-20) =====
    다리: 별도 앱스크립트 프로젝트 "위베이프 스케줄 AI 다리" (00-수집함/schedule-ai-bridge/Code.gs)
    ② AI 요청사항: 규칙으로 못 읽은 문장 → rule 모드 → 동작 미리보기 → [적용]
    ② 카톡: 날짜를 못 읽은 줄 → dates 모드 → 자동 기입칸에 합침
@@ -5574,7 +5574,7 @@ window.WV_AI_URL = window.WV_AI_URL || 'https://script.google.com/macros/s/AKfyc
 
 </script>
 <script>
-/* ===== 생성기 확장(2026-11-20 운영 반영) 화면 정리 ③ (2026-11-20) =====
+/* ===== 생성기 확장 화면 정리 ③ (2026-11-20) =====
    1) AI 답변 가독성   2) ② 기존 기능 → 옆 탭(040 사이드 레일)   3) ① 매장 설정 접이식(044) + 인원 직접 입력
    4) ① 직원 목록 B안 (027 검색 · 047 세그먼트 · 018 스테퍼 · 071 되돌리기 · 3단 매장 칩)
    저장 방식(S.emps / S.stores / save())은 원본과 동일 */
@@ -5598,7 +5598,7 @@ window.WV_AI_URL = window.WV_AI_URL || 'https://script.google.com/macros/s/AKfyc
 .wvT-log{max-height:520px!important}
 /* ---- ③ AI 조언을 스케줄 표 바로 옆에 (시선 이동 짧게) ---- */
 #wvSchedRow{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:14px;align-items:start}
-#wvSchedRow.fold{grid-template-columns:minmax(0,1fr) 48px}
+#wvSchedRow.fold{grid-template-columns:minmax(0,1fr) 56px}
 #wvSchedRow>.left{min-width:0}
 #wvSchedRow>.right{position:sticky;top:96px}
 #wvSchedRow #wvAdv{margin:0!important;max-height:calc(100vh - 120px);display:flex;flex-direction:column;padding:14px 14px 12px!important}
@@ -5609,11 +5609,11 @@ window.WV_AI_URL = window.WV_AI_URL || 'https://script.google.com/macros/s/AKfyc
 #wvSchedRow #wvAdv h3{white-space:nowrap}
 #wvSchedRow #wvAdvIn{font-size:12.5px}
 #wvAdvFold{margin-left:auto;border:0;background:var(--s3);width:28px;height:28px;border-radius:9px;cursor:pointer;font-weight:900;color:var(--ink2);flex:none}
-#wvSchedRow.fold #wvAdv>*:not(h3){display:none}
-#wvSchedRow.fold #wvAdv{padding:10px 6px!important;align-items:center}
-#wvSchedRow.fold #wvAdv h3{writing-mode:vertical-rl;font-size:13px!important;cursor:pointer}
-#wvSchedRow.fold #wvAdv h3 .hint{display:none}
-#wvSchedRow.fold #wvAdvFold{transform:rotate(180deg)}
+
+
+
+
+
 #wvSchedRow .wvCmpK{grid-template-columns:1fr 1fr}
 #wvSchedRow .wvCmpT{font-size:12px}
 @media (max-width:1100px){#wvSchedRow{grid-template-columns:1fr}#wvSchedRow>.right{position:static}#wvSchedRow #wvAdv{max-height:none}}
@@ -5983,6 +5983,199 @@ mark.wvHl{background:var(--goldS);color:inherit;border-radius:3px;padding:0 1px}
     document.querySelectorAll('.tabs button').forEach(function(b){ b.addEventListener('click', function(){ setTimeout(function(){ showSide(false); document.querySelectorAll('#wvEbody .wvSeg').forEach(function(sg){ segPlace(sg, false); }); }, 60); }); });
   }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function(){ setTimeout(boot, 50); }); else setTimeout(boot, 50);
+})();
+
+</script>
+<script>
+/* ===== 생성기 확장 ④ (2026-11-20) =====
+   1) 생성 중 확인창 없애기 — 연속근무·설정 점검 확인창은 멈추지 않고 결과 요약에 경고로
+   2) 생성 후 남은 6일+ 연속근무: 이유 + [AI에게 묻기]
+   3) AI 조언 패널 다시 그리기(빈 화면·접힘 모양)
+   4) 새 기능마다 ? 도움말 */
+(function(){
+  var css = document.createElement('style');
+  css.textContent = `
+/* ---- 결과 요약 경고 ---- */
+#wvWarnBox{margin-top:12px;border:1px solid rgba(214,115,30,.35);background:rgba(214,115,30,.07);border-radius:14px;padding:10px 12px;font-size:13px}
+#wvWarnBox .t{font-weight:800;color:#9a4f0f;display:flex;align-items:center;gap:6px;margin-bottom:6px}
+#wvWarnBox .it{display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px dashed rgba(214,115,30,.25)}
+#wvWarnBox .it:first-of-type{border-top:0}
+#wvWarnBox .it b{white-space:nowrap}
+#wvWarnBox .it .why{color:var(--ink2);flex:1}
+#wvWarnBox .it button{border:0;background:var(--brand);color:#fff;border-radius:9px;padding:5px 10px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap}
+#wvWarnBox.ok{border-color:rgba(17,156,114,.3);background:rgba(17,156,114,.07)}
+#wvWarnBox.ok .t{color:#0b6e50;margin:0}
+/* ---- AI 조언 패널 ---- */
+#wvAdv{border-radius:20px!important}
+#wvAdv h3{position:relative}
+#wvAdv h3 .ai-ic{width:26px;height:26px;border-radius:9px;background:var(--brand);color:var(--gold);display:grid;place-items:center;font-size:13px;flex:none}
+#wvAdvFold{width:30px!important;height:30px!important;border-radius:10px!important;display:grid;place-items:center;font-size:0!important}
+#wvAdvFold svg{width:14px;height:14px}
+#wvAdv .log:empty{display:none}
+#wvAdvEmpty{border:1.5px dashed var(--ln2);border-radius:14px;padding:12px;margin:6px 0 10px;color:var(--ink3);font-size:12.5px;line-height:1.6}
+#wvAdvEmpty b{color:var(--ink2)}
+#wvAdv .sug{gap:6px!important}
+#wvAdv .sug button{font-size:12px!important;padding:5px 10px!important}
+#wvAdv .row{position:relative;display:block!important}
+#wvAdvIn{width:100%;min-height:44px!important;max-height:120px;border-radius:14px!important;padding:11px 48px 11px 13px!important;resize:none!important;font-size:13px!important;line-height:1.5}
+#wvAdvGo{position:absolute!important;right:6px;bottom:6px;width:34px!important;height:34px!important;min-height:0!important;padding:0!important;border-radius:11px!important;font-size:0!important;display:grid;place-items:center}
+#wvAdvGo svg{width:16px;height:16px}
+/* 접힘: 얇은 세로 버튼 */
+#wvSchedRow.fold #wvAdv{background:var(--brand)!important;border-color:var(--brand)!important;padding:12px 0!important;align-items:center;gap:10px;cursor:pointer;min-height:150px;box-shadow:0 10px 26px rgba(20,21,31,.25)}
+#wvSchedRow.fold #wvAdv>*:not(h3){display:none!important}
+#wvSchedRow.fold #wvAdv h3{flex-direction:column;gap:10px!important;margin:0!important;color:#fff;font-size:12px!important}
+#wvSchedRow.fold #wvAdv h3 .ttl,#wvSchedRow.fold #wvAdv h3 .wvHelp,#wvSchedRow.fold #wvAdv h3 .hint{display:none!important}
+#wvSchedRow.fold #wvAdv h3::after{content:"AI";font-weight:900;letter-spacing:.06em;color:var(--gold)}
+#wvSchedRow.fold #wvAdvFold{margin:0!important;background:rgba(255,255,255,.12)!important;color:#fff!important;transform:rotate(180deg)}
+/* ---- ? 도움말 ---- */
+.wvHelp{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--ln2);background:#fff;color:var(--ink3);font-size:11px;font-weight:900;cursor:pointer;display:inline-grid;place-items:center;flex:none;padding:0;line-height:1;vertical-align:middle;transition:all .2s}
+.wvHelp:hover,.wvHelp.on{border-color:var(--ink);color:var(--ink);background:var(--goldS)}
+#wvHelpPop{position:fixed;z-index:100003;max-width:320px;background:var(--brand);color:#fff;border-radius:14px;padding:12px 14px;font-size:12.5px;line-height:1.65;box-shadow:0 14px 34px rgba(0,0,0,.3);animation:wvHp .25s cubic-bezier(.34,1.45,.64,1)}
+#wvHelpPop b{color:var(--gold)}
+#wvHelpPop .h{font-weight:900;font-size:13.5px;margin-bottom:4px}
+#wvHelpPop ul{margin:4px 0 0;padding-left:16px}
+#wvHelpPop li{margin:2px 0}
+#wvHelpPop code{background:rgba(255,255,255,.12);padding:0 5px;border-radius:5px;font-family:inherit}
+@keyframes wvHp{from{opacity:0;transform:translateY(6px) scale(.96)}to{opacity:1;transform:none}}
+`;
+  document.head.appendChild(css);
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+
+  /* ================= 1) 확인창 → 경고 모으기 ================= */
+  var collected = [];
+  var nativeConfirm = window.confirm;
+  window.confirm = function(msg){
+    var m = String(msg || '');
+    if(m.indexOf('다른 방법이 없어 5일 초과 연속 근무') === 0){ collected.push({ kind: 'run', text: m }); return true; }
+    if(m.indexOf('설정에 문제가 있습니다') === 0){ m.split('\n').filter(function(l){ return /^·/.test(l.trim()); }).forEach(function(l){ collected.push({ kind: 'cfg', text: l.replace(/^·\s*/, '').trim() }); }); return true; }
+    return nativeConfirm.apply(window, arguments);
+  };
+
+  /* ================= 2) 생성 후 남은 연속근무 + 이유 ================= */
+  var ABS = ['휴가','병가','훈련','출장','전휴무','제외'];
+  var isW = function(v){ return !!v && ABS.indexOf(v) < 0; };
+  var base = function(v){ return String(v || '').replace(/\((OP|CL|PT)\)$/, ''); };
+  function longRuns(){
+    if(typeof sched === 'undefined' || !sched || !sched.cells) return [];
+    var sc = sched, pd = new Date(sc.year, sc.month - 2, 1), pk = pd.getFullYear() + '-' + String(pd.getMonth() + 1).padStart(2, '0'), out = [];
+    var MAX = 5;
+    S.emps.forEach(function(e){
+      var a = sc.cells[e.name]; if(!a || e.role === '교육') return;
+      var p = (S.lastSched && S.lastSched[pk] && S.lastSched[pk][e.name]) || [], t = 0; for(var k = p.length - 1; k >= 0 && isW(p[k]); k--) t++;
+      var run = t, st = t ? 1 - t : 1, best = null;
+      for(var d = 0; d <= sc.nDays; d++){
+        if(d < sc.nDays && isW(a[d])){ if(run === 0) st = d + 1; run++; }
+        else { if(run > MAX && d >= 1 && (!best || run > best.len)) best = { len: run, s: st, e: d }; run = 0; }
+      }
+      if(best) out.push({ name: e.name, len: best.len, s: best.s, e: best.e, emp: e });
+    });
+    return out;
+  }
+  function allowedAt(q, stn){ if((q.ban || []).indexOf(stn) >= 0) return false; if(q.home === '순환') return true; return q.home === stn || (q.pref || []).indexOf(stn) >= 0; }
+  function whyOf(r){
+    var sc = sched, a = sc.cells[r.name], stores = {};
+    for(var d = Math.max(1, r.s); d <= r.e; d++){ var v = a[d - 1]; if(isW(v) && v !== '순환') stores[base(v)] = (stores[base(v)] || 0) + 1; }
+    var main = Object.keys(stores).sort(function(x, y){ return stores[y] - stores[x]; })[0];
+    var why = [];
+    if(r.s < 1) why.push(sc.month - 1 + '월 말부터 이어짐');
+    if(main){ var subs = S.emps.filter(function(q){ return q.name !== r.name && q.role !== '교육' && allowedAt(q, main); }).map(function(q){ return q.name; });
+      if(subs.length <= 3) why.push(main + ' 대신 설 수 있는 사람 ' + (subs.length ? subs.join('·') + '뿐' : '없음')); }
+    return why.join(' · ') || '그 기간 대신 설 사람이 휴무 요청 등으로 비어 있음';
+  }
+  function showWarns(){
+    var prog = document.getElementById('wvProg'); if(!prog) return;
+    var box = document.getElementById('wvWarnBox'); if(box) box.remove();
+    var runs = longRuns(), cfg = collected.filter(function(c){ return c.kind === 'cfg'; });
+    if(typeof __wvD !== 'undefined') __wvD = -1;
+    box = document.createElement('div'); box.id = 'wvWarnBox';
+    if(!runs.length && !cfg.length){ box.className = 'ok'; box.innerHTML = '<div class="t">✓ 연속근무 5일 이하 · 확인할 경고 없음</div>'; prog.appendChild(box); return; }
+    var h = '<div class="t">⚠ 자동으로 못 푼 항목 ' + (runs.length + cfg.length) + '건 <span style="font-weight:600;color:var(--ink3)">— 스케줄은 완성됐고, 아래만 확인하세요</span></div>';
+    runs.forEach(function(r, i){
+      var sp = (r.s < 1 ? '전월 말' : sched.month + '/' + r.s) + '~' + sched.month + '/' + r.e;
+      h += '<div class="it"><b>' + esc(r.name) + ' ' + r.len + '일 연속</b><span class="why">' + sp + ' · ' + esc(whyOf(r)) + '</span><button type="button" data-ask="' + i + '">AI에게 묻기</button></div>';
+    });
+    cfg.forEach(function(c){ h += '<div class="it"><b>설정 점검</b><span class="why">' + esc(c.text) + '</span></div>'; });
+    box.innerHTML = h; prog.appendChild(box);
+    box.querySelectorAll('[data-ask]').forEach(function(b){ b.onclick = function(){
+      var r = runs[+b.dataset.ask], inp = document.getElementById('wvAdvIn'), go = document.getElementById('wvAdvGo'); if(!inp || !go) return;
+      var row = document.getElementById('wvSchedRow'); if(row) row.classList.remove('fold');
+      inp.value = r.name + '이(가) ' + r.len + '일 내리 일하는데 자동 정리로 못 풀었어. 어떻게 하면 쉬게 할 수 있는지 조언해줘'; go.click();
+      document.getElementById('wvAdv').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }; });
+  }
+  if(typeof generate === 'function'){
+    var _g = generate;
+    generate = function(){
+      collected = [];
+      var s0 = (typeof sched !== 'undefined') ? sched : null, r = _g.apply(this, arguments), t0 = Date.now();
+      (function wait(){ var ch = (typeof sched !== 'undefined') && sched && sched !== s0; if(!ch && Date.now() - t0 < 30000){ setTimeout(wait, 250); return; } if(ch) setTimeout(showWarns, 900); })();
+      return r;
+    };
+  }
+
+  /* ================= 3) AI 조언 패널 ================= */
+  function polishAdv(){
+    var adv = document.getElementById('wvAdv'); if(!adv || adv.dataset.pol) return !!adv;
+    adv.dataset.pol = '1';
+    var h3 = adv.querySelector('h3');
+    var txt = [].filter.call(h3.childNodes, function(n){ return n.nodeType === 3; });
+    txt.forEach(function(n){ n.remove(); });
+    h3.insertAdjacentHTML('afterbegin', '<span class="ai-ic">✦</span><span class="ttl">AI 조언 · 대안</span>');
+    var fb = document.getElementById('wvAdvFold'); if(fb) fb.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg>';
+    var log = document.getElementById('wvAdvLog');
+    var em = document.createElement('div'); em.id = 'wvAdvEmpty';
+    em.innerHTML = '<b>표를 보면서 물어보세요.</b><br>예) "누가 제일 무리하고 있어?", "주말에 못 쉬는 사람 있어?", "장대운 8일 연속 풀어줘"';
+    log.parentNode.insertBefore(em, log);
+    new MutationObserver(function(){ em.style.display = log.children.length ? 'none' : ''; }).observe(log, { childList: true });
+    var go = document.getElementById('wvAdvGo'); if(go){ go.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>'; go.title = '보내기 (Enter)'; }
+    var inp = document.getElementById('wvAdvIn'); if(inp){ inp.placeholder = 'AI에게 물어보기…'; inp.addEventListener('input', function(){ inp.style.height = 'auto'; inp.style.height = Math.min(inp.scrollHeight, 120) + 'px'; }); }
+    adv.addEventListener('click', function(e){ var row = document.getElementById('wvSchedRow'); if(row && row.classList.contains('fold') && !e.target.closest('#wvAdvFold')){ row.classList.remove('fold'); } });
+    return true;
+  }
+
+  /* ================= 4) ? 도움말 ================= */
+  var HELP = [
+    { sel: '.wvAcc > h3', panel: 'panel0', h: '매장 설정', b: '매장마다 <b>하루 최소 몇 명</b>이 서야 하는지 정합니다.<ul><li>숫자를 눌러 직접 입력하거나 <code>−</code> <code>+</code></li><li>2명 이상 = OP·CL로 나눠 배치 · 0 = 쉬는 매장</li><li>특정 날짜만 바꿀 땐 ② 특이사항 → 매장 인원 예외</li></ul>' },
+    { sel: '#wvEmpB', before: true, h: '직원 목록', b: '<ul><li><b>매장 칩</b>을 누를 때마다 보통 → <b>★우선</b> → <b>✕제외</b> (노랑 = 소속, 못 바꿈)</li><li>직책·소속·고용형태는 글자를 눌러 그 자리에서 수정</li><li>역할은 버튼, 월 휴무는 <code>−</code> <code>+</code></li><li>🗑 삭제는 6초 안에 <b>되돌리기</b></li><li>바꾼 뒤 <b>설정 저장</b>을 눌러야 시트에 반영</li></ul>' },
+    { sel: '#capBox', parentH3: true, h: '근무 수급 미리보기', b: '이 달에 <b>필요한 근무일</b>과 <b>배치할 수 있는 근무일</b>을 비교합니다.<ul><li>여유가 +면 추가 휴무를 줄 수 있고, −면 공백이 생깁니다</li><li><b>파트 근무자는 가용에서 뺍니다</b>(보조 인력)</li><li>빨간 선 = 필요선</li></ul>' },
+    { sel: '#wvTKakao > h3', h: '카톡에서 휴무 요청 가져오기', b: '단톡방 대화를 드래그해서 붙여넣으면 바로 <code>이름 월/일</code>로 정리합니다.<ul><li>"위베이프 홍다운 매니저님", "대운" 같은 표시 이름도 알아봄</li><li>"정정", "21 22만" → 마지막 요청 기준</li><li>대화 속 달(예: 11월)을 따라감</li><li>못 읽은 줄은 AI가 해석 · <b>[특이사항에 추가]</b>를 눌러야 들어감</li></ul>' },
+    { sel: '#wvTAI > h3', h: 'AI 요청사항', b: '문장으로 적으면 생성 조건으로 바꿔 <b>[적용]</b> 버튼을 띄웁니다. 누르기 전엔 반영 안 됨.<ul><li>"장대운 24·25일 쉬게"</li><li>"로데오 매주 화요일 1명"</li><li>"장대운 가급적 주말 2일 연속 휴무"</li><li>"장대운 휴무 하루 더"</li><li>"카톡에서 겹치는 날 정리해줘"</li></ul>직원 이름은 가려서 보냅니다.' },
+    { sel: '#wvSideNav .cap', h: '기능 탭', b: '자주 안 쓰는 기능을 모아뒀습니다. 왼쪽에서 고르면 가운데에 그 기능만 뜹니다. 숫자 = 이번 달 등록 건수.' },
+    { sel: '#wvProg .top', h: '생성 결과', b: '생성이 끝나면 <b>매장 공백 · 휴무 일수 · 최대 연속근무 · 휴무 요청 반영</b>을 보여줍니다.<ul><li>연속근무 5일 넘는 칸은 <b>자동으로 정리</b>합니다(휴무 일수·요청은 그대로)</li><li>그래도 못 푼 사람은 아래에 이유와 함께 표시 → <b>AI에게 묻기</b></li></ul>' },
+    { sel: '#wvAdv h3', h: 'AI 조언 · 대안', b: '지금 표를 보고 답합니다.<ul><li>"누가 제일 무리하고 있어?"</li><li>"장현진 8일 연속 풀어줘" → 바뀐 칸 비교 후 <b>[이 버전 적용]</b> (되돌리기 가능)</li><li>› 로 접으면 표가 넓어집니다</li></ul>' }
+  ];
+  var pop = null, popBtn = null;
+  function closePop(){ if(pop){ pop.remove(); pop = null; } if(popBtn){ popBtn.classList.remove('on'); popBtn = null; } }
+  function openPop(btn, it){
+    closePop(); popBtn = btn; btn.classList.add('on');
+    pop = document.createElement('div'); pop.id = 'wvHelpPop'; pop.setAttribute('role', 'dialog');
+    pop.innerHTML = '<div class="h">' + it.h + '</div>' + it.b; document.body.appendChild(pop);
+    var r = btn.getBoundingClientRect(), w = pop.offsetWidth, hh = pop.offsetHeight;
+    var left = Math.min(Math.max(10, r.left + r.width / 2 - w / 2), window.innerWidth - w - 10), top = r.bottom + 8;
+    if(top + hh > window.innerHeight - 10) top = Math.max(10, r.top - hh - 8);
+    pop.style.left = left + 'px'; pop.style.top = top + 'px';
+  }
+  document.addEventListener('click', function(e){ if(pop && !e.target.closest('#wvHelpPop') && !e.target.closest('.wvHelp')) closePop(); }, true);
+  document.addEventListener('keydown', function(e){ if(e.key === 'Escape') closePop(); });
+  window.addEventListener('scroll', closePop, true);
+  function addHelps(){
+    HELP.forEach(function(it){
+      var el = document.querySelector(it.sel); if(!el) return;
+      var host = el;
+      if(it.parentH3){ var c = el.closest('.card'); host = c && c.querySelector(':scope > h3'); }
+      if(it.before){ var c2 = el.closest('.card'); host = c2 && c2.querySelector(':scope > h3'); }
+      if(!host || host.querySelector(':scope > .wvHelp')) return;
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'wvHelp'; b.textContent = '?'; b.setAttribute('aria-label', it.h + ' 사용법');
+      b.addEventListener('click', function(e){ e.stopPropagation(); e.preventDefault(); if(popBtn === b) closePop(); else openPop(b, it); });
+      var ref = host.querySelector(':scope > .chev, :scope > #wvAdvFold, :scope > .sum');
+      if(ref && !ref.classList.contains('sum')) host.insertBefore(b, ref); else host.appendChild(b);
+      b.style.marginLeft = '6px';
+    });
+  }
+
+  function boot(){ polishAdv(); addHelps(); }
+  setTimeout(boot, 300); setTimeout(boot, 1500); setTimeout(boot, 3500);
+  new MutationObserver(function(){ clearTimeout(boot._t); boot._t = setTimeout(boot, 200); }).observe(document.body, { childList: true, subtree: false });
 })();
 
 </script>
