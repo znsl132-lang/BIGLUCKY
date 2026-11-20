@@ -4922,7 +4922,7 @@ details.card>summary{font-weight:800;cursor:pointer}
 select,input[type=text],input[type=number],input[type=month],textarea{border:1.5px solid var(--ln2)!important;border-radius:10px!important;padding:8px 10px!important;font-family:inherit;background:#fff;transition:border-color .2s,box-shadow .2s}
 select:focus,input:focus,textarea:focus{outline:none;border-color:var(--ink)!important;box-shadow:0 0 0 4px var(--goldS)}
 /* 표 */
-table{border-radius:12px;overflow:hidden}
+table{border-radius:12px;overflow:hidden}#schedTable,.wvPv{overflow:visible!important}
 th{background:var(--s2)!important;color:var(--ink2);font-weight:700}
 th,td{border-color:var(--ln)!important}
 #schedTable thead th{background:var(--brand)!important;color:#fff!important}
@@ -6966,7 +6966,7 @@ window.WV_TOOLS_TABS = true;
    GitHub Pages는 페이지를 브라우저에 최대 10분 저장해 두므로, 배포 직후 열면 옛 화면이 뜰 수 있다.
    열 때·탭으로 돌아올 때·10분마다 서버의 빌드 번호와 비교 → 다르면 열자마자(아직 아무것도 안 만졌으면) 자동 새로고침, 작업 중이면 아래 알림 */
 (function(){
-  var B = 'T20261120-183843';/*WVBUILD*/
+  var B = 'T20261120-185224';/*WVBUILD*/
   window.WV_BUILD = B; if(B === 'DEV') return;
   var t0 = Date.now(), touched = false, shown = false;
   ['keydown', 'input', 'pointerdown'].forEach(function(ev){ document.addEventListener(ev, function(){ touched = true; }, { capture: true, once: true }); });
@@ -6988,6 +6988,19 @@ window.WV_TOOLS_TABS = true;
   }
   setTimeout(check, 1500); setInterval(check, 10 * 60 * 1000);
   document.addEventListener('visibilitychange', function(){ if(document.visibilityState === 'visible') check(); });
+})();
+/* ===== 스케줄 표: 옆으로 넘겨도 이름·직책·소속 고정 (2026-11-20)
+   원인: 스킨의 table{overflow:hidden}이 #schedTable의 sticky를 막아 이름 칸이 같이 밀려났음 → test_skin.js에서 #schedTable은 overflow:visible
+   소속 칸도 이름 칸 바로 옆에 고정(이름 칸 실제 폭만큼 띄움), 경계에 그림자 */
+(function(){
+  var st = document.createElement('style');
+  st.textContent = '#schedTable td.homecol,#schedTable th.homecol{position:sticky;left:var(--wvNameW,76px);z-index:3;background:#fff;box-shadow:6px 0 8px -6px rgba(20,16,40,.25)}' +
+    '#schedTable thead th.namecol,#schedTable thead th.homecol{z-index:5;background:#23253a}' +
+    '#schedTable td.namecol{z-index:4}';
+  (document.head || document.documentElement).appendChild(st);
+  function fix(){ var t = document.getElementById('schedTable'); if(!t) return; var n = t.querySelector('tbody td.namecol') || t.querySelector('th.namecol'); if(n) t.style.setProperty('--wvNameW', n.offsetWidth + 'px'); }
+  if(typeof renderSched === 'function'){ var _rs = renderSched; renderSched = function(){ var r = _rs.apply(this, arguments); try{ fix(); }catch(e){} return r; }; window.renderSched = renderSched; }
+  window.addEventListener('resize', fix);
 })();
 
 </script>
