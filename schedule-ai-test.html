@@ -5614,7 +5614,7 @@ window.WV_AI_URL = window.WV_AI_URL || 'https://script.google.com/macros/s/AKfyc
     return (head.length ? '<div class="ans-h">' + esc(head.join(' ')) + '</div>' : '') + (bul.length ? '<ul class="ans">' + bul.map(function(b){ return '<li>' + esc(b) + '</li>'; }).join('') + '</ul>' : '');
   }
   var TIER_NAME = { haiku: 'Haiku', sonnet: 'Sonnet', opus: 'Opus' };
-  window.wvAIEdit = function(q, say, tier, prev){
+  window.wvAIEdit = function(q, say, tier, prev, noFallback){
     if(typeof sched === 'undefined' || !sched || !sched.cells){ say('bot', '먼저 스케줄을 생성해 주세요.'); return; }
     var sc = sched, P = { y: sc.year, m: sc.month, nD: sc.nDays }, mkS = sc.year + '-' + String(sc.month).padStart(2, '0');
     if(histKey !== mkS){ HIST = []; histKey = mkS; }
@@ -5641,7 +5641,7 @@ window.WV_AI_URL = window.WV_AI_URL || 'https://script.google.com/macros/s/AKfyc
         return;
       }
       var res = window.wvApplyEdits(sc, edits);
-      if(res.problems.length && tier === 'sonnet' && !prev){
+      if(res.problems.length && tier === 'sonnet' && !prev && !noFallback){
         say('bot', '<div class="meta">Sonnet 수정안 검사: ' + esc(res.problems.join(' / ')) + '</div>');
         window.wvAIEdit(q, say, 'opus', { edits: edits, problems: res.problems });
         return;
@@ -5652,7 +5652,13 @@ window.WV_AI_URL = window.WV_AI_URL || 'https://script.google.com/macros/s/AKfyc
       window.wvShowAlt(sc, res, say, { head: intent + fmtAns(D.answer || ''), meta: meta, onApply: function(diffs){
         turn.적용 = true; turn.바뀐칸 = diffs.slice(0, 40).map(function(x){ return { 직원: x.n, 일: x.d + 1, 전: x.o === '' ? '휴' : String(x.o).replace(/\((OP|CL|PT)\)$/, ''), 후: x.v === '' ? '휴' : String(x.v).replace(/\((OP|CL|PT)\)$/, '') }; });
       } });
-    }).catch(function(e){ w.innerHTML = '<span style="color:#b3243f">AI 연결 실패: ' + esc(e.message) + '</span>'; });
+    }).catch(function(e){
+      if(tier === 'opus' && !noFallback && !/한도/.test(e.message)){   // Opus가 늦거나 실패하면 Sonnet으로 한 번 더(다리 60초 제한 대비)
+        w.innerHTML = '<span class="meta">Opus 응답 실패(' + esc(e.message) + ') — Sonnet으로 다시 시도해요</span>';
+        window.wvAIEdit(q, say, 'sonnet', null, true); return;
+      }
+      w.innerHTML = '<span style="color:#b3243f">AI 연결 실패: ' + esc(e.message) + '</span>';
+    });
   };
 
   window.wvAIAdvise = function(q, say, localAsk){
