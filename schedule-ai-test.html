@@ -6424,11 +6424,34 @@ window.WV_TOOLS_TABS = true;
       return { cells: cells, notes: notes, title: '공백 메우기 ' + fixed + '곳' };
     },
     // 휴무 날짜 옮기기 — from일 휴무를 to일로
+    // AI가 고른 날이 틀려도(휴무 아닌 날·이미 쉬는 날) 가장 가까운 맞는 날로 바로잡아 시도한다
     swapOff: function(sc, a){
-      var C = ctx(sc), cells = clone(sc.cells), e = S.emps.filter(function(x){ return x.name === a.emp; })[0], f = +a.from - 1, t = +a.to - 1, notes = [];
-      if(!e || !cells[e.name]) return { error: '직원을 찾지 못했어요.' };
-      if(cells[e.name][f] !== '') return { error: e.name + ' ' + (f + 1) + '일은 휴무가 아니에요.' };
-      if(!isW(cells[e.name][t])) return { error: e.name + ' ' + (t + 1) + '일은 이미 휴무·휴가예요.' };
+      var e = S.emps.filter(function(x){ return x.name === a.emp; })[0];
+      if(!e || !sc.cells[e.name]) return { error: '직원을 찾지 못했어요.' };
+      var row = sc.cells[e.name], nD = sc.nDays, F = +a.from - 1, T = +a.to - 1, fixNote = [];
+      if(!(T >= 0 && T < nD)) T = (F >= 0 && F < nD) ? F : 0;
+      var near = function(list, c){ return list.sort(function(p, q){ return Math.abs(p - c) - Math.abs(q - c) || p - q; }); };
+      var fs = [], ts = [], d;
+      if(row[F] === '' && F >= 0 && F < nD) fs = [F]; else { for(d = 0; d < nD; d++) if(row[d] === '') fs.push(d); near(fs, (F >= 0 && F < nD) ? F : T); }
+      if(isW(row[T])) ts = [T]; else { for(d = 0; d < nD; d++) if(isW(row[d])) ts.push(d); near(ts, T); }
+      fs = fs.slice(0, 6); ts = ts.slice(0, 4);
+      var lastErr = '옮길 수 있는 조합을 찾지 못했어요.', fallback = null;
+      for(var i = 0; i < ts.length; i++) for(var j = 0; j < fs.length; j++){
+        if(fs[j] === ts[i]) continue;
+        var r = swapOne(sc, e, fs[j], ts[i]);
+        if(!r.error && kpi(sc, r.cells).mx > Math.max(5, kpi(sc, sc.cells).mx)){ if(!fallback) fallback = r; continue; }   // 연속근무 늘리는 조합은 마지막 수단
+        if(!r.error){
+          if(fs[j] !== F && !isNaN(F)) r.notes.unshift('요청한 ' + (F + 1) + '일은 휴무가 아니라, 가장 가까운 ' + (fs[j] + 1) + '일 휴무를 옮겼어요.');
+          if(ts[i] !== +a.to - 1) r.notes.unshift((+a.to) + '일엔 이미 쉬거나 옮길 수 없어 가장 가까운 ' + (ts[i] + 1) + '일로 옮겼어요.');
+          return r;
+        }
+        lastErr = r.error;
+      }
+      return fallback || { error: lastErr };
+    }
+  };
+  function swapOne(sc, e, f, t){
+      var C = ctx(sc), cells = clone(sc.cells), notes = [];
       if(C.lockOff[e.name + '|' + f]) notes.push((f + 1) + '일은 ' + e.name + '의 휴무 요청일이라 요청도 함께 바뀌어요.');
       var vT = base(cells[e.name][t]);
       // to일에 빠져도 되나? 아니면 쉬던 사람이 대신
@@ -6447,9 +6470,9 @@ window.WV_TOOLS_TABS = true;
       if(runAt(C, cells, e.name, f) > 5) notes.push('⚠ ' + (f + 1) + '일 근무로 ' + e.name + ' 연속근무가 ' + runAt(C, cells, e.name, f) + '일이 돼요.');
       notes.unshift(e.name + ' 휴무를 ' + (f + 1) + '일 → ' + (t + 1) + '일로 옮겼어요. ' + (f + 1) + '일엔 ' + to + ' 근무.');
       return { cells: cells, notes: notes, title: e.name + ' 휴무 ' + (f + 1) + '일 → ' + (t + 1) + '일' };
-    },
-    // 특정 날 휴무 주기(추가 휴무) — 그날 그 사람이 빠져도 공백이 없을 때만
-    giveOff: function(sc, a){
+  }
+  // 특정 날 휴무 주기(추가 휴무) — 그날 그 사람이 빠져도 공백이 없을 때만
+  ALG.giveOff = function(sc, a){
       var C = ctx(sc), cells = clone(sc.cells), e = S.emps.filter(function(x){ return x.name === a.emp; })[0], notes = [], got = [], no = [];
       if(!e || !cells[e.name]) return { error: '직원을 찾지 못했어요.' };
       (a.days || []).map(Number).forEach(function(dd){ var d = dd - 1, v = cells[e.name][d]; if(!isW(v)){ no.push(dd + '일(이미 휴무)'); return; }
@@ -6458,7 +6481,6 @@ window.WV_TOOLS_TABS = true;
       if(got.length) notes.push(e.name + ' ' + got.join(', ') + ' 휴무 추가(그날 ' + '같은 매장에 사람이 남아 공백 없음).');
       if(no.length) notes.push('못 준 날: ' + no.join(', '));
       return { cells: cells, notes: notes, extraOff: true, title: e.name + ' 휴무 추가 ' + got.length + '일' };
-    }
   };
 
   function kpi(sc, cells){
@@ -6504,7 +6526,7 @@ window.WV_TOOLS_TABS = true;
   window.wvAltLabel = function(a){
     if(a.type === 'dupToOff') return '중복 근무를 휴무로 골고루 바꾼 대안 만들기';
     if(a.type === 'fillGap') return '공백 메운 대안 만들기';
-    if(a.type === 'swapOff') return a.emp + ' 휴무 ' + a.from + '일 → ' + a.to + '일 대안 만들기';
+    if(a.type === 'swapOff') return a.emp + ' 휴무를 ' + a.to + '일로 옮긴 대안 만들기';
     if(a.type === 'giveOff') return a.emp + ' ' + (a.days || []).join('·') + '일 휴무 대안 만들기';
     return '대안 만들기';
   };
