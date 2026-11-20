@@ -4702,7 +4702,11 @@ wvChkInit();
     if(m && neg) max = (+m[1]) - 1; else if(m2) max = +m2[3];
     if(max != null && max >= 3 && max <= 10){
       var label = '전 직원 연속근무 최대 ' + max + '일 (전월 이월 포함)';
-      var a = say('wvT-bot', '생성 마지막 단계에 <b>' + esc(label) + '</b>을 걸게요. ' + (max + 1) + '일째가 되는 사람은 ① 그날 남는 인원이면 휴무로 ② 같은 날 남는 자리 사람을 그 매장으로 이동 ③ 쉬는 사람과 휴무 맞교환 순서로 풉니다. <b>휴무 일수·휴무 요청·매장 인원은 그대로</b>이고, 못 지킨 사람은 생성 후 이름을 알려드려요.' +
+      var a = say('wvT-bot', '<div class="wvT-h">' + esc(label) + '</div>' +
+        '<p>생성 마지막 단계에서 <b>' + (max + 1) + '일째 연속</b>이 되는 사람을 아래 순서로 풀어요.</p>' +
+        '<ol class="wvT-ol"><li>그날 <b>남는 인원</b>이면 → 휴무로</li><li>아니면 같은 날 <b>남는 자리 사람</b>을 그 매장으로 이동</li><li>그래도 안 되면 <b>쉬는 사람과 휴무 맞교환</b></li></ol>' +
+        '<div class="wvT-keep">✓ 휴무 일수 · 휴무 요청 · 매장 인원은 그대로</div>' +
+        '<p class="wvT-sub">끝내 못 지킨 사람은 생성 후 이름을 알려드려요.</p>' +
         '<div class="wvT-rule"><b>적용할 조건</b> ' + esc(label) + '<button class="btn small">적용</button></div>');
       a.querySelector('button').onclick = function(){
         var rs = rules().filter(function(r){ return r.type !== 'maxRun'; }); rs.push({ type: 'maxRun', max: max, label: label, text: q });
@@ -5493,6 +5497,344 @@ window.WV_AI_URL = window.WV_AI_URL || 'https://script.google.com/macros/s/AKfyc
     var h3 = document.querySelector('#wvAdv h3 .hint'); if(h3) h3.textContent = '테스트 · Claude 연결됨 · 이름은 가려서 보냄';
   }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', relabel); else setTimeout(relabel, 0);
+})();
+
+</script>
+<script>
+/* ===== 테스트판 화면 정리 ③ (2026-11-20) =====
+   1) AI 답변 가독성   2) ② 기존 기능 → 옆 탭(040 사이드 레일)   3) ① 매장 설정 접이식(044) + 인원 직접 입력
+   4) ① 직원 목록 B안 (027 검색 · 047 세그먼트 · 018 스테퍼 · 071 되돌리기 · 3단 매장 칩)
+   저장 방식(S.emps / S.stores / save())은 원본과 동일 */
+(function(){
+  var css = document.createElement('style');
+  css.textContent = `
+/* ---- 1) AI 답변 가독성 ---- */
+.wvT-msg{font-size:13.5px!important;line-height:1.75!important;padding:12px 15px!important;max-width:min(760px,92%)!important}
+.wvT-bot{background:#fff!important;border:1px solid var(--ln)!important;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+.wvT-bot p{margin:0 0 6px}.wvT-bot p:last-child{margin-bottom:0}
+.wvT-h{font-weight:900;font-size:14.5px;margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.wvT-h::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--gold)}
+.wvT-ol{margin:6px 0 8px;padding:0;list-style:none;counter-reset:s}
+.wvT-ol li{counter-increment:s;display:flex;gap:9px;align-items:baseline;padding:4px 0}
+.wvT-ol li::before{content:counter(s);flex:none;width:20px;height:20px;border-radius:50%;background:var(--brand);color:#fff;font-size:11px;font-weight:800;display:grid;place-items:center;transform:translateY(-1px)}
+.wvT-keep{display:inline-block;background:rgba(17,156,114,.1);color:#0b6e50;font-weight:800;font-size:12.5px;padding:4px 10px;border-radius:99px;margin:2px 0 6px}
+.wvT-sub{color:var(--ink3);font-size:12.5px}
+.wvT-rule{margin-top:10px!important;border-radius:12px!important;padding:10px 12px!important;background:var(--s2)!important}
+.wvT-me{font-weight:600}
+#wvAdv .bot{line-height:1.75;font-size:13.5px}
+/* ---- 2) ② 옆 탭 (040) ---- */
+#wvSide{display:grid;grid-template-columns:220px 1fr;gap:16px;align-items:start;margin-top:4px}
+#wvSideNav{position:sticky;top:96px;background:var(--sf);border:1px solid var(--ln);border-radius:18px;padding:8px;box-shadow:var(--sh)}
+#wvSideNav .cap{font-size:11px;font-weight:800;color:var(--ink3);padding:6px 10px 4px;letter-spacing:.04em}
+.wvSN{position:relative;display:flex;align-items:center;gap:10px;width:100%;border:0;background:none;padding:10px 12px;border-radius:12px;cursor:pointer;font-weight:700;color:var(--ink2);text-align:left;font-size:13.5px;transition:color .2s}
+.wvSN .ic{width:28px;height:28px;border-radius:9px;background:var(--s3);display:grid;place-items:center;font-size:14px;flex:none;transition:background .2s}
+.wvSN .n{margin-left:auto;font-size:11px;font-weight:800;color:var(--ink3);background:var(--s2);padding:1px 7px;border-radius:99px}
+.wvSN:hover{color:var(--ink)}
+.wvSN.on{color:#fff}.wvSN.on .ic{background:rgba(255,255,255,.14)}.wvSN.on .n{background:rgba(255,255,255,.16);color:#fff}
+.wvSN>*{position:relative;z-index:1}
+#wvSideHl{position:absolute;left:8px;right:8px;height:48px;border-radius:12px;background:var(--brand);transition:transform .4s var(--spr);z-index:0}
+#wvSideMain>.card{display:none;margin:0!important}
+#wvSideMain>.card.wvShow{display:block;animation:wvSlide .35s var(--ease)}
+@keyframes wvSlide{from{opacity:0;transform:translateX(10px)}to{opacity:1;transform:none}}
+#wvSideMain>.card>h3{cursor:default!important}#wvSideMain>.card>h3::before{content:none!important}
+#wvSideMain>.card.collapsed>*:not(h3){display:revert!important}
+@media (max-width:860px){#wvSide{grid-template-columns:1fr}#wvSideNav{position:static;display:flex;overflow-x:auto;gap:4px}#wvSideNav .cap,#wvSideHl{display:none}.wvSN{flex:none;width:auto}.wvSN.on{background:var(--brand)}}
+/* ---- 3) 매장 설정 접이식 (044) ---- */
+.wvAcc>h3{display:flex!important;align-items:center;gap:10px;cursor:pointer;margin:0!important;user-select:none}
+.wvAcc>h3 .sum{font-size:12.5px;font-weight:600;color:var(--ink3)}
+.wvAcc>h3 .sum b{color:var(--ink)}
+.wvAcc>h3 .chev{margin-left:auto;width:30px;height:30px;border-radius:10px;background:var(--s3);display:grid;place-items:center;transition:transform .35s var(--spr),background .2s}
+.wvAcc.open>h3 .chev{transform:rotate(180deg);background:var(--goldS)}
+.wvAccBody{display:grid;grid-template-rows:0fr;transition:grid-template-rows .4s var(--ease)}
+.wvAcc.open .wvAccBody{grid-template-rows:1fr}
+.wvAccBody>div{overflow:hidden}
+.wvAccIn{padding-top:16px}
+.wvStNum{width:40px;border:0!important;background:transparent!important;text-align:center;font-weight:900;font-size:16px;padding:0!important;box-shadow:none!important;-moz-appearance:textfield}
+.wvStNum::-webkit-inner-spin-button,.wvStNum::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.wvStep:focus-within{border-color:var(--ink);box-shadow:0 0 0 3px var(--goldS)}
+.wvStep b{display:none}
+/* ---- 4) 직원 목록 B안 ---- */
+#empTable{display:none!important}
+#wvEmpB{margin-top:4px}
+.wvEbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.wvSrch{position:relative;flex:1;min-width:200px;max-width:320px}
+.wvSrch input{width:100%;padding-left:34px!important;background:var(--s2)!important}
+.wvSrch svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--ink3)}
+.wvEcnt{font-size:12.5px;color:var(--ink3);font-weight:700}
+.wvTbl{overflow:auto;border:1px solid var(--ln);border-radius:14px;max-height:72vh}
+.wvTbl table{width:100%;border-collapse:separate!important;border-spacing:0;border-radius:0!important;overflow:visible!important}
+.wvTbl th{position:sticky;top:0;z-index:2;background:var(--s2)!important;font-size:12px;text-align:left!important;padding:10px 12px!important;border:0!important;border-bottom:1px solid var(--ln)!important;white-space:nowrap}
+.wvTbl td{padding:9px 12px!important;border:0!important;border-bottom:1px solid var(--ln)!important;text-align:left!important;font-size:13.5px;vertical-align:middle;background:#fff}
+.wvTbl tbody tr:hover td{background:#FBFAF8}
+.wvTbl td.nm{font-weight:800;white-space:nowrap}
+.wvTT{display:inline-block;font-size:11px;font-weight:800;padding:2px 8px;border-radius:99px;background:var(--s3);color:var(--ink2)}
+.wvTT.t실장{background:var(--brand);color:var(--gold)}.wvTT.t팀장{background:rgba(106,87,242,.12);color:#4b3bc4}.wvTT.t매니저{background:rgba(47,143,224,.13);color:#1d5f9c}
+.wvIE{border:1px dashed transparent;border-radius:8px;padding:3px 7px;cursor:pointer;display:inline-block;white-space:nowrap;transition:border-color .2s,background .2s}
+.wvIE:hover{border-color:var(--ln2);background:#fff}
+.wvIE select{padding:3px 6px!important;border-radius:8px!important;border-color:var(--ink)!important}
+.wvIE.flash{animation:wvFlash .8s var(--ease)}
+@keyframes wvFlash{0%{box-shadow:inset 0 0 0 100px rgba(17,156,114,.2)}100%{box-shadow:inset 0 0 0 100px transparent}}
+.wvSeg{position:relative;display:inline-flex;background:var(--s3);border-radius:10px;padding:3px}
+.wvSeg button{position:relative;z-index:1;border:0;background:none;padding:4px 9px;border-radius:8px;font-size:11.5px;font-weight:700;color:var(--ink2);cursor:pointer;white-space:nowrap;transition:color .2s}
+.wvSeg button.on{color:var(--ink)}
+.wvSeg .knob{position:absolute;top:3px;bottom:3px;left:0;border-radius:8px;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.1);transition:transform .38s var(--spr),width .38s var(--spr)}
+.wvOff{display:inline-flex;align-items:center;border:1.5px solid var(--ln2);border-radius:10px;background:#fff;overflow:hidden}
+.wvOff button{width:26px;height:28px;border:0;background:none;font-size:15px;font-weight:700;color:var(--ink2);cursor:pointer}
+.wvOff button:hover{background:var(--s3)}
+.wvOff .num{position:relative;width:28px;height:28px;overflow:hidden;text-align:center;font-weight:900;font-size:14px}
+.wvOff .num span{position:absolute;inset:0;display:grid;place-items:center;transition:transform .35s var(--spr),opacity .35s}
+.wvOff.shake{animation:wvShake .35s}
+@keyframes wvShake{20%{transform:translateX(-4px)}40%{transform:translateX(4px)}60%{transform:translateX(-3px)}80%{transform:translateX(2px)}}
+.wvSt3{display:grid;grid-template-columns:repeat(5,minmax(62px,1fr));gap:5px;min-width:360px}
+.wvSc{border:1px solid var(--ln2);background:#fff;color:var(--ink2);border-radius:99px;padding:5px 6px;font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:3px;white-space:nowrap;transition:background .2s,color .2s,border-color .2s,transform .25s var(--spr)}
+.wvSc:active{transform:scale(.92)}
+.wvSc.pref{background:var(--brand);color:#fff;border-color:var(--brand)}
+.wvSc.ban{background:var(--dang);color:#fff;border-color:var(--dang);text-decoration:line-through}
+.wvSc.home{background:var(--gold);color:#1b1500;border-color:var(--gold);cursor:default}
+.wvSc .k{font-size:9.5px;opacity:.85}
+.wvLg{display:inline-flex;align-items:center;gap:5px;margin-left:8px;font-weight:600;vertical-align:middle}
+.wvLg .wvSc{cursor:default;padding:1px 8px;font-size:10.5px}
+.wvLg .ar{color:var(--ink3);font-size:11px}
+.wvBub{position:fixed;z-index:100001;pointer-events:none;color:#fff;font-size:12px;font-weight:800;padding:5px 10px;border-radius:9px;transform:translate(-50%,-100%);box-shadow:0 8px 20px rgba(0,0,0,.25);animation:wvBub 1.3s var(--ease) forwards;white-space:nowrap;background:var(--brand)}
+.wvBub.ban{background:var(--dang)}.wvBub.norm{background:#fff;color:var(--ink);border:1px solid var(--ln2)}
+@keyframes wvBub{0%{opacity:0;margin-top:4px}15%{opacity:1;margin-top:-6px}75%{opacity:1;margin-top:-6px}100%{opacity:0;margin-top:-12px}}
+.wvTrash{border:0;background:none;width:34px;height:34px;border-radius:10px;cursor:pointer;color:var(--ink3);display:grid;place-items:center;transition:background .2s,color .2s}
+.wvTrash svg{width:18px;height:18px}.wvTrash .lid{transition:transform .25s var(--spr);transform-origin:4px 6px}
+.wvTrash:hover{background:rgba(217,58,85,.12);color:var(--dang)}.wvTrash:hover .lid{transform:translateY(-1.5px) rotate(-8deg)}
+.wvLeave td{animation:wvLeave .32s var(--ease) forwards}
+@keyframes wvLeave{to{opacity:0;transform:translateX(-20px)}}
+.wvEnter td{animation:wvEnter .45s var(--spr) both}
+@keyframes wvEnter{from{opacity:0;transform:translateY(6px)}}
+#wvSnack{position:fixed;left:50%;bottom:22px;transform:translate(-50%,calc(100% + 40px));visibility:hidden;background:var(--brand);color:#fff;border-radius:14px;padding:10px 12px 10px 16px;display:flex;align-items:center;gap:12px;box-shadow:0 14px 36px rgba(0,0,0,.3);transition:transform .45s var(--spr);z-index:100002;font-size:13.5px}
+#wvSnack.on{transform:translate(-50%,0);visibility:visible}
+#wvSnack button{background:none;border:0;color:var(--gold);font-weight:900;cursor:pointer;display:flex;align-items:center;gap:8px}
+#wvSnack svg{width:20px;height:20px;transform:rotate(-90deg)}#wvSnack circle{fill:none;stroke-width:3}
+#wvSnack .bg{stroke:rgba(255,255,255,.18)}#wvSnack .fg{stroke:var(--gold);stroke-dasharray:50.3;stroke-linecap:round}
+mark.wvHl{background:var(--goldS);color:inherit;border-radius:3px;padding:0 1px}
+`;
+  document.head.appendChild(css);
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  /* 설정 변경 표시(원본 감시기는 input/select change만 봄 → 숨은 칸으로 알림) */
+  var probe = document.createElement('input'); probe.type = 'hidden'; probe.id = 'wvDirtyProbe'; document.body.appendChild(probe);
+  function cfgDirty(){ probe.dispatchEvent(new Event('change', { bubbles: true })); }
+  function refreshCap(){ try{ if(typeof renderCapacity === 'function') renderCapacity(); }catch(e){} }
+
+  /* ================= 3) 매장 설정 접이식 + 인원 직접 입력 ================= */
+  function needOf(st){ return st._need != null ? st._need : (+st.need || 0); }
+  function setNeed(i, v){
+    v = Math.max(0, Math.min(5, Math.round(+v || 0)));
+    var st = S.stores[i]; if(needOf(st) === v) return false;
+    st.need = v; save(); cfgDirty(); return true;
+  }
+  if(typeof renderStores === 'function'){
+    renderStores = function(){
+      try{ if(typeof wvWrapStores === 'function') wvWrapStores(); }catch(e){}
+      var box = document.getElementById('storeList'); if(!box) return;
+      var total = 0;
+      box.innerHTML = S.stores.map(function(st, i){
+        var n = needOf(st); total += n;
+        return '<div class="wvSt' + (n >= 2 ? ' two' : '') + (n === 0 ? ' zero' : '') + '">' +
+          '<div class="nm">' + esc(st.n) + '<small>' + (n >= 2 ? 'OP+CL ' + n + '인' : n === 0 ? '쉬는 매장' : '1인 근무') + '</small></div>' +
+          '<div class="wvStep"><button type="button" data-i="' + i + '" data-d="-1" aria-label="' + esc(st.n) + ' 인원 줄이기">−</button>' +
+          '<input class="wvStNum" type="number" inputmode="numeric" min="0" max="5" value="' + n + '" data-i="' + i + '" aria-label="' + esc(st.n) + ' 최소 인원">' +
+          '<button type="button" data-i="' + i + '" data-d="1" aria-label="' + esc(st.n) + ' 인원 늘리기">+</button></div>' +
+          '<button type="button" class="del" data-del="' + i + '" title="' + esc(st.n) + ' 삭제" aria-label="' + esc(st.n) + ' 삭제">✕</button></div>';
+      }).join('');
+      var sum = document.getElementById('wvStSum');
+      if(!sum){ sum = document.createElement('div'); sum.id = 'wvStSum'; sum.className = 'wvStSum'; box.parentNode.insertBefore(sum, box.nextSibling); }
+      sum.innerHTML = '매장 <b>' + S.stores.length + '곳</b> · 하루 필요 인원 <b>' + total + '명</b>';
+      var hs = document.getElementById('wvAccSum'); if(hs) hs.innerHTML = '매장 <b>' + S.stores.length + '곳</b> · 하루 최소 <b>' + total + '명</b>';
+      box.querySelectorAll('.wvStep button').forEach(function(b){ b.onclick = function(){ var i = +b.dataset.i; if(setNeed(i, needOf(S.stores[i]) + (+b.dataset.d))){ renderStores(); refreshCap(); } }; });
+      box.querySelectorAll('.wvStNum').forEach(function(inp){
+        inp.addEventListener('focus', function(){ inp.select(); });
+        inp.addEventListener('keydown', function(e){ if(e.key === 'Enter') inp.blur(); });
+        inp.addEventListener('change', function(){ setNeed(+inp.dataset.i, inp.value); renderStores(); refreshCap(); });
+      });
+      box.querySelectorAll('[data-del]').forEach(function(b){ b.onclick = function(){ if(confirm(S.stores[+b.dataset.del].n + ' 매장을 삭제할까요?')) delStore(+b.dataset.del); }; });
+      var sel = document.getElementById('reqStore'); if(sel) sel.innerHTML = S.stores.map(function(st){ return '<option>' + esc(st.n) + '</option>'; }).join('');
+    };
+  }
+  function mountStoreAcc(){
+    var list = document.getElementById('storeList'); if(!list) return;
+    var card = list.closest('.card'); if(!card || card.classList.contains('wvAcc')) return;
+    var h3 = card.querySelector('h3');
+    card.classList.add('wvAcc');
+    h3.innerHTML = '매장 설정 <span class="sum" id="wvAccSum"></span><span class="chev" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg></span>';
+    h3.setAttribute('role', 'button'); h3.setAttribute('tabindex', '0'); h3.setAttribute('aria-expanded', 'false');
+    var body = document.createElement('div'); body.className = 'wvAccBody';
+    var inner = document.createElement('div'), pad = document.createElement('div'); pad.className = 'wvAccIn';
+    while(h3.nextSibling) pad.appendChild(h3.nextSibling);
+    var hint = pad.querySelector('p.hint'); if(hint) hint.innerHTML = '숫자는 그 매장에 <b>하루 최소 몇 명</b>이 서야 하는지입니다(0~5). 숫자를 눌러 직접 입력하거나 − + 로 바꾸세요. 2명 이상이면 OP+CL로 나뉘고, 0이면 쉬는 매장입니다.';
+    var addNeed = pad.querySelector('#newStoreNeed'); if(addNeed){ addNeed.placeholder = '인원'; addNeed.title = '하루 최소 인원'; }
+    inner.appendChild(pad); body.appendChild(inner); card.appendChild(body);
+    var tog = function(){ var o = card.classList.toggle('open'); h3.setAttribute('aria-expanded', o ? 'true' : 'false'); };
+    h3.addEventListener('click', tog);
+    h3.addEventListener('keydown', function(e){ if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); tog(); } });
+    renderStores();
+  }
+
+  /* ================= 4) 직원 목록 B안 ================= */
+  var TITLES = ['', '주임', '매니저', '팀장', '실장', '교육생'];
+  var ROLES = ['풀타임', '오픈', '마감', '파트', '교육'];
+  var TYPES = ['정규직', '파트타임', '교육'];
+  var q = '';
+  function hl(s){ s = String(s || ''); if(!q) return esc(s); var i = s.indexOf(q); return i < 0 ? esc(s) : esc(s.slice(0, i)) + '<mark class="wvHl">' + esc(q) + '</mark>' + esc(s.slice(i + q.length)); }
+  function stState(e, s){ if(e.home === s) return 'home'; if((e.pref || []).indexOf(s) >= 0) return 'pref'; if((e.ban || []).indexOf(s) >= 0) return 'ban'; return ''; }
+  function scInner(s, st){ return (st === 'pref' ? '<span class="k">★</span>' : st === 'ban' ? '<span class="k">✕</span>' : '') + esc(s); }
+  function bubble(el, st){
+    var r = el.getBoundingClientRect(), d = document.createElement('div');
+    d.className = 'wvBub ' + (st === 'pref' ? '' : st === 'ban' ? 'ban' : 'norm');
+    d.textContent = el.dataset.s + ' · ' + (st === 'pref' ? '★ 우선 배치' : st === 'ban' ? '✕ 편성 제외' : '보통');
+    d.style.left = (r.left + r.width / 2) + 'px'; d.style.top = (r.top - 6) + 'px';
+    document.body.appendChild(d); setTimeout(function(){ d.remove(); }, 1350);
+  }
+  function segPlace(sg, anim){ var on = sg.querySelector('button.on'), k = sg.querySelector('.knob'); if(!on){ k.style.width = '0'; return; } if(!anim) k.style.transition = 'none'; k.style.width = on.offsetWidth + 'px'; k.style.transform = 'translateX(' + on.offsetLeft + 'px)'; if(!anim) requestAnimationFrame(function(){ k.style.transition = ''; }); }
+  var snack, undoT, lastDel;
+  function ensureSnack(){
+    if(snack) return; snack = document.createElement('div'); snack.id = 'wvSnack';
+    snack.innerHTML = '<span id="wvSnackTx"></span><button type="button" id="wvUndo"><svg viewBox="0 0 20 20"><circle class="bg" cx="10" cy="10" r="8"/><circle class="fg" id="wvRing" cx="10" cy="10" r="8"/></svg>되돌리기</button>';
+    document.body.appendChild(snack);
+    document.getElementById('wvUndo').onclick = function(){ if(!lastDel) return; S.emps.splice(lastDel.i, 0, lastDel.e); var b = lastDel.i; lastDel = null; save(); cfgDirty(); snack.classList.remove('on'); clearTimeout(undoT); renderEmps(); var tr = document.querySelector('#wvEmpB tr[data-i="' + b + '"]'); if(tr) tr.classList.add('wvEnter'); };
+  }
+  function delEmpUndo(i){
+    ensureSnack();
+    var e = S.emps[i], tr = document.querySelector('#wvEmpB tr[data-i="' + i + '"]');
+    var go = function(){ S.emps.splice(i, 1); lastDel = { e: e, i: i }; save(); cfgDirty(); renderEmps(); };
+    if(tr){ tr.classList.add('wvLeave'); setTimeout(go, 300); } else go();
+    document.getElementById('wvSnackTx').textContent = e.name + ' 직원을 삭제했습니다';
+    snack.classList.add('on'); var ring = document.getElementById('wvRing'); ring.style.transition = 'none'; ring.style.strokeDashoffset = '0';
+    requestAnimationFrame(function(){ requestAnimationFrame(function(){ ring.style.transition = 'stroke-dashoffset 6s linear'; ring.style.strokeDashoffset = '50.3'; }); });
+    clearTimeout(undoT); undoT = setTimeout(function(){ snack.classList.remove('on'); lastDel = null; }, 6000);
+  }
+  function offRange(e){ return { min: Math.min(8, offTarget(e)), max: 20 }; }
+  var origRenderEmps = renderEmps;
+  renderEmps = function(){
+    var host = document.getElementById('empTable'); if(!host) return origRenderEmps.apply(this, arguments);
+    var box = document.getElementById('wvEmpB');
+    if(!box){
+      box = document.createElement('div'); box.id = 'wvEmpB';
+      box.innerHTML = '<div class="wvEbar"><div class="wvSrch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="wvEq" placeholder="이름·소속·직책으로 찾기"></div><span class="wvEcnt" id="wvEcnt"></span></div>' +
+        '<div class="wvTbl"><table><thead><tr><th>성명</th><th>직책</th><th>소속</th><th>역할</th><th>고용형태</th><th>월 휴무</th>' +
+        '<th>매장 <span class="wvLg"><span class="wvSc">보통</span><span class="ar">→</span><span class="wvSc pref"><span class="k">★</span>우선</span><span class="ar">→</span><span class="wvSc ban"><span class="k">✕</span>제외</span><span class="ar" style="margin-left:4px">·</span><span class="wvSc home">소속</span></span></th><th></th></tr></thead><tbody id="wvEbody"></tbody></table></div>';
+      host.parentNode.insertBefore(box, host);
+      document.getElementById('wvEq').addEventListener('input', function(){ q = this.value.trim(); renderEmps(); });
+    }
+    var tb = document.getElementById('wvEbody'), shown = 0;
+    tb.innerHTML = S.emps.map(function(e, i){
+      if(q && (e.name + (e.title || '') + (e.home || '') + (e.role || '')).indexOf(q) < 0) return '';
+      shown++;
+      var off = offTarget(e);
+      return '<tr data-i="' + i + '"><td class="nm">' + hl(e.name) + '</td>' +
+        '<td><span class="wvIE" data-k="title" data-i="' + i + '"><span class="wvTT t' + esc(e.title || '') + '">' + hl(e.title || '-') + '</span></span></td>' +
+        '<td><span class="wvIE" data-k="home" data-i="' + i + '">' + hl(e.home || '순환') + '</span></td>' +
+        '<td><div class="wvSeg" data-i="' + i + '"><span class="knob"></span>' + ROLES.map(function(r){ return '<button type="button" class="' + (e.role === r ? 'on' : '') + '" data-v="' + r + '">' + r + '</button>'; }).join('') + '</div></td>' +
+        '<td><span class="wvIE" data-k="type" data-i="' + i + '">' + esc(e.type || '정규직') + '</span></td>' +
+        '<td><div class="wvOff" data-i="' + i + '"><button type="button" data-d="-1" aria-label="휴무 줄이기">−</button><div class="num"><span>' + off + '</span></div><button type="button" data-d="1" aria-label="휴무 늘리기">+</button></div></td>' +
+        '<td><div class="wvSt3">' + S.stores.map(function(st){ var s = st.n, ss = stState(e, s); return '<button type="button" class="wvSc ' + ss + '" data-i="' + i + '" data-s="' + esc(s) + '">' + scInner(s, ss) + '</button>'; }).join('') + '</div></td>' +
+        '<td><button type="button" class="wvTrash" data-del="' + i + '" title="' + esc(e.name) + ' 삭제" aria-label="' + esc(e.name) + ' 삭제"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><g class="lid"><path d="M3 6h18"/><path d="M9 6V4h6v2"/></g><path d="M5 6l1 14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-14"/><path d="M10 11v6M14 11v6"/></svg></button></td></tr>';
+    }).join('') || '<tr><td colspan="8" style="text-align:center!important;color:#8E8A97;padding:28px!important">"' + esc(q) + '"에 맞는 직원이 없습니다</td></tr>';
+    document.getElementById('wvEcnt').textContent = (q ? shown + ' / ' : '') + S.emps.length + '명';
+    // 직책·소속·고용형태: 눌러서 그 자리에서 고치기
+    tb.querySelectorAll('.wvIE').forEach(function(s){ s.onclick = function(){
+      if(s.querySelector('select')) return;
+      var i = +s.dataset.i, e = S.emps[i], k = s.dataset.k;
+      var opts = k === 'title' ? TITLES : k === 'home' ? ['순환'].concat(S.stores.map(function(x){ return x.n; })) : TYPES;
+      var cur = k === 'title' ? (e.title || '') : k === 'home' ? (e.home || '순환') : (e.type || '정규직');
+      s.innerHTML = '<select>' + opts.map(function(o){ return '<option value="' + esc(o) + '"' + (o === cur ? ' selected' : '') + '>' + esc(o || '-') + '</option>'; }).join('') + '</select>';
+      var sl = s.querySelector('select'); sl.focus();
+      sl.onchange = function(){
+        e[k] = sl.value; if(k === 'type') e.offN = null;
+        save(); cfgDirty(); renderEmps(); refreshCap();
+        var n = document.querySelector('#wvEbody .wvIE[data-k="' + k + '"][data-i="' + i + '"]'); if(n) n.classList.add('flash');
+      };
+      sl.onblur = function(){ setTimeout(function(){ if(document.body.contains(sl)) renderEmps(); }, 150); };
+    }; });
+    // 역할 (047)
+    tb.querySelectorAll('.wvSeg').forEach(function(sg){ segPlace(sg, false); sg.querySelectorAll('button').forEach(function(b){ b.onclick = function(){
+      var e = S.emps[+sg.dataset.i]; if(e.role === b.dataset.v) return;
+      sg.querySelectorAll('button').forEach(function(x){ x.classList.toggle('on', x === b); }); segPlace(sg, true);
+      e.role = b.dataset.v; if(e.role === '파트' || e.role === '교육') e.offN = 8;
+      save(); cfgDirty(); refreshCap();
+      if(e.offN === 8) setTimeout(renderEmps, 400);
+    }; }); });
+    // 월 휴무 (018)
+    tb.querySelectorAll('.wvOff').forEach(function(st){ st.querySelectorAll('button').forEach(function(b){ b.onclick = function(){
+      var e = S.emps[+st.dataset.i], d = +b.dataset.d, cur = offTarget(e), R = offRange(e), nv = cur + d;
+      if(nv < R.min || nv > R.max){ st.classList.remove('shake'); void st.offsetWidth; st.classList.add('shake'); return; }
+      e.offN = nv; save(); cfgDirty(); refreshCap();
+      var box2 = st.querySelector('.num'), old = box2.querySelector('span'), nw = document.createElement('span'); nw.textContent = nv;
+      nw.style.transform = 'translateY(' + (d > 0 ? '100%' : '-100%') + ')'; box2.appendChild(nw);
+      requestAnimationFrame(function(){ old.style.transform = 'translateY(' + (d > 0 ? '-100%' : '100%') + ')'; old.style.opacity = '0'; nw.style.transform = 'translateY(0)'; });
+      setTimeout(function(){ old.remove(); }, 380);
+    }; }); });
+    // 매장 3단 칩
+    tb.querySelectorAll('.wvSc').forEach(function(b){ b.onclick = function(){
+      var e = S.emps[+b.dataset.i], s = b.dataset.s, st = stState(e, s); if(st === 'home') return;
+      e.pref = (e.pref || []).filter(function(x){ return x !== s; }); e.ban = (e.ban || []).filter(function(x){ return x !== s; });
+      if(st === '') e.pref.push(s); else if(st === 'pref') e.ban.push(s);
+      save(); cfgDirty();
+      var ns = stState(e, s); b.className = 'wvSc ' + ns; b.innerHTML = scInner(s, ns); bubble(b, ns);
+    }; });
+    tb.querySelectorAll('[data-del]').forEach(function(b){ b.onclick = function(){ delEmpUndo(+b.dataset.del); }; });
+    var rs = document.getElementById('reqEmp'); if(rs) rs.innerHTML = S.emps.map(function(e){ return '<option>' + esc(e.name) + '</option>'; }).join('');
+    refreshCap();
+  };
+
+  /* ================= 2) ② 기존 기능 → 옆 탭 ================= */
+  var SIDE = [
+    { key: '특이사항 추가', ic: '✎', label: '특이사항 추가', count: function(){ var mk = monthKey(); return ((S.reqs && S.reqs[mk]) || []).length; } },
+    { key: '직원 휴무 요청', ic: '⇩', label: '직원 휴무 요청' },
+    { key: '매장 인원 예외', ic: '⚑', label: '매장 인원 예외', count: function(){ var mk = monthKey(); return ((S.needX && S.needX[mk]) || []).length; } },
+    { key: '전매장 휴무일', ic: '☾', label: '전매장 휴무일', count: function(){ var mk = monthKey(); return ((S.hols && S.hols[mk]) || []).length; } },
+    { key: '특이사항 임시 저장', ic: '⧉', label: '임시 저장' }
+  ];
+  var sideCur = '특이사항 추가';
+  function cardOf(key){
+    var hit = null;
+    document.querySelectorAll('#panel1 .card').forEach(function(c){ var h = c.querySelector(':scope > h3'); if(h && h.textContent.trim().indexOf(key) === 0 && !c.id.match(/^wvT/)) hit = c; });
+    return hit;
+  }
+  function mountSide(){
+    var p1 = document.getElementById('panel1'); if(!p1) return;
+    var side = document.getElementById('wvSide');
+    if(!side){
+      side = document.createElement('div'); side.id = 'wvSide';
+      side.innerHTML = '<nav id="wvSideNav" aria-label="특이사항 기능"><div class="cap">기능</div><span id="wvSideHl"></span></nav><div id="wvSideMain"></div>';
+      var ai = document.getElementById('wvTAI'); p1.insertBefore(side, ai ? ai.nextSibling : p1.firstChild);
+      var nav = side.querySelector('#wvSideNav');
+      SIDE.forEach(function(it){ var b = document.createElement('button'); b.type = 'button'; b.className = 'wvSN'; b.dataset.k = it.key; b.innerHTML = '<span class="ic">' + it.ic + '</span><span>' + it.label + '</span><span class="n"></span>'; b.onclick = function(){ sideCur = it.key; showSide(true); }; nav.appendChild(b); });
+    }
+    var main = document.getElementById('wvSideMain');
+    SIDE.forEach(function(it){ var c = cardOf(it.key); if(c && c.parentNode !== main){ c.classList.remove('collapsed'); main.appendChild(c); } });
+    showSide(false);
+  }
+  function showSide(anim){
+    var main = document.getElementById('wvSideMain'), nav = document.getElementById('wvSideNav'); if(!main) return;
+    var shownKey = null;
+    [].forEach.call(main.children, function(c){ var h = c.querySelector(':scope > h3'), on = h && h.textContent.trim().indexOf(sideCur) === 0; c.classList.toggle('wvShow', !!on); if(on) shownKey = sideCur; });
+    nav.querySelectorAll('.wvSN').forEach(function(b){
+      var it = SIDE.filter(function(x){ return x.key === b.dataset.k; })[0], has = !!cardOf(b.dataset.k);
+      b.style.display = has ? '' : 'none'; b.classList.toggle('on', b.dataset.k === sideCur);
+      var n = b.querySelector('.n'); var v = it.count ? it.count() : null; n.textContent = v ? v : ''; n.style.display = v ? '' : 'none';
+    });
+    var on = nav.querySelector('.wvSN.on'), hlb = document.getElementById('wvSideHl');
+    if(on && hlb){ hlb.style.height = on.offsetHeight + 'px'; if(!anim) hlb.style.transition = 'none'; hlb.style.transform = 'translateY(' + (on.offsetTop) + 'px)'; hlb.style.top = '0'; if(!anim) requestAnimationFrame(function(){ hlb.style.transition = ''; }); }
+  }
+  // 카드 안 h3 클릭 접힘 막기 (옆 탭 안에서는 항상 펼침)
+  document.addEventListener('click', function(ev){ var h = ev.target.closest && ev.target.closest('#wvSideMain > .card > h3'); if(h){ ev.stopPropagation(); } }, true);
+
+  function boot(){
+    mountStoreAcc();
+    try{ renderEmps(); }catch(e){ console.warn(e); }
+    mountSide();
+    var p1 = document.getElementById('panel1');
+    if(p1) new MutationObserver(function(){ var miss = SIDE.some(function(it){ var c = cardOf(it.key); return c && c.parentNode !== document.getElementById('wvSideMain'); }); if(miss) mountSide(); }).observe(p1, { childList: true, subtree: false });
+    // 숫자 갱신
+    ['renderReqs','renderHols','renderNeedX'].forEach(function(n){ var o = window[n]; if(typeof o === 'function'){ window[n] = function(){ var r = o.apply(this, arguments); try{ showSide(false); }catch(e){} return r; }; } });
+    var mp = document.getElementById('monthPick'); if(mp) mp.addEventListener('change', function(){ showSide(false); });
+    document.querySelectorAll('.tabs button').forEach(function(b){ b.addEventListener('click', function(){ setTimeout(function(){ showSide(false); document.querySelectorAll('#wvEbody .wvSeg').forEach(function(sg){ segPlace(sg, false); }); }, 60); }); });
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function(){ setTimeout(boot, 50); }); else setTimeout(boot, 50);
 })();
 
 </script>
