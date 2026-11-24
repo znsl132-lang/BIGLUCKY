@@ -6948,7 +6948,7 @@ window.WV_TOOLS_TABS = true;
    GitHub Pages는 페이지를 브라우저에 최대 10분 저장해 두므로, 배포 직후 열면 옛 화면이 뜰 수 있다.
    열 때·탭으로 돌아올 때·10분마다 서버의 빌드 번호와 비교 → 다르면 열자마자(아직 아무것도 안 만졌으면) 자동 새로고침, 작업 중이면 아래 알림 */
 (function(){
-  var B = 'P20261124-205718';/*WVBUILD*/
+  var B = 'P20261124-210101';/*WVBUILD*/
   window.WV_BUILD = B; if(B === 'DEV') return;
   var t0 = Date.now(), touched = false, shown = false;
   ['keydown', 'input', 'pointerdown'].forEach(function(ev){ document.addEventListener(ev, function(){ touched = true; }, { capture: true, once: true }); });
@@ -7379,8 +7379,13 @@ function close(){var u=$('up');u.classList.remove('on');clear();setTimeout(funct
     S.emps.filter(isPart).forEach(function(e){
       var tr = t.querySelector('tr[data-n="' + e.name + '"]'); if(!tr || typeof sched === 'undefined' || !sched || !sched.cells[e.name]) return;
       sched.cells[e.name].forEach(function(v, d){ var td = tr.children[d + 2]; if(td && work(v) && !td.querySelector('.opcl.pt')) td.insertAdjacentHTML('beforeend', '<span class="opcl pt">PT</span>'); });
+      var nm = tr.querySelector('td.namecol'); if(nm && !nm.querySelector('.wvPtTag')) nm.insertAdjacentHTML('beforeend', '<span class="wvPtTag">파트</span>');
     });
   }
+  var cs = document.createElement('style');
+  cs.textContent = '#schedTable td .opcl.pt{display:inline-block;margin-left:3px;padding:0 4px;border-radius:5px;background:#1f9d6a;color:#fff!important;font-size:9.5px;font-weight:800;line-height:15px;vertical-align:1px}' +
+    '#schedTable td.namecol .wvPtTag{display:inline-block;margin-left:4px;padding:0 5px;border-radius:5px;background:#e8f6ef;color:#1f7a5a;font-size:10px;font-weight:800;line-height:15px;vertical-align:1px}';
+  (document.head || document.documentElement).appendChild(cs);
   if(typeof renderSched === 'function'){ var _rs = renderSched; renderSched = function(){ var r = _rs.apply(this, arguments); try{ badge(); }catch(e){} return r; }; window.renderSched = renderSched; }
   // 내보낼 때만 '(PT)'를 붙였다가 바로 원래대로
   function withPT(fn){
