@@ -6929,7 +6929,7 @@ window.WV_TOOLS_TABS = true;
    GitHub Pages는 페이지를 브라우저에 최대 10분 저장해 두므로, 배포 직후 열면 옛 화면이 뜰 수 있다.
    열 때·탭으로 돌아올 때·10분마다 서버의 빌드 번호와 비교 → 다르면 열자마자(아직 아무것도 안 만졌으면) 자동 새로고침, 작업 중이면 아래 알림 */
 (function(){
-  var B = 'P20261124-184043';/*WVBUILD*/
+  var B = 'P20261124-203605';/*WVBUILD*/
   window.WV_BUILD = B; if(B === 'DEV') return;
   var t0 = Date.now(), touched = false, shown = false;
   ['keydown', 'input', 'pointerdown'].forEach(function(ev){ document.addEventListener(ev, function(){ touched = true; }, { capture: true, once: true }); });
@@ -7274,6 +7274,79 @@ function close(){var u=$('up');u.classList.remove('on');clear();setTimeout(funct
     }
     next();
   }
+})();
+
+</script>
+<script>
+/* ===== ④ 변경 탭 정리 — 엑셀 불러오기 (2026-11-24)
+   기본 파일 선택 칸 + 긴 설명 → 끌어다 놓기 영역 하나로. 파일을 고르거나 끌어 놓으면 바로 불러옴(원본 importXlsx 그대로 사용)
+   요소 참고: Lucian UX/UI 032 끌어다 놓는 업로드 (MIT (c) 2026 Seokwoooo) */
+(function(){
+  function boot(){
+    var panel = document.getElementById('panelEdit'), inp = document.getElementById('xlsFile');
+    if(!panel || !inp){ setTimeout(boot, 400); return; }
+    if(document.getElementById('wvXl')) return;
+    var card = panel.querySelector('.card'); if(!card) return;
+    var st = document.createElement('style');
+    st.textContent = '#wvXl h3{display:flex;align-items:center;gap:10px;margin:0 0 4px;font-size:16px}' +
+      '#wvXl .ico{width:30px;height:30px;border-radius:9px;background:#e9f7ee;color:#1f7a45;display:flex;align-items:center;justify-content:center;flex:none}#wvXl .ico svg{width:17px;height:17px}' +
+      '#wvXl .sub{color:#6b6880;font-size:13px;margin:0 0 14px 40px}' +
+      '#wvXl .dz{position:relative;border:2px dashed #d6d2e3;border-radius:16px;background:#fafafc;padding:26px 18px;text-align:center;cursor:pointer;transition:border-color .2s,background-color .2s,transform .25s cubic-bezier(.34,1.45,.64,1);outline:none}' +
+      '#wvXl .dz:hover,#wvXl .dz:focus-visible{border-color:#9b83ff;background:#f8f6ff}#wvXl .dz.over{border-color:#7c5cff;background:#f1edff;transform:scale(1.01)}' +
+      '#wvXl .dz .big{width:46px;height:46px;margin:0 auto 10px;border-radius:14px;background:#fff;box-shadow:0 4px 14px rgba(20,16,40,.08);display:flex;align-items:center;justify-content:center;color:#7c5cff}#wvXl .dz .big svg{width:24px;height:24px}' +
+      '#wvXl .dz b{display:block;font-size:14.5px;color:#16131f}#wvXl .dz small{display:block;margin-top:4px;color:#8a8797;font-size:12.5px}' +
+      '#wvXl .dz .pick{display:inline-block;margin-top:12px;background:#16131f;color:#fff;border-radius:10px;padding:8px 16px;font-size:13px;font-weight:700}' +
+      '#wvXl .file{display:none;align-items:center;gap:10px;margin-top:12px;border:1px solid #ebe9f1;border-radius:12px;padding:10px 12px;background:#fff;font-size:13px}#wvXl .file.on{display:flex}' +
+      '#wvXl .file .nm{font-weight:700;color:#16131f;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#wvXl .file .sz{color:#8a8797;font-size:12px}' +
+      '#wvXl .file .stt{margin-left:auto;font-size:12px;font-weight:700;color:#5b3fd6;white-space:nowrap}#wvXl .file .stt.ok{color:#1f7a45}#wvXl .file .stt.bad{color:#b3243f}' +
+      '#wvXl .file .again{border:1px solid #ebe9f1;background:#fff;border-radius:8px;padding:4px 10px;font:inherit;font-size:12px;cursor:pointer}' +
+      '#wvXl .can{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 0}#wvXl .can span{background:#f3f2f7;border-radius:999px;padding:3px 10px;font-size:12px;color:#555}' +
+      '#wvXl .warn{margin:10px 0 0;font-size:12px;color:#8a8797}#wvXl .warn b{color:#a86400}' +
+      '#wvXl .vh{position:absolute!important;width:1px;height:1px;opacity:0;overflow:hidden;clip:rect(0 0 0 0)}';
+    (document.head || document.documentElement).appendChild(st);
+    var ICO_X = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13l4 4M13 13l-4 4"/></svg>';
+    var ICO_UP = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M5 20h14"/></svg>';
+    var box = document.createElement('div'); box.id = 'wvXl';
+    box.innerHTML = '<h3><span class="ico">' + ICO_X + '</span>엑셀 스케줄 불러와서 수정</h3>' +
+      '<p class="sub">이 생성기에서 내려받은 월 스케줄 엑셀을 불러오면 ③ 생성 탭에 그대로 열려요.</p>' +
+      '<div class="dz" tabindex="0" role="button" aria-label="엑셀 파일 고르기 또는 끌어 놓기"><div class="big">' + ICO_UP + '</div><b>엑셀 파일을 여기로 끌어 놓으세요</b><small>.xlsx · .xls — 놓으면 바로 불러와요</small><span class="pick">파일 고르기</span></div>' +
+      '<div class="file"><span class="nm"></span><span class="sz"></span><span class="stt"></span><button type="button" class="again">다시 불러오기</button></div>' +
+      '<div class="can"><span>칸 눌러 수정</span><span>긴급 결원 반영</span><span>월중 재편성</span><span>추가 휴무</span><span>임시 저장</span><span>엑셀 다시 내려받기</span></div>' +
+      '<p class="warn"><b>⚠</b> 이 생성기에서 내려받은 형식(제목 "YYYY년 M월 직원 스케줄")만 열려요 · 성명이 ① 직원 목록과 같아야 표에 나와요.</p>';
+    // 원래 내용은 숨기고(입력칸은 살려 둠) 새 화면으로
+    Array.prototype.slice.call(card.children).forEach(function(el){ el.style.display = 'none'; });
+    card.appendChild(box);
+    inp.classList.add('vh'); box.appendChild(inp);
+    var dz = box.querySelector('.dz'), file = box.querySelector('.file'), stt = box.querySelector('.stt');
+    function size(n){ return n > 1048576 ? (n / 1048576).toFixed(1) + 'MB' : Math.max(1, Math.round(n / 1024)) + 'KB'; }
+    function load(){
+      var f = inp.files && inp.files[0]; if(!f) return;
+      if(!/\.(xlsx|xls)$/i.test(f.name)){ stt.textContent = '엑셀 파일이 아니에요'; stt.className = 'stt bad'; file.classList.add('on'); return; }
+      box.querySelector('.nm').textContent = f.name; box.querySelector('.sz').textContent = size(f.size);
+      stt.textContent = '불러오는 중…'; stt.className = 'stt'; file.classList.add('on');
+      var s0 = (typeof sched !== 'undefined') ? sched : null;
+      try{ importXlsx(); }catch(e){ stt.textContent = '불러오지 못했어요'; stt.className = 'stt bad'; return; }
+      var t0 = Date.now();
+      (function chk(){
+        var cur = (typeof sched !== 'undefined') ? sched : null;
+        if(cur && cur !== s0){ stt.textContent = '✓ ' + cur.year + '년 ' + cur.month + '월 불러옴'; stt.className = 'stt ok'; return; }
+        if(Date.now() - t0 < 4000){ setTimeout(chk, 200); return; }
+        stt.textContent = '형식을 확인해 주세요'; stt.className = 'stt bad';
+      })();
+    }
+    dz.addEventListener('click', function(){ inp.click(); });
+    dz.addEventListener('keydown', function(e){ if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); inp.click(); } });
+    inp.addEventListener('change', load);
+    box.querySelector('.again').addEventListener('click', load);
+    ['dragenter', 'dragover'].forEach(function(ev){ dz.addEventListener(ev, function(e){ e.preventDefault(); dz.classList.add('over'); }); });
+    ['dragleave', 'drop'].forEach(function(ev){ dz.addEventListener(ev, function(e){ e.preventDefault(); dz.classList.remove('over'); }); });
+    dz.addEventListener('drop', function(e){
+      var fl = e.dataTransfer && e.dataTransfer.files; if(!fl || !fl.length) return;
+      try{ var dt = new DataTransfer(); dt.items.add(fl[0]); inp.files = dt.files; }catch(err){ return; }
+      load();
+    });
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else setTimeout(boot, 0);
 })();
 
 </script>
