@@ -6979,7 +6979,7 @@ window.WV_TOOLS_TABS = true;
    GitHub Pages는 페이지를 브라우저에 최대 10분 저장해 두므로, 배포 직후 열면 옛 화면이 뜰 수 있다.
    열 때·탭으로 돌아올 때·10분마다 서버의 빌드 번호와 비교 → 다르면 열자마자(아직 아무것도 안 만졌으면) 자동 새로고침, 작업 중이면 아래 알림 */
 (function(){
-  var B = 'T20261124-183040';/*WVBUILD*/
+  var B = 'T20261124-183544';/*WVBUILD*/
   window.WV_BUILD = B; if(B === 'DEV') return;
   var t0 = Date.now(), touched = false, shown = false;
   ['keydown', 'input', 'pointerdown'].forEach(function(ev){ document.addEventListener(ev, function(){ touched = true; }, { capture: true, once: true }); });
@@ -7248,7 +7248,8 @@ function close(){var u=$('up');u.classList.remove('on');clear();setTimeout(funct
     if(!el){ el = document.createElement('div'); el.id = 'wvVarCard'; el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite'); document.body.appendChild(el); }
     var sec = Math.round((Date.now() - t0) / 1000), left = '';
     if(done.length){ var avg = done.reduce(function(a, b){ return a + b; }, 0) / done.length, rest = Math.max(0, STEPS.length - state.i - 1);
-      left = ' · 약 ' + Math.max(1, Math.round((avg * rest + (state.i === STEPS.length - 1 ? avg * 3 : 0)) / 1000)) + '초 남음'; }
+      var restMs = state.i < STEPS.length - 1 ? avg * Math.max(0, rest - 1) + avg * 5 : (state.i === STEPS.length - 1 ? avg * 5 : 0);   // 5안(정밀)은 1~4안의 약 5배
+      left = restMs ? ' · 약 ' + Math.max(1, Math.round(restMs / 1000)) + '초 남음' : ''; }
     el.innerHTML = '<div class="bx"><h4><span class="sp"></span>5개 안을 비교하고 있어요</h4><div class="sub">안마다 표를 새로 짜서 공백·중복·요청 반영을 비교해요. 계산하는 동안 화면이 잠깐씩 멈춰 보일 수 있어요.</div>' +
       '<div class="bar"><i style="width:' + Math.round(state.i / STEPS.length * 100) + '%"></i></div><ol>' +
       STEPS.map(function(s, k){ var c = k < state.i ? 'ok' : (k === state.i ? 'run' : ''); return '<li class="' + c + '"><span class="ic">' + (k < state.i ? '✓' : '') + '</span>' + s + '<span class="r">' + (state.res[k] || '') + '</span></li>'; }).join('') +
@@ -7273,12 +7274,14 @@ function close(){var u=$('up');u.classList.remove('on');clear();setTimeout(funct
       window.WV_RESTARTS = full ? savedR : 1;          // 1~4안은 빠른 탐색
       window.WV_LNS = full ? savedL : 0;
       window.confirm = function(){ return true; }; window.alert = function(){};
+      var _rs = window.renderSched, _rc = window.renderCapacity;   // 안을 만드는 동안은 표를 다시 그리지 않음(마지막에 한 번만)
+      window.renderSched = function(){}; if(_rc) window.renderCapacity = function(){};
       try{
         job.baseGen.apply(null, job.args);
         var snap = {}; Object.keys(sched.cells).forEach(function(k){ snap[k] = sched.cells[k].slice(); });
         return { label: label, trim: trim, cells: snap };
       }catch(e){ console.warn(label + ' 생성 실패', e); return null; }
-      finally{ window.confirm = _cf; window.alert = _al; }
+      finally{ window.confirm = _cf; window.alert = _al; window.renderSched = _rs; if(_rc) window.renderCapacity = _rc; }
     }
     function gapOf(cells){ return scoreSchedule(cells, wvCtx(sched)).det.gap; }
     function brief(cells){ try{ var d = scoreSchedule(cells, wvCtx(sched)).det; return '공백 ' + (d.gap || 0) + (d.dupe != null ? ' · 중복 ' + d.dupe : ''); }catch(e){ return ''; } }
