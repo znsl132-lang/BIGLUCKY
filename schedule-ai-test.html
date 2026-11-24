@@ -5636,7 +5636,7 @@ window.WV_AI_URL = window.WV_AI_URL || 'https://script.google.com/macros/s/AKfyc
     var isRev = /^\[자동 검토\]/.test(q);
     var w = say('bot', '<span class="dots"></span>' + (isRev && !prev ? '✦ AI가 초안을 검토하는 중…' : '') + (isRev && !prev ? '' : (prev ? '검사에서 걸린 점을 고쳐 Opus가 다시 짜는 중… (1~2분 걸릴 수 있어요)' : (tier === 'opus' ? '복잡한 요청이라 Opus가 꼼꼼히 고치는 중… (1~2분 걸릴 수 있어요)' : 'AI가 표를 읽고 고치는 중…'))));
     var PT = (window.WV_PATROL_TITLES || ['팀장', '실장']), patrol = S.emps.filter(function(e){ return PT.indexOf(String(e.title || '').trim()) >= 0 && sc.cells[e.name]; }).map(function(e){ return e.name; });
-    var cx = { 근무불가매장규칙: '사용자가 특정 직원을 근무가능 목록에 없는 매장으로 보내라고 이름·매장을 콕 집어 말하면, 거절하지 말고 그대로 edits에 넣는다(화면이 사용자에게 한 번 더 확인받는다). 사용자가 콕 집지 않은 연쇄 수정은 근무가능 매장만 쓴다.', 순환규칙: '칸 값 "순환"은 매장 순회 근무다. 팀장·실장만 가능: ' + (patrol.join(', ') || '없음') + '. 다른 직원은 절대 순환으로 바꾸지 않는다. 이미 순환인 칸을 매장으로 바꾸는 것은 가능.', y: P.y, m: P.m, nDays: P.nD, 달력: cal(P.y, P.m), 매장필요인원: need, 인원예외: ex, 특이사항: reqs, 요약: SM.rows, 지표: SM.kpi, 일별: EC.일별, rows: rows, 대화: HIST.slice(-4) };
+    var cx = { 과거패턴: window.wvPatternText || '', 근무불가매장규칙: '사용자가 특정 직원을 근무가능 목록에 없는 매장으로 보내라고 이름·매장을 콕 집어 말하면, 거절하지 말고 그대로 edits에 넣는다(화면이 사용자에게 한 번 더 확인받는다). 사용자가 콕 집지 않은 연쇄 수정은 근무가능 매장만 쓴다.', 순환규칙: '칸 값 "순환"은 매장 순회 근무다. 팀장·실장만 가능: ' + (patrol.join(', ') || '없음') + '. 다른 직원은 절대 순환으로 바꾸지 않는다. 이미 순환인 칸을 매장으로 바꾸는 것은 가능.', y: P.y, m: P.m, nDays: P.nD, 달력: cal(P.y, P.m), 매장필요인원: need, 인원예외: ex, 특이사항: reqs, 요약: SM.rows, 지표: SM.kpi, 일별: EC.일별, rows: rows, 대화: HIST.slice(-4) };
     if(prev) cx.검사결과 = { 이전수정안: prev.edits, 문제: prev.problems };
     call({ mode: 'edit', tier: tier, q: q, ctx: cx }, tier === 'opus' ? 330000 : 120000).then(function(j){
       w.remove();
@@ -6591,6 +6591,7 @@ window.WV_TOOLS_TABS = true;
       return { cells: cells, notes: notes, extraOff: true, title: e.name + ' 휴무 추가 ' + got.length + '일' };
   };
 
+  window.__wvH = { ctx: function(sc){ return ctx(sc); }, need: function(C, s, d){ return need(C, s, d); }, cnt: function(C, c, s, d){ return cnt(C, c, s, d); }, allowed: function(q, s){ return allowed(q, s); }, relabel: function(C, c, s, d){ return relabel(C, c, s, d); }, runAt: function(C, c, n, d){ return runAt(C, c, n, d); }, clone: function(c){ return clone(c); }, kpi: function(sc, c){ return kpi(sc, c); }, base: base, isW: isW };   // 다른 기능(과거 패턴·추가 휴무)에서 같이 씀
   function kpi(sc, cells){
     var C = ctx(sc), gap = 0, dup = 0, mx = 0, n6 = 0, offs = 0;
     C.acts.forEach(function(e){ var a = cells[e.name], r = C.tail[e.name] || 0, m = r; a.forEach(function(v){ if(v === '') offs++; if(isW(v)){ r++; if(r > m) m = r; } else r = 0; }); if(m > mx) mx = m; if(m > 5) n6++; });
@@ -6998,7 +6999,7 @@ window.WV_TOOLS_TABS = true;
    GitHub Pages는 페이지를 브라우저에 최대 10분 저장해 두므로, 배포 직후 열면 옛 화면이 뜰 수 있다.
    열 때·탭으로 돌아올 때·10분마다 서버의 빌드 번호와 비교 → 다르면 열자마자(아직 아무것도 안 만졌으면) 자동 새로고침, 작업 중이면 아래 알림 */
 (function(){
-  var B = 'T20261124-210101';/*WVBUILD*/
+  var B = 'T20261124-211051';/*WVBUILD*/
   window.WV_BUILD = B; if(B === 'DEV') return;
   var t0 = Date.now(), touched = false, shown = false;
   ['keydown', 'input', 'pointerdown'].forEach(function(ev){ document.addEventListener(ev, function(){ touched = true; }, { capture: true, once: true }); });
@@ -7297,6 +7298,7 @@ function close(){var u=$('up');u.classList.remove('on');clear();setTimeout(funct
       window.renderSched = function(){}; if(_rc) window.renderCapacity = function(){};
       try{
         job.baseGen.apply(null, job.args);
+        try{ if(window.wvRebalance) window.wvRebalance(sched); }catch(e){}   // 과거 패턴 반영(안마다)
         var snap = {}; Object.keys(sched.cells).forEach(function(k){ snap[k] = sched.cells[k].slice(); });
         return { label: label, trim: trim, cells: snap };
       }catch(e){ console.warn(label + ' 생성 실패', e); return null; }
@@ -7453,6 +7455,186 @@ function close(){var u=$('up');u.classList.remove('on');clear();setTimeout(funct
     S.emps.filter(isPart).forEach(function(e){ var a = sched.cells[e.name]; if(!a) return; keep[e.name] = a.slice(); sched.cells[e.name] = a.map(function(v){ return work(v) ? v + '(PT)' : v; }); });
     setTimeout(function(){ Object.keys(keep).forEach(function(k){ sched.cells[k] = keep[k]; }); }, 0);
   }, true);
+})();
+
+</script>
+<script>
+/* ===== 과거 스케줄 패턴 반영 · 추가 휴무 부여 개선 (2026-11-24)
+   ① 패턴: 스케줄표(공유용 시트)의 최근 4개월 확정 스케줄을 읽어
+      - 남는 인원을 어느 매장·요일에 두었는지(예: 연수 46일 > 구월 21일)
+      - 순환 직원이 어느 매장에 주로 갔는지
+      를 계산 → 생성 직후, 남는 인원이 과거에 덜 쓰던 매장에 있으면 더 쓰던 매장으로 옮김(근무 가능 매장·공백·휴무 수·연속근무 그대로)
+      → AI 검토에도 근거로 전달. 시트는 하루 한 번 다시 읽음(브라우저에 저장)
+   ② 추가 휴무: 직원별 한 줄 표 + 공평하게 나눠 주기 + 공백 없는 날로 넣은 미리보기(개선안 팝업) → 적용·보류·되돌리기 */
+(function(){
+  var DOW = '일월화수목금토', H = function(){ return window.__wvH; };
+  /* ---------------- ① 과거 패턴 ---------------- */
+  var KEY = 'wvPattern2';
+  function csv(t){ var rows = [], row = [], cur = '', q = false; for(var i = 0; i < t.length; i++){ var c = t[i];
+      if(q){ if(c === '"'){ if(t[i + 1] === '"'){ cur += '"'; i++; } else q = false; } else cur += c; }
+      else if(c === '"') q = true; else if(c === ','){ row.push(cur); cur = ''; } else if(c === '\n' || c === '\r'){ if(c === '\r' && t[i + 1] === '\n') i++; row.push(cur); rows.push(row); row = []; cur = ''; } else cur += c; }
+    if(cur || row.length){ row.push(cur); rows.push(row); } return rows; }
+  function months(){ var now = new Date(), out = []; for(var k = 4; k >= 1; k--){ var d = new Date(now.getFullYear(), now.getMonth() - k + 1, 1); out.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')); } return out; }
+  function analyze(list){
+    var NOT = ['', '제외', '휴가', '병가', '훈련', '출장', '전휴무', '순환'], sur = {}, tot = {}, aff = {}, used = [];
+    var needOf = {}; (S.stores || []).forEach(function(s){ needOf[s.n] = s._need != null ? s._need : s.need; });
+    list.forEach(function(it){
+      var rows = it.rows; if(!rows || rows.length < 4) return; var dayRow = rows[2], data = rows.slice(3).filter(function(r){ return r[1]; });
+      var nD = 0; for(var c = 4; c < dayRow.length && DOW.indexOf(dayRow[c]) >= 0 && dayRow[c]; c++) nD++;
+      if(!nD) return; used.push(it.m);
+      for(var d = 0; d < nD; d++){
+        var w = DOW.indexOf(dayRow[4 + d]), cnt = {};
+        data.forEach(function(r){ var v = String(r[4 + d] || '').trim(); if(NOT.indexOf(v) >= 0) return; var b = v.replace(/\((OP|CL|PT)\)$/, '').trim(); if(!b || needOf[b] == null) return; cnt[b] = (cnt[b] || 0) + 1;
+          if(r[3] === '순환'){ (aff[r[1]] = aff[r[1]] || {})[b] = ((aff[r[1]] || {})[b] || 0) + 1; } });
+        Object.keys(cnt).forEach(function(s){ var x = cnt[s] - (needOf[s] || 1); if(x > 0){ (sur[s] = sur[s] || [0, 0, 0, 0, 0, 0, 0])[w] += x; tot[s] = (tot[s] || 0) + x; } });
+      }
+    });
+    return { at: Date.now(), months: used, sur: sur, tot: tot, aff: aff };
+  }
+  function text(P){
+    if(!P || !P.months.length) return '';
+    var st = Object.keys(P.tot).sort(function(a, b){ return P.tot[b] - P.tot[a]; });
+    return '최근 ' + P.months.join('·') + ' 확정 스케줄에서 남는 인원을 둔 매장(많은 순): ' + st.map(function(s){ return s + ' ' + P.tot[s] + '일'; }).join(', ') +
+      '. 같은 날 인원이 남으면 이 순서대로 많이 둔 매장에 두는 것이 실장님 방식이다. 순환 직원 주 근무 매장: ' +
+      Object.keys(P.aff).map(function(n){ var e = Object.entries(P.aff[n]).sort(function(a, b){ return b[1] - a[1]; }).slice(0, 2); return n + '(' + e.map(function(x){ return x[0]; }).join('·') + ')'; }).join(', ');
+  }
+  function load(force){
+    var c = null; try{ c = JSON.parse(localStorage.getItem(KEY) || 'null'); }catch(e){}
+    if(c && !force && Date.now() - c.at < 86400000){ window.wvPattern = c; window.wvPatternText = text(c); return Promise.resolve(c); }
+    var url = window.SHEET_WEBAPP_URL; if(!url || typeof fetch !== 'function') return Promise.resolve(c);
+    return Promise.all(months().map(function(m){ return fetch(url + '?month=' + m + '&t=' + Date.now()).then(function(r){ return r.ok ? r.text() : ''; }).then(function(t){ return { m: m, rows: t ? csv(t) : null }; }).catch(function(){ return { m: m, rows: null }; }); }))
+      .then(function(list){ var P = analyze(list); if(P.months.length){ try{ localStorage.setItem(KEY, JSON.stringify(P)); }catch(e){} window.wvPattern = P; window.wvPatternText = text(P); } return P; });
+  }
+  window.wvPatternLoad = load;
+  setTimeout(function(){ if(typeof S !== 'undefined') load(false); }, 2500);
+
+  // 생성 직후: 남는 인원을 과거에 더 쓰던 매장으로(같은 날·근무 가능 매장 안에서만)
+  window.wvRebalance = function(sc){
+    var P = window.wvPattern, h = H(); if(!P || !P.months.length || !h || !sc || !sc.cells) return 0;
+    try{ if(localStorage.getItem('wvUsePattern') === '0') return 0; }catch(e){}
+    var C = h.ctx(sc), cells = sc.cells, moved = 0, log = {};
+    var pref = function(s, w){ return ((P.sur[s] || [])[w] || 0) * 2 + (P.tot[s] || 0) / 7; };
+    var aff = function(n, s){ var a = P.aff[n] || {}, t = 0; Object.keys(a).forEach(function(k){ t += a[k]; }); return t ? (a[s] || 0) / t : 0; };
+    for(var d = 0; d < C.nD; d++){
+      if(C.hol[d]) continue;
+      var w = new Date(sc.year, sc.month - 1, d + 1).getDay(), guard = 0, changed = true;
+      while(changed && guard++ < 4){
+        changed = false; var best = null;
+        S.stores.forEach(function(sx){ var X = sx.n, cx = h.cnt(C, cells, X, d), nx = h.need(C, X, d); if(cx <= nx) return;
+          C.acts.forEach(function(p){
+            var v = cells[p.name][d]; if(!h.isW(v) || v === '순환' || h.base(v) !== X) return;
+            if(p.role === '오픈' || p.role === '마감' || p.role === '교육' || C.lockWork[p.name + '|' + d]) return;
+            S.stores.forEach(function(sy){ var Y = sy.n; if(Y === X || !h.allowed(p, Y)) return; var ny = h.need(C, Y, d); if(!(ny > 0) || h.cnt(C, cells, Y, d) < ny) return;
+              if(h.cnt(C, cells, Y, d) - ny >= 2) return;   // 한 매장에 남는 인원이 3명 이상 몰리지 않게
+              var g = pref(Y, w) - pref(X, w) + 3 * (aff(p.name, Y) - aff(p.name, X));
+              if(g > 2.5 && (!best || g > best.g)) best = { g: g, p: p, X: X, Y: Y };
+            });
+          });
+        });
+        if(best){ cells[best.p.name][d] = best.Y; h.relabel(C, cells, best.X, d); h.relabel(C, cells, best.Y, d); moved++; var k = best.X + '→' + best.Y; log[k] = (log[k] || 0) + 1; changed = true; }
+      }
+    }
+    window.__wvRebalanceLog = log;
+    return moved;
+  };
+  // 일반 생성: 생성이 끝난 직후(전월 불러오기 뒤) 한 번 적용 — 5개 안 비교 모드는 안마다 test_ai9에서 적용
+  document.addEventListener('wv:generated', function(){
+    try{
+      if(window.__wvVarBusy || typeof sched === 'undefined' || !sched || sched.__wvReb) return;
+      if(location.search.indexOf('opt=1') >= 0) return;
+      sched.__wvReb = true;
+      var n = window.wvRebalance(sched);
+      if(n){ if(typeof renderSched === 'function') renderSched(typeof lastWarns !== 'undefined' ? lastWarns : undefined);
+        var L = window.__wvRebalanceLog || {}; if(typeof wvToast === 'function') wvToast('과거 패턴 반영 · 남는 인원 ' + n + '명 옮김 (' + Object.keys(L).slice(0, 3).map(function(k){ return k + ' ' + L[k]; }).join(', ') + ')', 'ok'); }
+    }catch(e){ console.warn('과거 패턴 반영 건너뜀', e); }
+  });
+  // 생성 버튼 옆 켜고 끄기
+  function mountT(){
+    if(document.getElementById('wvPatTgl')) return true;
+    var anchor = document.getElementById('wvRevPatrol') || document.getElementById('wvRevTgl'); if(!anchor) return false;
+    var l = document.createElement('label'); l.id = 'wvPatTgl';
+    l.style.cssText = 'display:inline-flex;align-items:center;gap:6px;margin-left:6px;font-size:12.5px;font-weight:600;color:#1f7a5a;background:#e8f6ef;border-radius:999px;padding:5px 12px;cursor:pointer;vertical-align:middle';
+    var on = true; try{ on = localStorage.getItem('wvUsePattern') !== '0'; }catch(e){}
+    l.innerHTML = '<input type="checkbox" style="accent-color:#1f9d6a;margin:0"' + (on ? ' checked' : '') + '> 과거 패턴 반영 <small style="color:#5f8f7a;font-weight:500"></small>';
+    l.title = '최근 4개월 확정 스케줄에서 남는 인원을 둔 매장·요일을 보고, 생성 직후 남는 인원을 그쪽으로 옮깁니다';
+    var c = l.querySelector('input'); c.onchange = function(){ try{ localStorage.setItem('wvUsePattern', c.checked ? '1' : '0'); }catch(e){} };
+    anchor.parentNode.insertBefore(l, anchor.nextSibling);
+    var sm = l.querySelector('small'); var upd = function(){ var P = window.wvPattern; sm.textContent = P && P.months.length ? (P.months[0].slice(5) + '~' + P.months[P.months.length - 1].slice(5) + '월') : '불러오는 중'; }; upd(); setInterval(upd, 4000);
+    return true;
+  }
+  (function bootT(){ if(!mountT()) setTimeout(bootT, 600); })();
+
+  /* ---------------- ② 추가 휴무 부여 ---------------- */
+  var want = {};
+  function mk(){ return (typeof sched !== 'undefined' && sched) ? sched.year + '-' + String(sched.month).padStart(2, '0') : ''; }
+  function histCount(n){ var c = 0; Object.keys(S.extraLog || {}).forEach(function(k){ if(k === mk()) return; (S.extraLog[k] || []).forEach(function(x){ if(x.name === n) c++; }); }); return c; }
+  function thisCount(n){ return ((S.extraLog && S.extraLog[mk()]) || []).filter(function(x){ return x.name === n; }).length; }
+  // 그 사람의 '빠져도 공백 없는 날'(남는 칸) — 연속근무가 긴 날·주말 우선
+  function freeDays(sc, cells, n){
+    var h = H(), C = h.ctx(sc), out = [];
+    for(var d = 0; d < C.nD; d++){ var v = cells[n][d]; if(!h.isW(v) || C.hol[d] || C.lockWork[n + '|' + d]) continue;
+      if(v !== '순환'){ var b = h.base(v); if(h.cnt(C, cells, b, d) - 1 < h.need(C, b, d)) continue; }
+      var w = new Date(sc.year, sc.month - 1, d + 1).getDay(); out.push({ d: d, sc: h.runAt(C, cells, n, d) * 2 + ((w === 0 || w === 6) ? 3 : 0) }); }
+    return out.sort(function(a, b){ return b.sc - a.sc; });
+  }
+  function preview(){
+    var sc = sched, h = H(); if(!sc || !h) return;
+    var cells = h.clone(sc.cells), notes = [], short = [], C = h.ctx(sc);
+    Object.keys(want).forEach(function(n){ var k = want[n]; if(!k || !cells[n]) return; var got = 0;
+      for(var i = 0; i < k; i++){ var f = freeDays(sc, cells, n)[0]; if(!f) break; var v = cells[n][f.d]; cells[n][f.d] = ''; if(v !== '순환') h.relabel(C, cells, h.base(v), f.d); got++; notes.push(n + ' ' + sc.month + '/' + (f.d + 1) + ' 추가 휴무'); }
+      if(got < k) short.push(n + ' ' + (k - got) + '일');
+    });
+    if(short.length) notes.push('⚠ 공백 없이 넣을 날이 부족: ' + short.join(', ') + ' → 아래 「재편성으로 부여」를 쓰세요');
+    if(window.wvShowAlt) window.wvShowAlt(sc, { cells: cells, notes: notes, extraOff: true, title: '추가 휴무 ' + Object.keys(want).reduce(function(a, n){ return a + (want[n] || 0); }, 0) + '일' }, function(cls, html){
+      var log = document.getElementById('wvAdvLog'); if(!log) return null; var x = document.createElement('div'); x.className = 'm ' + cls; x.innerHTML = html; log.appendChild(x); return x; }, { onApply: function(){ want = {}; setTimeout(render, 50); } });
+  }
+  function fair(total){
+    want = {}; var emps = S.emps.filter(function(e){ return e.role !== '교육' && sched.cells[e.name]; });
+    emps.sort(function(a, b){ return (histCount(a.name) + thisCount(a.name)) - (histCount(b.name) + thisCount(b.name)) || (a.name < b.name ? -1 : 1); });
+    var left = total, guard = 0;
+    while(left > 0 && guard++ < 50){ emps.forEach(function(e){ if(left <= 0) return; if(!freeDays(sched, sched.cells, e.name).length) return; if((want[e.name] || 0) >= 2) return; want[e.name] = (want[e.name] || 0) + 1; left--; }); if(guard > 3) break; }
+    render();
+  }
+  function render(){
+    var box = document.getElementById('extraBox'); if(!box || typeof sched === 'undefined' || !sched) return;
+    if(typeof extraHidden !== 'undefined' && extraHidden){ return; }
+    var cand = (typeof extraCands === 'function') ? extraCands() : { byEmp: {}, total: 0 };
+    var emps = S.emps.filter(function(e){ return e.role !== '교육' && sched.cells[e.name]; });
+    var sum = Object.keys(want).reduce(function(a, n){ return a + (want[n] || 0); }, 0);
+    var log = (S.extraLog && S.extraLog[mk()]) || [];
+    var h = '<div class="card" id="wvEx"><h3>추가 휴무 부여 <span class="hint">— 남는 근무 ' + cand.total + '일 · 공백 없는 날로 넣고 미리보기 후 적용</span></h3>' +
+      '<div class="wvExBar"><button type="button" class="btn small" data-a="fair">⚖ 공평하게 나눠 주기 (' + cand.total + '일)</button><button type="button" class="btn small gray" data-a="clear">비우기</button><span class="sp"></span><b>선택 ' + sum + '일</b><button type="button" class="btn small" data-a="prev"' + (sum ? '' : ' disabled') + '>미리보기 → 적용</button></div>' +
+      '<table class="wvExT"><thead><tr><th>직원</th><th>이번 달 휴무</th><th>지난 추가 휴무</th><th>공백 없이 쉴 수 있는 날</th><th>추가</th></tr></thead><tbody>' +
+      emps.map(function(e){ var off = sched.cells[e.name].filter(function(v){ return v === ''; }).length, fd = freeDays(sched, sched.cells, e.name), k = want[e.name] || 0;
+        return '<tr' + (k ? ' class="on"' : '') + '><td class="nm">' + e.name + '<small>' + (e.title || '') + '</small></td><td>' + off + ' / ' + offTarget(e) + (thisCount(e.name) ? ' <span class="tg">+' + thisCount(e.name) + ' 부여됨</span>' : '') + '</td><td>' + (histCount(e.name) ? histCount(e.name) + '회' : '<span class="mu">없음</span>') + '</td>' +
+          '<td>' + (fd.length ? fd.slice(0, 4).map(function(x){ return sched.month + '/' + (x.d + 1); }).join(' · ') + (fd.length > 4 ? ' 외 ' + (fd.length - 4) : '') : '<span class="mu">재편성 필요</span>') + '</td>' +
+          '<td><span class="stp"><button type="button" data-n="' + e.name + '" data-v="-1">−</button><b>' + k + '</b><button type="button" data-n="' + e.name + '" data-v="1">+</button></span></td></tr>'; }).join('') +
+      '</tbody></table>' +
+      (log.length ? '<div class="wvExLog">이번 달 부여: ' + log.map(function(x, i){ return '<span class="reqtag">' + x.name + ' ' + (x.bulk ? '+1일(재편성)' : (x.day + 1) + '일') + '<b data-u="' + i + '">✕</b></span>'; }).join('') + '</div>' : '') +
+      '<div class="wvExFoot"><span>공백 없이 넣을 날이 없으면 → </span><button type="button" class="btn small gray" data-a="bulk">재편성으로 부여</button><button type="button" class="btn small gray" data-a="skip">반영 없이 편성</button></div></div>';
+    box.innerHTML = h;
+    box.querySelectorAll('.stp button').forEach(function(b){ b.onclick = function(){ var n = b.dataset.n; want[n] = Math.max(0, Math.min(5, (want[n] || 0) + (+b.dataset.v))); render(); }; });
+    box.querySelector('[data-a=fair]').onclick = function(){ fair(cand.total); };
+    box.querySelector('[data-a=clear]').onclick = function(){ want = {}; render(); };
+    box.querySelector('[data-a=prev]').onclick = preview;
+    box.querySelector('[data-a=skip]').onclick = function(){ if(typeof skipExtra === 'function') skipExtra(); };
+    box.querySelector('[data-a=bulk]').onclick = function(){
+      var names = Object.keys(want).filter(function(n){ return want[n] > 0; }); if(!names.length){ if(typeof wvToast === 'function') wvToast('추가할 직원을 먼저 고르세요', 'warn'); return; }
+      // 원본 일괄 부여(재편성)를 그대로 사용: 체크박스를 만들어 넘김
+      var tmp = document.createElement('div'); tmp.style.display = 'none'; names.forEach(function(n){ for(var i = 0; i < want[n]; i++){ var c = document.createElement('input'); c.type = 'checkbox'; c.className = 'exsel'; c.value = n; c.checked = true; tmp.appendChild(c); } }); document.body.appendChild(tmp);
+      try{ if(typeof applyExtraBulk === 'function') applyExtraBulk(); }finally{ tmp.remove(); want = {}; }
+    };
+    box.querySelectorAll('[data-u]').forEach(function(b){ b.onclick = function(){ if(typeof undoExtra === 'function') undoExtra(+b.dataset.u); }; });
+  }
+  var st = document.createElement('style');
+  st.textContent = '#wvEx .wvExBar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:6px 0 10px}#wvEx .wvExBar .sp{flex:1}#wvEx .wvExBar b{font-size:13px}' +
+    '#wvEx .wvExT{width:100%;border-collapse:separate;border-spacing:0;font-size:13px}#wvEx .wvExT th{text-align:left;font-size:12px;color:#6b6880;font-weight:700;padding:6px 8px;border-bottom:1px solid #ebe9f1;background:#fafafc}' +
+    '#wvEx .wvExT td{padding:7px 8px;border-bottom:1px solid #f2f1f6;vertical-align:middle}#wvEx .wvExT tr.on td{background:#f6f3ff}#wvEx .nm{font-weight:700;white-space:nowrap}#wvEx .nm small{margin-left:5px;color:#8a8797;font-weight:500}' +
+    '#wvEx .mu{color:#aaa}#wvEx .tg{display:inline-block;background:#e8f6ef;color:#1f7a5a;border-radius:6px;padding:0 6px;font-size:11px;font-weight:700}' +
+    '#wvEx .stp{display:inline-flex;align-items:center;border:1px solid #e3e0ec;border-radius:9px;overflow:hidden}#wvEx .stp button{border:0;background:#fff;width:28px;height:26px;cursor:pointer;font-size:15px;color:#555}#wvEx .stp button:hover{background:#f1edff}#wvEx .stp b{min-width:22px;text-align:center;font-size:13px}' +
+    '#wvEx .wvExLog{margin-top:10px;font-size:12.5px}#wvEx .wvExFoot{display:flex;align-items:center;gap:6px;margin-top:12px;padding-top:10px;border-top:1px dashed #eee;font-size:12px;color:#8a8797;flex-wrap:wrap}';
+  (document.head || document.documentElement).appendChild(st);
+  if(typeof renderExtra === 'function'){ var _re = renderExtra; renderExtra = function(){ var r = _re.apply(this, arguments); try{ if(!(typeof extraHidden !== 'undefined' && extraHidden)) render(); }catch(e){ console.warn('추가 휴무 화면', e); } return r; }; window.renderExtra = renderExtra; }
 })();
 
 </script>
