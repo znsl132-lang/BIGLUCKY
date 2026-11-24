@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-24 08:20",
+  "updatedAt": "2026-11-24 10:11",
   "branches": {
     "구월 로데오점": {
       "naver": 2515,
@@ -7394,5 +7394,15 @@
       }
     }
   },
-  "errors": []
+  "errors": [
+    "구월 로데오점/kakao: Page.goto: Timeout 45000ms exceeded.\nCall log:\n  - navigating to \"https://place.map.kakao.com/1168620629\", waiting until \"domcontentloaded\"\n",
+    "구월 길병원점/kakao: Page.goto: Timeout 45000ms exceeded.\nCall log:\n  - navigating to \"https://place.map.kakao.com/633298339\", waiting until \"domcontentloaded\"\n",
+    "부천 상동점/kakao: Page.goto: net::ERR_CONNECTION_TIMED_OUT at https://place.map.kakao.com/1296224657\nCall log:\n  - navigating to \"https://place.map.kakao.com/1296224657\", waiting until \"domcontentloaded\"\n",
+    "부천 신중동점/kakao: Page.goto: net::ERR_CONNECTION_TIMED_OUT at https://place.map.kakao.com/2143803668\nCall log:\n  - navigating to \"https://place.map.kakao.com/2143803668\", waiting until \"domcontentloaded\"\n",
+    "인천 검단점/kakao: Page.goto: net::ERR_CONNECTION_TIMED_OUT at https://place.map.kakao.com/935044085\nCall log:\n  - navigating to \"https://place.map.kakao.com/935044085\", waiting until \"domcontentloaded\"\n",
+    "인천 계산점/kakao: Page.goto: net::ERR_CONNECTION_TIMED_OUT at https://place.map.kakao.com/1174093631\nCall log:\n  - navigating to \"https://place.map.kakao.com/1174093631\", waiting until \"domcontentloaded\"\n",
+    "인천 공항점/kakao: Page.goto: net::ERR_CONNECTION_TIMED_OUT at https://place.map.kakao.com/846947831\nCall log:\n  - navigating to \"https://place.map.kakao.com/846947831\", waiting until \"domcontentloaded\"\n",
+    "인천 논현점/kakao: Page.goto: Timeout 45000ms exceeded.\nCall log:\n  - navigating to \"https://place.map.kakao.com/630219080\", waiting until \"domcontentloaded\"\n",
+    "인천 연수점/kakao: Page.goto: net::ERR_CONNECTION_TIMED_OUT at https://place.map.kakao.com/580096181\nCall log:\n  - navigating to \"https://place.map.kakao.com/580096181\", waiting until \"domcontentloaded\"\n"
+  ]
 }
