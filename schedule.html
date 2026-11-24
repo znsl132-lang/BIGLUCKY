@@ -5586,7 +5586,7 @@ window.WV_AI_URL = window.WV_AI_URL || 'https://script.google.com/macros/s/AKfyc
     var isRev = /^\[자동 검토\]/.test(q);
     var w = say('bot', '<span class="dots"></span>' + (isRev && !prev ? '✦ AI가 초안을 검토하는 중…' : '') + (isRev && !prev ? '' : (prev ? '검사에서 걸린 점을 고쳐 Opus가 다시 짜는 중… (1~2분 걸릴 수 있어요)' : (tier === 'opus' ? '복잡한 요청이라 Opus가 꼼꼼히 고치는 중… (1~2분 걸릴 수 있어요)' : 'AI가 표를 읽고 고치는 중…'))));
     var PT = (window.WV_PATROL_TITLES || ['팀장', '실장']), patrol = S.emps.filter(function(e){ return PT.indexOf(String(e.title || '').trim()) >= 0 && sc.cells[e.name]; }).map(function(e){ return e.name; });
-    var cx = { 순환규칙: '칸 값 "순환"은 매장 순회 근무다. 팀장·실장만 가능: ' + (patrol.join(', ') || '없음') + '. 다른 직원은 절대 순환으로 바꾸지 않는다. 이미 순환인 칸을 매장으로 바꾸는 것은 가능.', y: P.y, m: P.m, nDays: P.nD, 달력: cal(P.y, P.m), 매장필요인원: need, 인원예외: ex, 특이사항: reqs, 요약: SM.rows, 지표: SM.kpi, 일별: EC.일별, rows: rows, 대화: HIST.slice(-4) };
+    var cx = { 근무불가매장규칙: '사용자가 특정 직원을 근무가능 목록에 없는 매장으로 보내라고 이름·매장을 콕 집어 말하면, 거절하지 말고 그대로 edits에 넣는다(화면이 사용자에게 한 번 더 확인받는다). 사용자가 콕 집지 않은 연쇄 수정은 근무가능 매장만 쓴다.', 순환규칙: '칸 값 "순환"은 매장 순회 근무다. 팀장·실장만 가능: ' + (patrol.join(', ') || '없음') + '. 다른 직원은 절대 순환으로 바꾸지 않는다. 이미 순환인 칸을 매장으로 바꾸는 것은 가능.', y: P.y, m: P.m, nDays: P.nD, 달력: cal(P.y, P.m), 매장필요인원: need, 인원예외: ex, 특이사항: reqs, 요약: SM.rows, 지표: SM.kpi, 일별: EC.일별, rows: rows, 대화: HIST.slice(-4) };
     if(prev) cx.검사결과 = { 이전수정안: prev.edits, 문제: prev.problems };
     call({ mode: 'edit', tier: tier, q: q, ctx: cx }, tier === 'opus' ? 330000 : 120000).then(function(j){
       w.remove();
@@ -5601,6 +5601,24 @@ window.WV_AI_URL = window.WV_AI_URL || 'https://script.google.com/macros/s/AKfyc
       }
       var res = window.wvApplyEdits(sc, edits);
       var tries = prev ? (prev.n || 1) : 0;
+      // 설정상 근무 불가 매장으로 보내는 칸이 있으면 → 바로 거절·재시도하지 않고 사용자에게 한 번 묻는다
+      if(res.banned && res.banned.length && !isRev){
+        var grp = {}; res.banned.forEach(function(b){ var k = b.emp + '|' + b.store; (grp[k] = grp[k] || { emp: b.emp, store: b.store, ban: b.ban, days: [] }).days.push(b.day); });
+        var G = Object.keys(grp).map(function(k){ return grp[k]; });
+        var lines = G.map(function(g){ return '<li><b>' + esc(g.emp) + ' → ' + esc(g.store) + '</b> · ' + g.days.sort(function(a, b){ return a - b; }).map(function(d){ return sc.month + '/' + d; }).join(', ') + '<br><small>' + (g.ban ? '설정: ' + esc(g.store) + ' 배치 금지' : '설정: ' + esc(g.store) + '는 근무 가능 매장이 아님(소속·우선 매장 외)') + '</small></li>'; }).join('');
+        var ask = say('bot', intent + '<div class="ans-h">⚠ 설정상 배치할 수 없는 매장이 있어요</div><ul class="ans">' + lines + '</ul><div class="ans-h" style="margin-top:6px">그래도 이번만 배치할까요?</div>' +
+          '<div class="wvAdvBtns"><button class="btn" data-a="yes">이번만 배치하기</button><button class="btn gray" data-a="no">빼고 진행</button></div><div class="meta">설정(직원 목록)은 바뀌지 않아요 · 이번 수정에만 예외로 적용</div>' + meta);
+        var proceed = function(allow){
+          ask.querySelector('.wvAdvBtns').innerHTML = allow ? '✓ 이번만 배치로 진행' : '설정대로 빼고 진행';
+          var r2 = window.wvApplyEdits(sc, edits, { allow: allow || {} });
+          r2.title = '수정안'; if(allow) r2.notes.unshift('설정상 배치 금지 매장을 이번만 예외로 배치: ' + G.map(function(g){ return g.emp + '→' + g.store; }).join(', '));
+          var turn2 = { 요청: q, 답: String(D.answer || '').split('\n')[0].slice(0, 120), 바뀐칸: [], 적용: false }; HIST.push(turn2);
+          window.wvShowAlt(sc, r2, say, { head: fmtAns(D.answer || ''), meta: meta, onApply: function(diffs){ turn2.적용 = true; turn2.바뀐칸 = diffs.slice(0, 40).map(function(x){ return { 직원: x.n, 일: x.d + 1, 전: x.o === '' ? '휴' : String(x.o).replace(/\((OP|CL|PT)\)$/, ''), 후: x.v === '' ? '휴' : String(x.v).replace(/\((OP|CL|PT)\)$/, '') }; }); } });
+        };
+        ask.querySelector('[data-a=yes]').onclick = function(){ var al = {}; G.forEach(function(g){ al[g.emp + '|' + g.store] = 1; }); proceed(al); };
+        ask.querySelector('[data-a=no]').onclick = function(){ proceed(null); };
+        return;
+      }
       if(res.problems.length && tries < 1 && !noFallback){   // 검사에 걸리면 Opus가 문제를 알고 한 번 더 짠다(Sonnet→Opus, Opus→Opus)
         say('bot', '<div class="meta">' + TIER_NAME[tier] + ' 수정안 검사: ' + esc(res.problems.join(' / ')) + '</div>');
         window.wvAIEdit(q, say, 'opus', { edits: edits, problems: res.problems, n: tries + 1 });
@@ -6714,7 +6732,8 @@ window.WV_TOOLS_TABS = true;
   };
 
   /* AI 칸 수정안 검사·반영 — 막힌 칸은 거절, 새로 생긴 공백은 기존 알고리즘으로 자동 보정, 남은 문제는 problems로 */
-  window.wvApplyEdits = function(sc, edits){
+  window.wvApplyEdits = function(sc, edits, opt){
+    opt = opt || {}; var allowSet = opt.allow || {}, banned = [];   // allow['이름|매장']=1 → 이번만 근무 불가 매장 허용(사용자가 확인함)
     var C = ctx(sc), cells = clone(sc.cells), rej = [], ok = [], touched = {}, LK = {}, notes = [], seen = {};
     var storeN = S.stores.map(function(s){ return s.n; });
     (edits || []).forEach(function(x){
@@ -6729,7 +6748,7 @@ window.WV_TOOLS_TABS = true;
       if(ABS.indexOf(o) >= 0){ rej.push(nm + ' ' + dd + '일 — ' + o + ' 칸은 못 바꿈'); return; }
       if(to === '' && C.lockWork[nm + '|' + d]){ rej.push(nm + ' ' + dd + '일 — 근무 지정일'); return; }
       if(to !== '' && C.lockOff[nm + '|' + d]){ rej.push(nm + ' ' + dd + '일 — 휴무 요청일'); return; }
-      if(to !== '' && to !== '순환' && !allowed(e, to)){ rej.push(nm + ' ' + dd + '일 — ' + to + ' 근무 불가'); return; }
+      if(to !== '' && to !== '순환' && !allowed(e, to) && !allowSet[nm + '|' + to]){ banned.push({ emp: nm, day: dd, store: to, ban: (e.ban || []).indexOf(to) >= 0 }); rej.push(nm + ' ' + dd + '일 — ' + to + ' 근무 불가'); return; }
       if(to === '순환' && o !== '순환' && (window.WV_PATROL_TITLES || ['팀장', '실장']).indexOf(String(e.title || '').trim()) < 0){ rej.push(nm + ' ' + dd + '일 — 순환(매장 순회)은 팀장·실장만'); return; }
       if(base(o) === to && (o === '') === (to === '')) return;
       cells[nm][d] = to; LK[nm + '|' + d] = 1; ok.push({ n: nm, d: d });
@@ -6754,7 +6773,7 @@ window.WV_TOOLS_TABS = true;
     if(rej.length) notes.push('반영 못 한 칸: ' + rej.join(', '));
     if(problems.length && !rej.length && !longs.length && k1.gap > k0.gap) notes.push('⚠ 공백이 남아 있어요 — 적용 전 확인');
     if(longs.length) notes.push('⚠ ' + longs.join(', ') + ' 연속근무');
-    return { cells: cells, notes: notes, problems: problems, applied: ok.length, rejected: rej, offDelta: offDelta, title: 'AI 수정안' };
+    return { cells: cells, notes: notes, problems: problems, applied: ok.length, rejected: rej, banned: banned, offDelta: offDelta, title: 'AI 수정안' };
   };
   window.wvAltLabel = function(a){
     if(a.type === 'dupToOff') return '중복 근무를 휴무로 골고루 바꾼 대안 만들기';
@@ -6929,7 +6948,7 @@ window.WV_TOOLS_TABS = true;
    GitHub Pages는 페이지를 브라우저에 최대 10분 저장해 두므로, 배포 직후 열면 옛 화면이 뜰 수 있다.
    열 때·탭으로 돌아올 때·10분마다 서버의 빌드 번호와 비교 → 다르면 열자마자(아직 아무것도 안 만졌으면) 자동 새로고침, 작업 중이면 아래 알림 */
 (function(){
-  var B = 'P20261124-203605';/*WVBUILD*/
+  var B = 'P20261124-205422';/*WVBUILD*/
   window.WV_BUILD = B; if(B === 'DEV') return;
   var t0 = Date.now(), touched = false, shown = false;
   ['keydown', 'input', 'pointerdown'].forEach(function(ev){ document.addEventListener(ev, function(){ touched = true; }, { capture: true, once: true }); });
