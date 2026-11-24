@@ -4708,7 +4708,7 @@ wvChkInit();
       return;
     }
     if(window.wvAIRule && window.WV_AI_URL){ window.wvAIRule(q, say); return; }
-    say('wvT-bot', '테스트판은 아직 Claude API 연결 전이라 <b>연속근무 조건</b>만 알아듣습니다. 예: "6일 연속 근무 발생하지 않게 해줘", "연속근무 최대 4일까지". 다른 문장은 API 연결 후 처리됩니다.');
+    say('wvT-bot', '생성기 확장은 아직 Claude API 연결 전이라 <b>연속근무 조건</b>만 알아듣습니다. 예: "6일 연속 근무 발생하지 않게 해줘", "연속근무 최대 4일까지". 다른 문장은 API 연결 후 처리됩니다.');
   }
 
   /* ---------- ③ 연속근무 상한 후처리 ---------- */
@@ -4998,7 +4998,7 @@ th,td{border-color:var(--ln)!important}
       var t0 = Date.now();
       (function wait(){
         var changed = (typeof sched !== 'undefined') && sched && sched !== s0;
-        if(!changed && Date.now() - t0 < 30000){ setTimeout(wait, 200); return; }
+        if(window.__wvVarBusy || (!changed && Date.now() - t0 < 30000)){ setTimeout(wait, 200); return; }   // 5개 안 비교(?opt=1)는 다 만들 때까지 기다림
         pg.classList.remove('wait');
         var k = 0;
         (function step(){
@@ -5221,7 +5221,7 @@ th,td{border-color:var(--ln)!important}
     // '연속근무만' 푸는 요청은 로컬 알고리즘, 다른 요구가 섞인 복합 요청(바꿔·보내·중복·휴무 등)은 AI가 표를 직접 고침
     var pureRun = /연속/.test(q) && !/(바꿔|바꾸|교체|보내|옮겨|옮기|중복|휴무|쉬게|대신|넣어|빼|,|그리고|하고\s|랑\s)/.test(q.replace(/연속\s*근무|연속/g, ''));
     if(!pureRun && window.wvAIAdvise && window.WV_AI_URL){ window.wvAIAdvise(q, say, ask); return; }
-    if(!/연속/.test(q)){ say('bot', '테스트판은 아직 Claude API 연결 전이라 <b>연속근무 해소</b> 요청만 처리합니다. 예: "장현진 연속근무 8일 해소한 버전 만들어줘", "6일 이상 연속근무 전부 해소해줘". 다른 조언은 API 연결 후 가능합니다.'); return; }
+    if(!/연속/.test(q)){ say('bot', '생성기 확장은 아직 Claude API 연결 전이라 <b>연속근무 해소</b> 요청만 처리합니다. 예: "장현진 연속근무 8일 해소한 버전 만들어줘", "6일 이상 연속근무 전부 해소해줘". 다른 조언은 API 연결 후 가능합니다.'); return; }
     var sc = sched, names = findNames(q);
     var mm = q.match(/최대\s*(\d{1,2})\s*일/), r0 = (Array.isArray(S.aiRules) ? S.aiRules : []).filter(function(x){ return x.type === 'maxRun'; })[0];
     var MAX = mm ? +mm[1] : (r0 ? r0.max : 5);
@@ -5583,7 +5583,8 @@ window.WV_AI_URL = window.WV_AI_URL || 'https://script.google.com/macros/s/AKfyc
     var ex = ((S.needX && S.needX[mkS]) || []).map(function(x){ return x.store + ' ' + x.day + '일 ' + x.need + '명'; }).join(', ');
     var reqs = ((S.reqs && S.reqs[mkS]) || []).map(function(r){ return r.emp + ' ' + r.day + '일 ' + r.type + (r.store ? '(' + r.store + ')' : ''); }).join(', ');
     var SM = summary(sc);
-    var w = say('bot', '<span class="dots"></span>' + (prev ? '검사에서 걸린 점을 고쳐 Opus가 다시 짜는 중… (1~2분 걸릴 수 있어요)' : (tier === 'opus' ? '복잡한 요청이라 Opus가 꼼꼼히 고치는 중… (1~2분 걸릴 수 있어요)' : 'AI가 표를 읽고 고치는 중…')));
+    var isRev = /^\[자동 검토\]/.test(q);
+    var w = say('bot', '<span class="dots"></span>' + (isRev && !prev ? '✦ AI가 초안을 검토하는 중…' : '') + (isRev && !prev ? '' : (prev ? '검사에서 걸린 점을 고쳐 Opus가 다시 짜는 중… (1~2분 걸릴 수 있어요)' : (tier === 'opus' ? '복잡한 요청이라 Opus가 꼼꼼히 고치는 중… (1~2분 걸릴 수 있어요)' : 'AI가 표를 읽고 고치는 중…'))));
     var PT = (window.WV_PATROL_TITLES || ['팀장', '실장']), patrol = S.emps.filter(function(e){ return PT.indexOf(String(e.title || '').trim()) >= 0 && sc.cells[e.name]; }).map(function(e){ return e.name; });
     var cx = { 순환규칙: '칸 값 "순환"은 매장 순회 근무다. 팀장·실장만 가능: ' + (patrol.join(', ') || '없음') + '. 다른 직원은 절대 순환으로 바꾸지 않는다. 이미 순환인 칸을 매장으로 바꾸는 것은 가능.', y: P.y, m: P.m, nDays: P.nD, 달력: cal(P.y, P.m), 매장필요인원: need, 인원예외: ex, 특이사항: reqs, 요약: SM.rows, 지표: SM.kpi, 일별: EC.일별, rows: rows, 대화: HIST.slice(-4) };
     if(prev) cx.검사결과 = { 이전수정안: prev.edits, 문제: prev.problems };
@@ -5592,9 +5593,9 @@ window.WV_AI_URL = window.WV_AI_URL || 'https://script.google.com/macros/s/AKfyc
       if(sched !== sc){ say('bot', '그사이 표가 바뀌었어요. 다시 요청해 주세요.'); return; }
       var D = j.data || {}, edits = Array.isArray(D.edits) ? D.edits : [];
       var meta = '<div class="meta">AI · ' + TIER_NAME[j.tier || tier] + (j.ms ? ' · ' + (j.ms / 1000).toFixed(1) + '초' : '') + (j.left != null ? ' · 오늘 남은 ' + j.left + '회' : '') + '</div>';
-      var intent = D.intent ? '<div class="wvIntent">이해한 요청 · ' + esc(D.intent) + '</div>' : '';
+      var intent = isRev ? '<div class="wvRevH">✦ AI 검토</div>' : (D.intent ? '<div class="wvIntent" title="' + esc(D.intent) + '">이해한 요청 · ' + esc(D.intent) + '</div>' : '');
       if(!edits.length){
-        say('bot', intent + fmtAns(D.answer || '') + (D.ask ? '<div class="ans-h" style="margin-top:6px">' + esc(D.ask) + '</div>' : '') + meta);
+        var bx0 = say('bot', intent + fmtAns(D.answer || '') + (D.ask ? '<div class="ans-h" style="margin-top:6px">' + esc(D.ask) + '</div>' : '') + meta); if(isRev && bx0) bx0.classList.add('wvRev');
         HIST.push({ 요청: q, 답: String(D.answer || D.ask || '').split('\n')[0].slice(0, 120), 바뀐칸: [], 적용: false });
         return;
       }
@@ -5608,9 +5609,10 @@ window.WV_AI_URL = window.WV_AI_URL || 'https://script.google.com/macros/s/AKfyc
       res.title = /^\[자동 검토\]/.test(q) ? 'AI 검토안' : '수정안';
       var turn = { 요청: q, 답: String(D.answer || '').split('\n')[0].slice(0, 120), 바뀐칸: [], 적용: false };
       HIST.push(turn);
-      window.wvShowAlt(sc, res, say, { head: intent + fmtAns(D.answer || ''), meta: meta, onApply: function(diffs){
+      var bx1 = window.wvShowAlt(sc, res, say, { head: intent + fmtAns(D.answer || ''), meta: meta, onApply: function(diffs){
         turn.적용 = true; turn.바뀐칸 = diffs.slice(0, 40).map(function(x){ return { 직원: x.n, 일: x.d + 1, 전: x.o === '' ? '휴' : String(x.o).replace(/\((OP|CL|PT)\)$/, ''), 후: x.v === '' ? '휴' : String(x.v).replace(/\((OP|CL|PT)\)$/, '') }; });
       } });
+      if(isRev && bx1) bx1.classList.add('wvRev');
     }).catch(function(e){
       if(tier === 'sonnet' && !prev && !noFallback && !/한도/.test(e.message)){   // Sonnet이 글자 수 한도 등으로 실패하면 Opus가 한 번 더
         w.innerHTML = '<span class="meta">Sonnet 응답 실패(' + esc(e.message) + ') — Opus로 다시 시도해요 (1~2분)</span>';
@@ -6927,7 +6929,7 @@ window.WV_TOOLS_TABS = true;
    GitHub Pages는 페이지를 브라우저에 최대 10분 저장해 두므로, 배포 직후 열면 옛 화면이 뜰 수 있다.
    열 때·탭으로 돌아올 때·10분마다 서버의 빌드 번호와 비교 → 다르면 열자마자(아직 아무것도 안 만졌으면) 자동 새로고침, 작업 중이면 아래 알림 */
 (function(){
-  var B = 'P20261124-181140';/*WVBUILD*/
+  var B = 'P20261124-184043';/*WVBUILD*/
   window.WV_BUILD = B; if(B === 'DEV') return;
   var t0 = Date.now(), touched = false, shown = false;
   ['keydown', 'input', 'pointerdown'].forEach(function(ev){ document.addEventListener(ev, function(){ touched = true; }, { capture: true, once: true }); });
@@ -7121,16 +7123,157 @@ function close(){var u=$('up');u.classList.remove('on');clear();setTimeout(funct
   document.addEventListener('wv:generated', function(){
     if(!on() || !window.WV_AI_URL || !window.wvAIEdit) return;
     if(typeof sched === 'undefined' || !sched || !sched.cells) return;
+    // 5개 안 비교 중이거나 비교창이 열려 있으면, 안을 고른 뒤에 검토
+    (function waitPick(){ if(window.__wvVarBusy || document.getElementById('wvCmp')){ setTimeout(waitPick, 400); return; } go(); })();
+  });
+  function go(){
+    if(typeof sched === 'undefined' || !sched || !sched.cells) return;
     var sc = sched;
     setTimeout(function(){
       if(sched !== sc) return;
       var row = document.getElementById('wvSchedRow'); if(row && row.classList.contains('fold')) row.classList.remove('fold');   // AI 패널이 접혀 있으면 펼침
-      say('bot', '<div class="ans-h">✦ 초안이 나왔어요 — AI가 한 번 검토할게요</div><div class="meta">공백 · 6일 연속 · 중복 몰림 · 주말 휴무 편중 · 소속 외 근무를 보고, 고칠 곳이 있으면 팝업으로 비교안을 띄워요</div>');
+      var log = document.getElementById('wvAdvLog'); if(log) log.querySelectorAll('.m.bot.wvRev').forEach(function(x){ x.classList.add('wvOld'); });   // 지난 검토 결과는 접기
       window.wvAIEdit(q(), say, 'sonnet');
     }, 900);
-  });
+  }
   function boot(){ if(!mountToggle()) setTimeout(boot, 500); }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else setTimeout(boot, 0);
+})();
+/* AI 조언 패널 가독성 (2026-11-24): 글자·줄 간격, '이해한 요청'은 한 줄, 지난 자동 검토는 접어서 한 줄로(누르면 펼침) */
+(function(){
+  var st = document.createElement('style');
+  st.textContent = '#wvAdvLog .m.bot{font-size:13px;line-height:1.6}#wvAdvLog .ans-h{font-size:13.5px;line-height:1.5;margin:2px 0 6px}' +
+    '#wvAdvLog ul.ans{margin:4px 0 6px;padding-left:16px}#wvAdvLog ul.ans li{margin:3px 0}' +
+    '#wvAdvLog .wvIntent{display:block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
+    '#wvAdvLog .wvRevH{display:inline-block;font-size:11.5px;font-weight:800;color:#fff;background:#7c5cff;border-radius:999px;padding:2px 9px;margin-bottom:6px}' +
+    '#wvAdvLog .m.bot.wvOld{max-height:38px;overflow:hidden;opacity:.55;cursor:pointer;position:relative}' +
+    '#wvAdvLog .m.bot.wvOld::after{content:"지난 검토 · 눌러서 펼치기";position:absolute;right:10px;top:7px;font-size:11px;color:#6b6880;background:inherit}';
+  (document.head || document.documentElement).appendChild(st);
+  document.addEventListener('click', function(e){ var b = e.target.closest && e.target.closest('#wvAdvLog .m.bot.wvOld'); if(b){ b.classList.remove('wvOld'); } }, true);
+})();
+
+</script>
+<script>
+/* ===== 5개 안 비교(?opt=1) — 빠르게 · 진행 화면 (2026-11-24)
+   원인: 5개 안을 만들 때 안마다 전체 최적화(재시작 3회 + 파괴·재구축 6회)를 돌려 생성 1번에 최적화가 12번 이상 → 화면이 1~2분 멈춤
+   조치: ① 1~4안은 빠른 탐색(재시작 1회, 파괴·재구축 생략), 5안 「종합 최적」만 전체 탐색
+         ② 안을 하나씩 나눠 계산하며 사이사이 화면을 그려 진행 상황(몇 번째 안·남은 시간)을 보여줌
+   원본 wvBuildVariantsInner와 같은 순서·같은 규칙으로 안을 만든다(결과 비교창도 원본 그대로) */
+(function(){
+  if(location.search.indexOf('opt=1') < 0) return;
+  if(typeof wvBuildVariants !== 'function' || typeof wvShowCompare !== 'function' || typeof wvTrimReqs !== 'function') return;
+  var _show = wvShowCompare, _busy = (typeof wvBusy === 'function') ? wvBusy : null, pending = null;
+  window.__wvVarBusy = false;
+
+  // 원본 래퍼가 부르는 두 함수를 가로채 비동기로 돌린다
+  wvBuildVariants = function(baseGen, args){ pending = { baseGen: baseGen, args: args }; window.__wvVarBusy = true; return [{ __wvAsync: true }]; };
+  window.wvBuildVariants = wvBuildVariants;
+  wvShowCompare = function(list, onPick){
+    if(!(list && list[0] && list[0].__wvAsync)) return _show(list, onPick);
+    var job = pending; pending = null;
+    runAsync(job, function(out){ window.__wvVarBusy = false; card(null); if(out && out.length) _show(out, onPick); else if(typeof wvToast === 'function') wvToast('안을 만들지 못했어요', 'warn'); });
+  };
+  window.wvShowCompare = wvShowCompare;
+  if(_busy){ wvBusy = function(msg){ if(msg && /안을 만드는/.test(msg)) return; return _busy(msg); }; window.wvBusy = wvBusy; }
+
+  /* ---------- 진행 화면 ---------- */
+  var STEPS = ['1안 · 요청 휴무 전부 반영', '2안 · 요청 휴무 1건씩 축소', '3안 · 요청 휴무 2건씩 축소', '4안 · 공백 0 최소 축소', '5안 · 종합 최적 (정밀)'];
+  var st = document.createElement('style');
+  st.textContent = '#wvVarCard{position:fixed;inset:0;z-index:99998;display:flex;align-items:center;justify-content:center;background:rgba(245,244,240,.55);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}' +
+    '#wvVarCard .bx{width:min(420px,92vw);background:#fff;border-radius:18px;box-shadow:0 20px 60px rgba(20,16,40,.18);padding:20px 22px;font-size:14px;color:#16131f}' +
+    '#wvVarCard h4{margin:0;font-size:16px;display:flex;align-items:center;gap:10px}#wvVarCard .sp{width:18px;height:18px;border-radius:50%;border:2.5px solid #e6e1ff;border-top-color:#7c5cff;animation:wvSpin .8s linear infinite;flex:none}' +
+    '#wvVarCard .sub{color:#6b6880;font-size:12.5px;margin:4px 0 14px}' +
+    '#wvVarCard .bar{height:6px;border-radius:9px;background:#efedf5;overflow:hidden;margin-bottom:12px}#wvVarCard .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#9b83ff,#7c5cff);transition:width .5s cubic-bezier(.2,.8,.2,1)}' +
+    '#wvVarCard ol{list-style:none;margin:0;padding:0}#wvVarCard li{display:flex;align-items:center;gap:10px;padding:7px 2px;border-bottom:1px dashed #f0eef5;font-size:13px;color:#8a8797}#wvVarCard li:last-child{border-bottom:0}' +
+    '#wvVarCard li .ic{width:18px;height:18px;flex:none;border-radius:50%;border:1.5px solid #d9d6e3;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800}' +
+    '#wvVarCard li.run{color:#16131f;font-weight:700}#wvVarCard li.run .ic{border-color:#e6e1ff;border-top-color:#7c5cff;animation:wvSpin .8s linear infinite}' +
+    '#wvVarCard li.ok{color:#16131f}#wvVarCard li.ok .ic{background:#1f9d6a;border-color:#1f9d6a;color:#fff}#wvVarCard li .r{margin-left:auto;font-size:11.5px;color:#6b6880;font-weight:600}' +
+    '#wvVarCard .ft{display:flex;justify-content:space-between;color:#8a8797;font-size:12px;margin-top:12px}' +
+    '@keyframes wvSpin{to{transform:rotate(360deg)}}@media (prefers-reduced-motion:reduce){#wvVarCard .sp,#wvVarCard li.run .ic{animation:none}}';
+  (document.head || document.documentElement).appendChild(st);
+  var t0 = 0, done = [];
+  function card(state){
+    var el = document.getElementById('wvVarCard');
+    if(!state){ if(el) el.remove(); return; }
+    if(!el){ el = document.createElement('div'); el.id = 'wvVarCard'; el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite'); document.body.appendChild(el); }
+    var sec = Math.round((Date.now() - t0) / 1000), left = '';
+    if(done.length){ var avg = done.reduce(function(a, b){ return a + b; }, 0) / done.length, rest = Math.max(0, STEPS.length - state.i - 1);
+      var restMs = state.i < STEPS.length - 1 ? avg * Math.max(0, rest - 1) + avg * 5 : (state.i === STEPS.length - 1 ? avg * 5 : 0);   // 5안(정밀)은 1~4안의 약 5배
+      left = restMs ? ' · 약 ' + Math.max(1, Math.round(restMs / 1000)) + '초 남음' : ''; }
+    el.innerHTML = '<div class="bx"><h4><span class="sp"></span>5개 안을 비교하고 있어요</h4><div class="sub">안마다 표를 새로 짜서 공백·중복·요청 반영을 비교해요. 계산하는 동안 화면이 잠깐씩 멈춰 보일 수 있어요.</div>' +
+      '<div class="bar"><i style="width:' + Math.round(state.i / STEPS.length * 100) + '%"></i></div><ol>' +
+      STEPS.map(function(s, k){ var c = k < state.i ? 'ok' : (k === state.i ? 'run' : ''); return '<li class="' + c + '"><span class="ic">' + (k < state.i ? '✓' : '') + '</span>' + s + '<span class="r">' + (state.res[k] || '') + '</span></li>'; }).join('') +
+      '</ol><div class="ft"><span>' + (state.i + 1 <= STEPS.length ? (state.i + 1) + ' / ' + STEPS.length : '정리 중') + left + '</span><span>' + sec + '초 지남</span></div></div>';
+  }
+
+  /* ---------- 안 만들기 (원본과 같은 규칙) ---------- */
+  function runAsync(job, finish){
+    var mk = document.getElementById('monthPick').value, p = mk.split('-'), y = +p[0], mo = +p[1];
+    var orig = ((S.reqs && S.reqs[mk]) || []).slice();
+    var savedW = {}; Object.keys(WV_W).forEach(function(k){ savedW[k] = WV_W[k]; });
+    var savedIt = WV_ITERS, savedR = window.WV_RESTARTS, savedL = window.WV_LNS;
+    var out = [], res = [], i = 0;
+    var _cf = window.confirm, _al = window.alert;
+    t0 = Date.now(); done = [];
+    function restore(){ S.reqs[mk] = orig; Object.keys(savedW).forEach(function(k){ WV_W[k] = savedW[k]; }); WV_ITERS = savedIt; window.WV_RESTARTS = savedR; window.WV_LNS = savedL; }
+    function make(label, trim, w, iters, full){
+      S.reqs[mk] = wvTrimReqs(orig, trim, y, mo);
+      Object.keys(savedW).forEach(function(k){ WV_W[k] = savedW[k]; });
+      if(w) Object.keys(w).forEach(function(k){ WV_W[k] = w[k]; });
+      WV_ITERS = iters || WV_VAR_ITERS;
+      window.WV_RESTARTS = full ? savedR : 1;          // 1~4안은 빠른 탐색
+      window.WV_LNS = full ? savedL : 0;
+      window.confirm = function(){ return true; }; window.alert = function(){};
+      var _rs = window.renderSched, _rc = window.renderCapacity;   // 안을 만드는 동안은 표를 다시 그리지 않음(마지막에 한 번만)
+      window.renderSched = function(){}; if(_rc) window.renderCapacity = function(){};
+      try{
+        job.baseGen.apply(null, job.args);
+        var snap = {}; Object.keys(sched.cells).forEach(function(k){ snap[k] = sched.cells[k].slice(); });
+        return { label: label, trim: trim, cells: snap };
+      }catch(e){ console.warn(label + ' 생성 실패', e); return null; }
+      finally{ window.confirm = _cf; window.alert = _al; window.renderSched = _rs; if(_rc) window.renderCapacity = _rc; }
+    }
+    function gapOf(cells){ return scoreSchedule(cells, wvCtx(sched)).det.gap; }
+    function brief(cells){ try{ var d = scoreSchedule(cells, wvCtx(sched)).det; return '공백 ' + (d.gap || 0) + (d.dupe != null ? ' · 중복 ' + d.dupe : ''); }catch(e){ return ''; } }
+    var hit = null;
+    var steps = [
+      function(){ var r = make('1안  요청 휴무 전부 반영', 0); if(r){ out.push(r); res[0] = brief(r.cells); } },
+      function(){ var r = make('2안  요청 휴무 1건씩 축소', 1); if(r){ out.push(r); res[1] = brief(r.cells); } },
+      function(){ var r = make('3안  요청 휴무 2건씩 축소', 2); if(r){ out.push(r); res[2] = brief(r.cells); } },
+      function(){
+        restore();
+        for(var k = 0; k < out.length; k++){ if(gapOf(out[k].cells) === 0){ hit = { trim: out[k].trim, cells: out[k].cells }; break; } }
+        if(!hit){
+          for(var t = 3; t <= 5 && !hit; t++){
+            var r2 = make('tmp', t, { gap: 30000, dupe: 6000 }); if(!r2) break; restore();
+            if(gapOf(r2.cells) === 0) hit = { trim: t, cells: r2.cells }; else if(t === 5) hit = { trim: t, cells: r2.cells, fail: true };
+          }
+        }
+        if(hit){ out.push({ label: '4안  공백 0 최소 축소 (' + hit.trim + '건씩)' + (hit.fail ? ' — 달성 실패' : ''), trim: hit.trim, cells: hit.cells }); res[3] = hit.trim + '건씩 · ' + brief(hit.cells); }
+      },
+      function(){ var r = make('5안  종합 최적', 0, null, WV_FINAL_ITERS, true); if(r){ out.push(r); res[4] = brief(r.cells); } }
+    ];
+    function next(){
+      card({ i: i, res: res });
+      if(i >= steps.length){
+        restore();
+        try{
+          var C = wvCtx(sched), reqOff = orig.filter(function(r){ return r.type === '휴무요청'; });
+          out.forEach(function(o){ o.score = scoreSchedule(o.cells, C); o.reqOK = reqOff.filter(function(r){ var a2 = o.cells[r.emp]; return a2 && a2[r.day - 1] === ''; }).length; o.reqN = reqOff.length; });
+        }catch(e){ console.warn('점수 계산 실패', e); }
+        setTimeout(function(){ finish(out); }, 120);
+        return;
+      }
+      // 화면을 먼저 그리고 계산
+      setTimeout(function(){
+        var s0 = Date.now();
+        try{ steps[i](); }catch(e){ console.warn('안 만들기 실패', e); }
+        done.push(Date.now() - s0); i++;
+        setTimeout(next, 30);
+      }, 60);
+    }
+    next();
+  }
 })();
 
 </script>
