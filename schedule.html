@@ -6283,6 +6283,8 @@ mark.wvHl{background:var(--goldS);color:inherit;border-radius:3px;padding:0 1px}
       if(it.parentH3){ var c = el.closest('.card'); host = c && c.querySelector(':scope > h3'); }
       if(it.before){ var c2 = el.closest('.card'); host = c2 && c2.querySelector(':scope > h3'); }
       if(!host || host.querySelector(':scope > .wvHelp')) return;
+      // 제목 글자를 <span>으로 감싼 뒤 ?를 붙임 — 원본 생성기가 '직원 목록' 글자만 있는 칸을 찾아 [설정 저장]·시트 불러오기를 붙이기 때문(감싸지 않으면 시트 설정을 못 불러옴)
+      Array.prototype.slice.call(host.childNodes).forEach(function(n){ if(n.nodeType === 3 && n.textContent.trim()){ var sp = document.createElement('span'); sp.className = 'wvHT'; sp.textContent = n.textContent.trim(); host.replaceChild(sp, n); } });
       var b = document.createElement('button'); b.type = 'button'; b.className = 'wvHelp'; b.textContent = '?'; b.setAttribute('aria-label', it.h + ' 사용법');
       b.addEventListener('click', function(e){ e.stopPropagation(); e.preventDefault(); if(popBtn === b) closePop(); else openPop(b, it); });
       var ref = host.querySelector(':scope > .chev, :scope > #wvAdvFold, :scope > .sum');
@@ -6925,7 +6927,7 @@ window.WV_TOOLS_TABS = true;
    GitHub Pages는 페이지를 브라우저에 최대 10분 저장해 두므로, 배포 직후 열면 옛 화면이 뜰 수 있다.
    열 때·탭으로 돌아올 때·10분마다 서버의 빌드 번호와 비교 → 다르면 열자마자(아직 아무것도 안 만졌으면) 자동 새로고침, 작업 중이면 아래 알림 */
 (function(){
-  var B = 'P20261120-212847';/*WVBUILD*/
+  var B = 'P20261124-181140';/*WVBUILD*/
   window.WV_BUILD = B; if(B === 'DEV') return;
   var t0 = Date.now(), touched = false, shown = false;
   ['keydown', 'input', 'pointerdown'].forEach(function(ev){ document.addEventListener(ev, function(){ touched = true; }, { capture: true, once: true }); });
