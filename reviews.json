@@ -1,8 +1,8 @@
 {
-  "updatedAt": "2026-11-24 12:03",
+  "updatedAt": "2026-11-24 18:03",
   "branches": {
     "구월 로데오점": {
-      "naver": 2515,
+      "naver": 2516,
       "kakao": 28,
       "daangn": 89,
       "tmap": null
@@ -14,7 +14,7 @@
       "tmap": null
     },
     "부천 상동점": {
-      "naver": 1396,
+      "naver": 1397,
       "kakao": 17,
       "daangn": 17,
       "tmap": null
@@ -38,7 +38,7 @@
       "tmap": null
     },
     "인천 공항점": {
-      "naver": 126,
+      "naver": 127,
       "kakao": 5,
       "daangn": 0,
       "tmap": null
@@ -50,7 +50,7 @@
       "tmap": null
     },
     "인천 연수점": {
-      "naver": 1220,
+      "naver": 1221,
       "kakao": 72,
       "daangn": 6,
       "tmap": null
@@ -7339,7 +7339,7 @@
     },
     "2026-11-24": {
       "구월 로데오점": {
-        "naver": 2515,
+        "naver": 2516,
         "kakao": 28,
         "daangn": 89,
         "tmap": null
@@ -7351,7 +7351,7 @@
         "tmap": null
       },
       "부천 상동점": {
-        "naver": 1396,
+        "naver": 1397,
         "kakao": 17,
         "daangn": 17,
         "tmap": null
@@ -7375,7 +7375,7 @@
         "tmap": null
       },
       "인천 공항점": {
-        "naver": 126,
+        "naver": 127,
         "kakao": 5,
         "daangn": 0,
         "tmap": null
@@ -7387,7 +7387,7 @@
         "tmap": null
       },
       "인천 연수점": {
-        "naver": 1220,
+        "naver": 1221,
         "kakao": 72,
         "daangn": 6,
         "tmap": null
