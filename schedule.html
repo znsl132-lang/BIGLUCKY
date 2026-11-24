@@ -6948,7 +6948,7 @@ window.WV_TOOLS_TABS = true;
    GitHub Pages는 페이지를 브라우저에 최대 10분 저장해 두므로, 배포 직후 열면 옛 화면이 뜰 수 있다.
    열 때·탭으로 돌아올 때·10분마다 서버의 빌드 번호와 비교 → 다르면 열자마자(아직 아무것도 안 만졌으면) 자동 새로고침, 작업 중이면 아래 알림 */
 (function(){
-  var B = 'P20261124-205422';/*WVBUILD*/
+  var B = 'P20261124-205718';/*WVBUILD*/
   window.WV_BUILD = B; if(B === 'DEV') return;
   var t0 = Date.now(), touched = false, shown = false;
   ['keydown', 'input', 'pointerdown'].forEach(function(ev){ document.addEventListener(ev, function(){ touched = true; }, { capture: true, once: true }); });
@@ -7366,6 +7366,38 @@ function close(){var u=$('up');u.classList.remove('on');clear();setTimeout(funct
     });
   }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else setTimeout(boot, 0);
+})();
+/* ===== 파트타임 근무 칸에 PT 표시 (2026-11-24)
+   파트(역할 '파트' 또는 고용형태 '파트타임') 직원의 근무 칸: 표에 PT 배지, 엑셀·스케줄표 반영 값은 '매장(PT)'
+   내부 값은 그대로(인원 계산·검사에 영향 없음) — 교육생 PT 표시와 같은 방식. 엑셀을 다시 불러오면 원본이 (PT)를 떼어 냄 */
+(function(){
+  var NOT = ['휴가', '병가', '훈련', '출장', '전휴무', '제외', '순환'];
+  function isPart(e){ return e && e.role !== '교육' && (e.role === '파트' || e.type === '파트타임'); }
+  function work(v){ return !!v && NOT.indexOf(v) < 0 && !/\((OP|CL|PT)\)$/.test(v); }
+  function badge(){
+    var t = document.getElementById('schedTable'); if(!t || typeof S === 'undefined') return;
+    S.emps.filter(isPart).forEach(function(e){
+      var tr = t.querySelector('tr[data-n="' + e.name + '"]'); if(!tr || typeof sched === 'undefined' || !sched || !sched.cells[e.name]) return;
+      sched.cells[e.name].forEach(function(v, d){ var td = tr.children[d + 2]; if(td && work(v) && !td.querySelector('.opcl.pt')) td.insertAdjacentHTML('beforeend', '<span class="opcl pt">PT</span>'); });
+    });
+  }
+  if(typeof renderSched === 'function'){ var _rs = renderSched; renderSched = function(){ var r = _rs.apply(this, arguments); try{ badge(); }catch(e){} return r; }; window.renderSched = renderSched; }
+  // 내보낼 때만 '(PT)'를 붙였다가 바로 원래대로
+  function withPT(fn){
+    if(typeof sched === 'undefined' || !sched || !sched.cells) return fn();
+    var keep = {};
+    S.emps.filter(isPart).forEach(function(e){ var a = sched.cells[e.name]; if(!a) return; keep[e.name] = a.slice(); sched.cells[e.name] = a.map(function(v){ return work(v) ? v + '(PT)' : v; }); });
+    try{ return fn(); } finally{ setTimeout(function(){ Object.keys(keep).forEach(function(k){ sched.cells[k] = keep[k]; }); }, 0); }
+  }
+  if(typeof exportXlsx === 'function'){ var _ex = exportXlsx; exportXlsx = function(){ var self = this, a = arguments; return withPT(function(){ return _ex.apply(self, a); }); }; window.exportXlsx = exportXlsx; }
+  // 「스케줄표 반영」 버튼은 원본 함수를 직접 물고 있어서, 누르는 순간(먼저 도는 캡처 단계)에 붙이고 끝나면 되돌림
+  document.addEventListener('click', function(ev){
+    var b = ev.target && ev.target.closest && ev.target.closest('button'); if(!b || !/스케줄표 반영/.test(b.textContent || '')) return;
+    if(typeof sched === 'undefined' || !sched || !sched.cells) return;
+    var keep = {};
+    S.emps.filter(isPart).forEach(function(e){ var a = sched.cells[e.name]; if(!a) return; keep[e.name] = a.slice(); sched.cells[e.name] = a.map(function(v){ return work(v) ? v + '(PT)' : v; }); });
+    setTimeout(function(){ Object.keys(keep).forEach(function(k){ sched.cells[k] = keep[k]; }); }, 0);
+  }, true);
 })();
 
 </script>
