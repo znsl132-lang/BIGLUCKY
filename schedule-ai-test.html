@@ -6999,7 +6999,7 @@ window.WV_TOOLS_TABS = true;
    GitHub Pages는 페이지를 브라우저에 최대 10분 저장해 두므로, 배포 직후 열면 옛 화면이 뜰 수 있다.
    열 때·탭으로 돌아올 때·10분마다 서버의 빌드 번호와 비교 → 다르면 열자마자(아직 아무것도 안 만졌으면) 자동 새로고침, 작업 중이면 아래 알림 */
 (function(){
-  var B = 'T20261126-154019';/*WVBUILD*/
+  var B = 'T20261126-154314';/*WVBUILD*/
   window.WV_BUILD = B; if(B === 'DEV') return;
   var t0 = Date.now(), touched = false, shown = false;
   ['keydown', 'input', 'pointerdown'].forEach(function(ev){ document.addEventListener(ev, function(){ touched = true; }, { capture: true, once: true }); });
@@ -7674,7 +7674,7 @@ function close(){var u=$('up');u.classList.remove('on');clear();setTimeout(funct
     '#wvGenM h3{margin:0;font-size:18px}#wvGenM .sum{color:#6b6880;font-size:12.5px;margin:4px 0 14px}' +
     '#wvGenM .ck{display:flex;gap:12px;align-items:flex-start;border:1px solid #ebe9f1;border-radius:12px;padding:11px 12px;margin-bottom:8px;cursor:pointer;transition:border-color .2s,background-color .2s}' +
     '#wvGenM .ck:hover{border-color:#c9bdfc}#wvGenM .ck.on{border-color:#7c5cff;background:#faf8ff}' +
-    '#wvGenM .ck input{margin:3px 0 0;width:17px;height:17px;accent-color:#7c5cff;flex:none}#wvGenM .ck b{display:block;font-size:14px}#wvGenM .ck small{display:block;color:#6b6880;font-size:12.5px;line-height:1.5;margin-top:2px}' +
+    '#wvGenM .ck .bx2{width:18px;height:18px;flex:none;margin-top:2px;border-radius:5px;border:2px solid #c9c5d6;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;color:#fff}#wvGenM .ck.on .bx2{background:#7c5cff;border-color:#7c5cff}#wvGenM .ck:focus-visible{outline:2px solid #7c5cff;outline-offset:2px}#wvGenM .ck b{display:block;font-size:14px}#wvGenM .ck small{display:block;color:#6b6880;font-size:12.5px;line-height:1.5;margin-top:2px}' +
     '#wvGenM .ck .m{display:inline-block;margin-left:6px;font-size:11px;font-weight:700;color:#5b3fd6;background:#f1edff;border-radius:999px;padding:1px 8px;vertical-align:1px}' +
     '#wvGenM .note{font-size:12px;color:#a86400;background:#fff8e6;border-radius:10px;padding:8px 10px;margin:4px 0 10px;display:none}#wvGenM .note.on{display:block}' +
     '#wvGenM .ft{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}#wvGenM .ft button{border:0;border-radius:11px;padding:10px 18px;font:inherit;font-weight:700;cursor:pointer}' +
@@ -7684,26 +7684,35 @@ function close(){var u=$('up');u.classList.remove('on');clear();setTimeout(funct
     '#wvReqDone{display:flex;justify-content:flex-end;gap:10px;align-items:center;margin:16px 0 4px}#wvReqDone span{color:#6b6880;font-size:12.5px}#wvReqDone button{border:0;border-radius:12px;padding:12px 20px;background:#16131f;color:#fff;font:inherit;font-weight:800;cursor:pointer}';
   (document.head || document.documentElement).appendChild(st);
 
+  // 원본 생성기는 화면 어디서든 입력칸이 바뀌면 '설정 저장 안 됨'으로 표시함(대상 월 바꾸기·체크 상자 등) → ① 직원·매장 탭 밖의 변경은 표시를 원래대로 되돌림
+  window.addEventListener('change', function(e){
+    var t = e.target; if(!t || !t.closest || t.closest('#panel0')) return;
+    var msg = document.getElementById('wvCfgMsg'), sb = document.getElementById('wvCfgSave'); if(!msg) return;
+    var c0 = msg.className, h0 = msg.innerHTML, b0 = sb ? sb.className : '';
+    setTimeout(function(){ if(msg.className === 'dirty' && c0 !== 'dirty'){ msg.className = c0; msg.innerHTML = h0; if(sb) sb.className = b0; } }, 0);
+  }, true);
   // 생성 창
   function open(mode){
     var old = document.getElementById('wvGenM'); if(old) old.remove();
     var m = document.createElement('div'); m.id = 'wvGenM';
     m.innerHTML = '<div class="bx" role="dialog" aria-modal="true"><h3>' + (mode === 'set' ? '생성 옵션' : mkLabel() + ' 스케줄을 생성할까요?') + '</h3><div class="sum">' + esc(summary()) + '</div>' +
-      ITEMS.map(function(it, i){ var on = state(it); return '<label class="ck' + (on ? ' on' : '') + '"><input type="checkbox" data-i="' + i + '"' + (on ? ' checked' : '') + '><span><b>' + it.t + (it.m ? '<span class="m">' + it.m + '</span>' : '') + '</b><small>' + it.d + '</small></span></label>'; }).join('') +
+      ITEMS.map(function(it, i){ var on = state(it); return '<div class="ck' + (on ? ' on' : '') + '" role="checkbox" tabindex="0" aria-checked="' + on + '" data-i="' + i + '"><span class="bx2">' + (on ? '✓' : '') + '</span><span><b>' + it.t + (it.m ? '<span class="m">' + it.m + '</span>' : '') + '</b><small>' + it.d + '</small></span></div>'; }).join('') +
       '<div class="note" id="wvGenNote">「여러 안 비교」를 바꾸면 페이지를 한 번 다시 연 뒤 바로 생성해요. 입력한 특이사항·조건은 그대로 남아요.</div>' +
       '<div class="ft"><button type="button" class="no">' + (mode === 'set' ? '닫기' : '취소') + '</button><button type="button" class="go">' + (mode === 'set' ? '저장' : '생성하기') + '</button></div></div>';
     document.body.appendChild(m);
     var note = m.querySelector('#wvGenNote');
-    m.querySelectorAll('input[data-i]').forEach(function(c){ c.onchange = function(){ c.closest('.ck').classList.toggle('on', c.checked); note.classList.toggle('on', !!m.querySelector('input[data-i="0"]').checked !== OPT); }; });
+    // 입력칸(input)을 쓰면 원본 생성기가 '설정 바뀜(저장 안 됨)'으로 오인하므로 직접 만든 체크 상자 사용
+    var isOn = function(i){ return m.querySelector('.ck[data-i="' + i + '"]').getAttribute('aria-checked') === 'true'; };
+    m.querySelectorAll('.ck[data-i]').forEach(function(c){ var tg = function(){ var v = c.getAttribute('aria-checked') !== 'true'; c.setAttribute('aria-checked', String(v)); c.classList.toggle('on', v); c.querySelector('.bx2').textContent = v ? '✓' : ''; note.classList.toggle('on', isOn(0) !== OPT); }; c.onclick = tg; c.onkeydown = function(e){ if(e.key === ' ' || e.key === 'Enter'){ e.preventDefault(); tg(); } }; });
     var close = function(){ m.remove(); };
     m.querySelector('.no').onclick = close; m.addEventListener('click', function(e){ if(e.target === m) close(); });
     m.querySelector('.go').onclick = function(){
-      var want = {}; m.querySelectorAll('input[data-i]').forEach(function(c){ want[ITEMS[+c.dataset.i].k] = c.checked; });
+      var want = {}; ITEMS.forEach(function(it, i){ want[it.k] = isOn(i); });
       ['wvReviewPatrol', 'wvUsePattern', 'wvAutoReview'].forEach(function(k){ s(k, want[k]); });
       close(); chip();
       if(want.opt !== OPT){
-        var dirty = document.querySelector('#wvCfgMsg.dirty');
-        if(dirty){ if(typeof wvToast === 'function') wvToast('① 직원·매장 설정이 저장 안 됐어요. [설정 저장] 후 다시 해 주세요', 'warn'); return; }
+        // 다시 열면 시트 설정을 새로 읽으므로, 저장 안 한 직원·매장 설정은 잠깐 보관했다가 되돌림
+        try{ if(document.querySelector('#wvCfgMsg.dirty')) sessionStorage.setItem('wvKeepCfg', JSON.stringify({ emps: S.emps, stores: S.stores })); }catch(e){}
         try{ if(mode !== 'set') sessionStorage.setItem('wvAutoGen', '1'); }catch(e){}
         var q = location.search.replace(/[?&]opt=1/, '').replace(/^&/, '?'); var u = location.pathname + (want.opt ? (q ? q + '&opt=1' : '?opt=1') : q) + location.hash;
         location.replace(u); return;
@@ -7794,6 +7803,10 @@ function close(){var u=$('up');u.classList.remove('on');clear();setTimeout(funct
     if(!(a && b && c)){ setTimeout(boot, 500); return; }
     // 여러 안 비교를 바꾸느라 다시 열었으면 자동으로 ③ 탭 → 생성
     var auto = false; try{ auto = sessionStorage.getItem('wvAutoGen') === '1'; sessionStorage.removeItem('wvAutoGen'); }catch(e){}
+    var keep = null; try{ keep = JSON.parse(sessionStorage.getItem('wvKeepCfg') || 'null'); sessionStorage.removeItem('wvKeepCfg'); }catch(e){}
+    if(keep){ (function back(n){ var msg = document.getElementById('wvCfgMsg'); if(!(msg && /불러옴|문제|실패|없습니다|비어/.test(msg.textContent)) && n < 40){ setTimeout(function(){ back(n + 1); }, 300); return; }
+      S.emps = keep.emps; S.stores = keep.stores; try{ save(); }catch(e){} try{ renderEmps(); }catch(e){} try{ renderStores(); }catch(e){}
+      if(msg){ msg.className = 'dirty'; msg.textContent = '● 시트에 저장 안 됨'; } var sb = document.getElementById('wvCfgSave'); if(sb) sb.className = 'on'; })(0); }
     if(auto){ (function wait(n){ var lk = document.getElementById('wvLock'); if((lk && lk.isConnected && lk.offsetHeight) || !document.getElementById('wvCfgBar')){ if(n < 40){ setTimeout(function(){ wait(n + 1); }, 400); return; } } goTab(2); setTimeout(run, 900); })(0); }
   }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function(){ setTimeout(boot, 300); }); else setTimeout(boot, 300);
