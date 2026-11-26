@@ -5740,7 +5740,7 @@ WV.module(90, 'ai6', function(){
    GitHub Pages는 페이지를 브라우저에 최대 10분 저장해 두므로, 배포 직후 열면 옛 화면이 뜰 수 있다.
    열 때·탭으로 돌아올 때·10분마다 서버의 빌드 번호와 비교 → 다르면 열자마자(아직 아무것도 안 만졌으면) 자동 새로고침, 작업 중이면 아래 알림 */
 (function(){
-  var B = 'T20261126-170105';/*WVBUILD*/
+  var B = 'T20261126-171443';/*WVBUILD*/
   window.WV_BUILD = B; if(B === 'DEV') return;
   var t0 = Date.now(), touched = false, shown = false;
   ['keydown', 'input', 'pointerdown'].forEach(function(ev){ document.addEventListener(ev, function(){ touched = true; }, { capture: true, once: true }); });
@@ -7952,6 +7952,7 @@ WV.module(170, 'dupToYeonsu', function(){
   function on(){ try{ return localStorage.getItem(KEY) !== '0'; }catch(e){ return true; } }
   var H = WV.calc;
   window.wvDupToYeonsu = function(sc){
+    if(sc && sc.cells && window.wvFillGaps){ try{ window.__wvFillN = window.wvFillGaps(sc); }catch(e){ console.warn('공백 메우기 건너뜀', e); } }
     if(!on() || !sc || !sc.cells || !S.stores.some(function(s){ return s.n === TO; })) return 0;
     var C = H.ctx(sc), cells = sc.cells, moved = 0, log = [];
     for(var d = 0; d < C.nD; d++){
@@ -7972,6 +7973,8 @@ WV.module(170, 'dupToYeonsu', function(){
       });
     }
     window.__wvDupYLog = log;
+    // 연수로 보낸 뒤 연수에 남는 사람이 생기면, 그 사람으로 공백을 한 번 더 메움
+    if(moved && window.wvFillGaps){ try{ var l0 = window.__wvFillLog || [], g2 = window.wvFillGaps(sc); window.__wvFillN = (window.__wvFillN || 0) + g2; window.__wvFillLog = l0.concat(window.__wvFillLog || []); }catch(e){} }
     return moved;
   };
   // 5개 안: 안마다 과거 패턴 반영 직후 / 일반 생성: 과거 패턴 반영(생성 완료 신호) 뒤
@@ -7981,7 +7984,9 @@ WV.module(170, 'dupToYeonsu', function(){
       try{
         if(window.__wvVarBusy || typeof sched === 'undefined' || !sched || sched.__wvDupY) return;
         sched.__wvDupY = true;
-        var n = window.wvDupToYeonsu(sched);
+        var n = window.wvDupToYeonsu(sched), g = window.__wvFillN || 0;
+        if(g && !n){ try{ save(); }catch(e){} if(typeof renderSched === 'function') renderSched(typeof lastWarns !== 'undefined' ? lastWarns : undefined); }
+        if(g && typeof wvToast === 'function') setTimeout(function(){ wvToast('공백 ' + g + '칸을 자동으로 메웠어요 (' + (window.__wvFillLog || []).slice(0, 2).join(', ') + (g > 2 ? ' 외' : '') + ')', 'ok'); }, n ? 2500 : 0);
         if(n){ try{ save(); }catch(e){} if(typeof renderSched === 'function') renderSched(typeof lastWarns !== 'undefined' ? lastWarns : undefined);
           if(typeof wvToast === 'function') wvToast('중복 근무 ' + n + '칸을 연수로 옮겼어요 (' + window.__wvDupYLog.slice(0, 2).join(', ') + (n > 2 ? ' 외' : '') + ')', 'ok'); }
       }catch(e){ console.warn('중복→연수 건너뜀', e); }
@@ -8000,6 +8005,64 @@ WV.module(170, 'dupToYeonsu', function(){
     return true;
   }
   var tries = 0; (function t(){ if(!mount() && tries++ < 40) setTimeout(t, 250); })();
+});
+
+WV.module(165, 'fillGaps', function(){
+/* ===== 공백 자동 메우기 (2026-11-26, 랜덤 요청 시뮬 40회 중 17회 공백 → 대책)
+   생성 맨 마지막, 중복→연수 규칙보다 먼저 돈다(wvDupToYeonsu 시작에서 호출). 근무 불가 매장·근무지정·요청 휴무는 지킨다
+   ① 그날 남는 사람(연수 2번째 포함)을 공백 매장으로  ② 그날 순환 중인 팀장·실장이 공백 매장으로
+   ③ 요청하지 않은 휴무를 사람이 남는 다른 날로 옮김(휴무 수 그대로, 연속 5일 넘지 않게) */
+  var H = WV.calc, MAXRUN = 5;
+  function workers(C, cells, stn, d){ return C.acts.filter(function(q){ var v = cells[q.name][d]; return H.isW(v) && v !== '순환' && H.base(v) === stn; }); }
+  window.wvFillGaps = function(sc){
+    var C = H.ctx(sc), cells = sc.cells, fixed = 0, log = [];
+    function put(q, d, from, to){ cells[q.name][d] = to; if(from) H.relabel(C, cells, from, d); H.relabel(C, cells, to, d); }
+    for(var d = 0; d < C.nD; d++){
+      if(C.hol[d]) continue;
+      S.stores.forEach(function(st){
+        var guard = 0;
+        while(H.cnt(C, cells, st.n, d) < H.need(C, st.n, d) && guard++ < 4){
+          var done = false;
+          // ① 남는 사람
+          S.stores.some(function(x){
+            if(x.n === st.n || H.cnt(C, cells, x.n, d) <= H.need(C, x.n, d)) return false;
+            var q = workers(C, cells, x.n, d).filter(function(p){ return !C.lockWork[p.name + '|' + d] && H.allowed(p, st.n); })
+              .sort(function(a, b){ return (a.home === '순환' ? 0 : 1) - (b.home === '순환' ? 0 : 1); })[0];
+            if(!q) return false;
+            put(q, d, x.n, st.n); log.push((d + 1) + '일 ' + st.n + ' ← ' + q.name + '(' + x.n + ')'); done = true; return true;
+          });
+          // ② 순환 중인 팀장·실장
+          if(!done){ var pq = C.acts.filter(function(p){ return cells[p.name][d] === '순환' && !C.lockWork[p.name + '|' + d] && H.allowed(p, st.n); })[0];
+            if(pq){ put(pq, d, null, st.n); log.push((d + 1) + '일 ' + st.n + ' ← ' + pq.name + '(순환)'); done = true; } }
+          // ③ 휴무를 다른 날로
+          if(!done){
+            var best = null;
+            C.acts.forEach(function(p){
+              if(cells[p.name][d] !== '' || C.lockOff[p.name + '|' + d] || !H.allowed(p, st.n)) return;
+              for(var d2 = 0; d2 < C.nD; d2++){
+                if(d2 === d || C.hol[d2] || C.lockWork[p.name + '|' + d2]) continue;
+                var v2 = cells[p.name][d2]; if(!H.isW(v2)) continue;
+                var y2 = v2 === '순환' ? null : H.base(v2);
+                if(y2 && H.cnt(C, cells, y2, d2) <= H.need(C, y2, d2)) continue;   // 그날 빠져도 공백이 안 생겨야
+                cells[p.name][d] = st.n; cells[p.name][d2] = '';
+                var ok = H.runAt(C, cells, p.name, d) <= MAXRUN;
+                cells[p.name][d] = ''; cells[p.name][d2] = v2;
+                if(!ok) continue;
+                var sc2 = (p.home === '순환' ? 0 : 1) + Math.abs(d2 - d) / 100;
+                if(!best || sc2 < best.s) best = { p: p, d2: d2, v2: v2, y2: y2, s: sc2 };
+              }
+            });
+            if(best){ cells[best.p.name][best.d2] = ''; if(best.y2) H.relabel(C, cells, best.y2, best.d2); put(best.p, d, null, st.n);
+              log.push((d + 1) + '일 ' + st.n + ' ← ' + best.p.name + '(휴무 ' + (best.d2 + 1) + '일로)'); done = true; }
+          }
+          if(!done) break;
+          fixed++;
+        }
+      });
+    }
+    window.__wvFillLog = log;
+    return fixed;
+  };
 });
 
 </script>
