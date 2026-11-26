@@ -5740,7 +5740,7 @@ WV.module(90, 'ai6', function(){
    GitHub Pages는 페이지를 브라우저에 최대 10분 저장해 두므로, 배포 직후 열면 옛 화면이 뜰 수 있다.
    열 때·탭으로 돌아올 때·10분마다 서버의 빌드 번호와 비교 → 다르면 열자마자(아직 아무것도 안 만졌으면) 자동 새로고침, 작업 중이면 아래 알림 */
 (function(){
-  var B = 'T20261126-163117';/*WVBUILD*/
+  var B = 'T20261126-164735';/*WVBUILD*/
   window.WV_BUILD = B; if(B === 'DEV') return;
   var t0 = Date.now(), touched = false, shown = false;
   ['keydown', 'input', 'pointerdown'].forEach(function(ev){ document.addEventListener(ev, function(){ touched = true; }, { capture: true, once: true }); });
@@ -7938,6 +7938,68 @@ WV.module(160, 'keepOffs', function(){
       if(m && m.length && !confirm('이 안을 고르면 요청 휴무 ' + m.length + '건이 근무로 바뀝니다.\n' + m.join(', ') + '\n\n그래도 이 안으로 할까요?')){ ev.stopPropagation(); ev.preventDefault(); }
     }, true);
   });
+});
+
+WV.module(170, 'dupToYeonsu', function(){
+/* ===== 규칙: 중복 근무 → 연수 (2026-11-26, 사용자 결정)
+   같은 날 한 매장에 필요 인원보다 많이 들어가면, 남는 한 명을 연수로 옮긴다. 연수는 1명이면 빠듯하고 2명이면 무난한 매장
+   · 대상: 주임급만. 팀장·실장·매니저는 그대로
+   · 보내는 사람: 고정 매장이 없는 순환 주임만. 고정 매장 주임은 규칙에서 제외(사용자 결정)
+   · 연수는 최대 2명까지. 근무지정(고정) 칸은 건드리지 않음
+   · 연수가 '근무 불가 매장'이어도 이 경우에 한해 보냄(사용자 결정)
+   · 생성 맨 마지막(과거 패턴 반영 뒤)에 적용. 5개 안 비교도 안마다 적용. 켜고 끄기: 생성 버튼 옆 「중복→연수」 */
+  var KEY = 'wvDupYeonsu', TO = '연수', MAXY = 2, SKIP = ['팀장', '실장', '매니저'];
+  function on(){ try{ return localStorage.getItem(KEY) !== '0'; }catch(e){ return true; } }
+  var H = WV.calc;
+  window.wvDupToYeonsu = function(sc){
+    if(!on() || !sc || !sc.cells || !S.stores.some(function(s){ return s.n === TO; })) return 0;
+    var C = H.ctx(sc), cells = sc.cells, moved = 0, log = [];
+    for(var d = 0; d < C.nD; d++){
+      if(C.hol[d]) continue;
+      var y = H.cnt(C, cells, TO, d); if(y >= MAXY) continue;
+      S.stores.forEach(function(st){
+        if(st.n === TO || y >= MAXY) return;
+        var over = H.cnt(C, cells, st.n, d) - H.need(C, st.n, d);
+        while(over > 0 && y < MAXY){
+          var cand = C.acts.filter(function(q){
+            var v = cells[q.name][d];
+            return H.isW(v) && v !== '순환' && H.base(v) === st.n && SKIP.indexOf(String(q.title || '').trim()) < 0 && q.home === '순환' && !C.lockWork[q.name + '|' + d];   // 고정 매장 없는 순환 주임만
+          });
+          if(!cand.length) break;
+          var p = cand[0]; cells[p.name][d] = TO; H.relabel(C, cells, st.n, d); H.relabel(C, cells, TO, d);
+          over--; y++; moved++; log.push(p.name + ' ' + (d + 1) + '일 ' + st.n + '→' + TO);
+        }
+      });
+    }
+    window.__wvDupYLog = log;
+    return moved;
+  };
+  // 5개 안: 안마다 과거 패턴 반영 직후 / 일반 생성: 과거 패턴 반영(생성 완료 신호) 뒤
+  WV.after('wvRebalance', '중복→연수 규칙(dupToYeonsu)', function(_r, a){ if(window.__wvVarBusy) window.wvDupToYeonsu(a[0]); });   // 일반 생성은 아래 신호에서 한 번만
+  WV.on('generated', function(){
+    setTimeout(function(){
+      try{
+        if(window.__wvVarBusy || typeof sched === 'undefined' || !sched || sched.__wvDupY) return;
+        sched.__wvDupY = true;
+        var n = window.wvDupToYeonsu(sched);
+        if(n){ try{ save(); }catch(e){} if(typeof renderSched === 'function') renderSched(typeof lastWarns !== 'undefined' ? lastWarns : undefined);
+          if(typeof wvToast === 'function') wvToast('중복 근무 ' + n + '칸을 연수로 옮겼어요 (' + window.__wvDupYLog.slice(0, 2).join(', ') + (n > 2 ? ' 외' : '') + ')', 'ok'); }
+      }catch(e){ console.warn('중복→연수 건너뜀', e); }
+    }, 0);
+  });
+  // 생성 버튼 옆 켜고 끄기
+  function mount(){
+    if(document.getElementById('wvDupYTgl')) return true;
+    var anchor = document.getElementById('wvPatTgl'); if(!anchor) return false;
+    var l = document.createElement('label'); l.id = 'wvDupYTgl';
+    l.style.cssText = anchor.style.cssText;
+    l.innerHTML = '<input type="checkbox" style="accent-color:#1f9d6a;margin:0"' + (on() ? ' checked' : '') + '> 중복→연수';
+    l.title = '같은 날 한 매장에 사람이 남으면, 주임 한 명을 연수로 옮깁니다(순환 주임만, 팀장·실장·매니저·고정 매장 주임 제외, 연수 최대 2명)';
+    var c = l.querySelector('input'); c.onchange = function(){ try{ localStorage.setItem(KEY, c.checked ? '1' : '0'); }catch(e){} };
+    anchor.parentNode.insertBefore(l, anchor.nextSibling);
+    return true;
+  }
+  var tries = 0; (function t(){ if(!mount() && tries++ < 40) setTimeout(t, 250); })();
 });
 
 </script>
