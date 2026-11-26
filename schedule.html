@@ -4773,15 +4773,17 @@ th,td{border-color:var(--ln)!important}
     var ABS = ['휴가','병가','훈련','출장','전휴무','제외'], isW = function(v){ return !!v && ABS.indexOf(v) < 0; }, base = function(v){ return String(v).replace(/\((OP|CL|PT)\)$/, ''); };
     var pd = new Date(sched.year, sched.month - 2, 1), pk = pd.getFullYear() + '-' + String(pd.getMonth() + 1).padStart(2, '0');
     var gap = 0, mis = 0, mx = 0, who = '';
+    var bonus = {}; ((S.extraLog && S.extraLog[mk]) || []).forEach(function(x){ if(x._wvTmp) return; if(x.bulk || x.day >= 0) bonus[x.name] = (bonus[x.name] || 0) + 1; });   // 추가 휴무(일괄·날짜 지정)도 목표에 포함 (2026-11-26)
     S.emps.forEach(function(e){ var a = c[e.name]; if(!a) return; var p = (S.lastSched && S.lastSched[pk] && S.lastSched[pk][e.name]) || [], r = 0, off = 0;
       for(var k = p.length - 1; k >= 0 && isW(p[k]); k--) r++;
       a.forEach(function(v){ if(v === '') off++; if(isW(v)){ r++; if(r > mx){ mx = r; who = e.name; } } else r = 0; });
-      if(typeof offTarget === 'function' && e.role !== '교육' && off !== offTarget(e)) mis++; });
+      if(typeof offTarget === 'function' && e.role !== '교육' && off !== offTarget(e) + (bonus[e.name] || 0)) mis++; });
     for(var d = 0; d < nD; d++) S.stores.forEach(function(st){ var need = needAtN(st.n, d, mk), n = 0; S.emps.forEach(function(e){ var v = (c[e.name] || [])[d]; if(isW(v) && v !== '순환' && base(v) === st.n) n++; }); if(n < need) gap += need - n; });
     if(typeof __wvD !== 'undefined') __wvD = -1;
     var rq = ((S.reqs && S.reqs[mk]) || []).filter(function(r){ return r.type === '휴무요청'; }), ok = rq.filter(function(r){ return (c[r.emp] || [])[r.day - 1] === ''; }).length;
     return { gap: gap, mis: mis, mx: mx, who: who, req: ok + '/' + rq.length };
   }
+  window.wvStats = stats;
   var running = false;
   WV.around('generate', '생성 진행 표시·생성 완료 신호(skin)', function(_g, args){
       var self = this, s0 = (typeof sched !== 'undefined') ? sched : null;
@@ -5470,6 +5472,7 @@ WV.module(70, 'skin4', function(){
       document.getElementById('wvAdv').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }; });
   }
+  window.wvShowWarns = showWarns;
   WV.around('generate', '설정 경고 모으기(skin4)', function(_g, args){
       collected = [];
       var s0 = (typeof sched !== 'undefined') ? sched : null, r = _g.apply(null, args), t0 = Date.now();
@@ -5695,7 +5698,7 @@ WV.module(90, 'ai6', function(){
    GitHub Pages는 페이지를 브라우저에 최대 10분 저장해 두므로, 배포 직후 열면 옛 화면이 뜰 수 있다.
    열 때·탭으로 돌아올 때·10분마다 서버의 빌드 번호와 비교 → 다르면 열자마자(아직 아무것도 안 만졌으면) 자동 새로고침, 작업 중이면 아래 알림 */
 (function(){
-  var B = 'P20261126-180746';/*WVBUILD*/
+  var B = 'P20261126-194807';/*WVBUILD*/
   window.WV_BUILD = B; if(B === 'DEV') return;
   var t0 = Date.now(), touched = false, shown = false;
   ['keydown', 'input', 'pointerdown'].forEach(function(ev){ document.addEventListener(ev, function(){ touched = true; }, { capture: true, once: true }); });
@@ -5739,7 +5742,7 @@ WV.module(100, 'ai7', function(){
    비품 주문 보고 사용법 화면 방식 + 장면마다 이전 | 지금 비교 + 실측 결과 + 완성도 막대그래프
    화면 스타일과 섞이지 않게 Shadow DOM 안에 그림. 안내 내용을 바꾸면 VER을 올려야 다시 자동으로 뜸 */
 (function(){
-  var KEY = 'wvUpdateSeen', VER = '2026-11-20b';
+  var KEY = 'wvUpdateSeen', VER = '2026-11-26';   // 11-26: 이번 업데이트 장면으로 교체(이전 장면은 버전/2026-11-26_ver1에)
   var R = null;
 
 var CUR='<svg viewBox="0 0 24 24"><path d="M4 2l15 9-6.5 1.6L16 20l-3 1.3-3.4-7.4L4 18z" fill="#16131f" stroke="#fff" stroke-width="1.4"/></svg>';
@@ -5753,64 +5756,43 @@ function cnt(el,to){var t0=performance.now();(function f(){var p=Math.min(1,(per
 function tbl(rows,days,id){var h='<table class="mt"'+(id?' id="'+id+'"':'')+'><tr><th>성명</th><th>소속</th>';days.forEach(function(d){h+='<th>'+d+'</th>';});h+='</tr>';rows.forEach(function(r){h+='<tr><td class="n">'+r[0]+'</td><td class="n" style="font-weight:400;color:#888">'+r[1]+'</td>';r[2].forEach(function(v,i){h+='<td class="c s-'+(v||'휴').slice(0,1)+'" data-k="'+r[0]+i+'">'+(v||'')+'</td>';});h+='</tr>';});return h+'</table>';}
 
 var S=[
-{t:'카톡 휴무 요청',cap:'단톡방 대화를 <b>그대로 붙여넣으면</b> 이름·날짜가 자동으로 정리되고, 읽은 대화는 입력칸에서 지워집니다',dur:7000,
- bf:function(b){b.innerHTML='<div class="lbl">특이사항 추가</div><div class="row"><span class="inp" style="color:#333">정유진</span><span class="inp" style="color:#333">휴무 요청</span></div><div class="row"><span class="inp">날짜 (예: 7, 0707…)</span><span class="btn">추가</span></div><div class="row"><span class="inp" style="color:#333">장대운</span><span class="inp" style="color:#333">휴무 요청</span></div><div class="row"><span class="inp">날짜 (예: 7, 0707…)</span><span class="btn">추가</span></div><p style="font-size:11.5px;color:#888;margin-top:10px">단톡방을 보며 한 명·한 날짜씩 직접 입력</p>';},
- af:function(a){a.innerHTML='<div class="lbl">직원 휴무 요청 · 카톡 붙여넣기</div><div class="ta" id="k1"></div><div class="lbl" style="margin-top:8px">자동 기입</div><div class="out"><div id="o1">정유진 12/24 12/25</div><div id="o2">장대운 12/14 12/15</div><div id="o3">홍다운 12/31</div></div><div class="ok" id="ok1" style="margin-top:8px">✓ 특이사항 5건 추가 · 대화 23줄 읽고 입력칸 비움</div>';
-  type($('k1'),'[정유진] [오후 3:10] 12월 24일 25일 쉬어도 될까요?\n[장대운] [오후 3:12] 저는 14,15일이요\n[홍다운] [오후 3:15] 31일 하루만 부탁드려요',22);
-  at(3600,function(){$('o1').classList.add('on');});at(3900,function(){$('o2').classList.add('on');});at(4200,function(){$('o3').classList.add('on');});
-  at(5000,function(){$('k1').textContent='';$('k1').style.color='#aaa';$('k1').textContent='대화 23줄을 읽었습니다…';$('ok1').classList.add('on');});}},
-{t:'생성',cap:'생성 중 뜨던 <b>확인창이 사라지고</b> 바로 완성됩니다 — 연속근무는 최대 5일로 자동 정리',dur:6500,
- bf:function(b){b.innerHTML='<div class="lbl">③ 생성</div><div style="height:180px;background:#f4f4f6;border-radius:8px"></div><div class="cnt">확인창 3번</div>'+
-  '<div class="dlg">다른 방법이 없어 5일 초과 연속 근무가 생깁니다. 계속할까요?<div class="b"><span class="btn gray">취소</span><span class="btn">확인</span></div></div>'+
-  '<div class="dlg">설정에 문제가 있습니다. 그래도 생성할까요?<div class="b"><span class="btn gray">취소</span><span class="btn">확인</span></div></div>'+
-  '<div class="dlg">다른 방법이 없어 5일 초과 연속 근무가 생깁니다. 계속할까요?<div class="b"><span class="btn gray">취소</span><span class="btn">확인</span></div></div>';},
- af:function(a){a.innerHTML='<div class="lbl">③ 생성</div><div id="pb" style="height:8px;border-radius:9px;background:#eee;overflow:hidden"><i style="display:block;height:100%;width:0;background:var(--vio);transition:width 2.2s var(--ease)"></i></div><div id="tb" style="margin-top:10px;opacity:0;transition:opacity .4s">'+
-  tbl([['오명록','연수',['연수','연수','','연수','연수','연수','']],['장대운','구월',['구월','','구월','구월','','구월','구월']],['정유진','계산',['계산','계산','계산','','계산','계산','']]],['1','2','3','4','5','6','7'])+'</div><div class="ok" id="ok2" style="margin-top:8px">✓ 12월 스케줄 생성 완료 · 공백 0 · 최대 연속 5일</div>';
-  at(300,function(){$('pb').firstChild.style.width='100%';});at(2600,function(){$('tb').style.opacity=1;$('ok2').classList.add('on');});}},
-{t:'AI가 표를 직접 수정',cap:'긴 문장으로 부탁하면 <b>AI가 표를 읽고 직접 고친 수정안</b>을 만듭니다 — 복잡한 요청은 Opus가 꼼꼼히',dur:8000,
- bf:function(b){b.innerHTML='<div class="lbl">③ 표 직접 수정</div>'+tbl([['홍다운','중동',['중동','','중동']],['오명록','연수',['','연수','연수']]],['14','15','16'])+'<div class="dlg" style="top:62%">홍다운 · 15일<div class="row" style="margin-top:6px"><span class="chip">휴무</span><span class="chip">중동</span><span class="chip">연수</span><span class="chip">…</span></div></div><p style="font-size:11.5px;color:#888;position:absolute;bottom:10px;left:12px;right:12px">칸을 하나씩 눌러 바꾸고, 빈자리·연속근무는 직접 계산</p>';},
- af:function(a){a.innerHTML='<div class="lbl">✦ AI 조언 · 대안</div><div class="bub me" id="m1">홍다운이랑 오명록 15일 근무 바꾸고, 김형진은 중복 근무 날 연수점으로 다 보내줘</div><div class="bub ai" id="m2"><span style="display:inline-block;background:var(--vio2);color:#5b3fd6;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:700">이해한 요청 · 15일 맞교환 + 김형진 중복일 연수</span><br><b>15일 교환하고, 빈 자리는 남는 사람으로 채웠어요</b><div class="kp"><div>매장 공백<b>0 → 0건</b></div><div>최대 연속<b>5 → 5일</b></div></div><span class="btn">개선안 크게 보기</span><div style="font-size:10.5px;color:#999;margin-top:4px">AI · Opus · 87초</div></div>';
-  at(300,function(){$('m1').classList.add('on');});at(1600,function(){$('m2').classList.add('on');});}},
-{t:'개선안 팝업 · 보류',cap:'바로 덮어쓰지 않고 <b>팝업에서 비교</b>한 뒤 적용 — 나중에 보려면 「개선안 1 [임시]」로 <b>보류</b>',dur:8000,
- bf:function(b){b.innerHTML='<div class="lbl">③ 표</div>'+tbl([['홍다운','중동',['중동','','중동']],['오명록','연수',['','연수','연수']]],['14','15','16'])+'<p style="font-size:11.5px;color:#888;margin-top:12px">바꾼 내용이 표에 바로 덮어써짐 — 무엇이 바뀌었는지 비교 화면 없음, 임시 저장 없음</p>';},
- af:function(a){a.innerHTML='<div class="lbl">③ 표</div><div class="draft" id="d1">⏸ 보류한 개선안 · 개선안 1 [임시]</div><div style="margin-top:8px">'+tbl([['홍다운','중동',['중동','','중동']],['오명록','연수',['','연수','연수']]],['14','15','16'])+'</div>'+
-  '<div class="pop" id="p1"><b style="font-size:13px">수정안 · 바뀐 칸 2개</b><div class="kp"><div>매장 공백<b>0 → 0건</b></div><div>중복 근무<b class="up">15 → 15칸</b></div></div>'+tbl([['홍다운','중동',['중동','중동','중동']],['오명록','연수',['','','연수']]],['14','15','16'],'pt')+'<div class="row" style="justify-content:flex-end;margin-top:8px"><span class="btn gray">닫기</span><span class="btn gray" id="hold">보류 · 임시 저장</span><span class="btn">이 버전 적용</span></div></div>';
-  var c=cursor(a);at(200,function(){$('p1').classList.add('on');var t=$('pt');t.querySelectorAll('td.c')[1].classList.add('chg');t.querySelectorAll('td.c')[4].classList.add('chg');});
-  at(1600,function(){moveTo(c,$('hold'));});at(2500,function(){click(c);});at(2900,function(){$('p1').classList.remove('on');$('d1').classList.add('on');});}},
-{t:'되돌리기 · 다시 앞으로',cap:'적용한 뒤에도 <b>↩ 이전 버전으로 돌리고 ↪ 다시 앞으로</b> — AI가 준 추가 휴무 기록도 함께',dur:7000,
- bf:function(b){b.innerHTML='<div class="row"><span class="ub">↩ 되돌리기 (1)</span></div><div style="margin-top:8px">'+tbl([['홍다운','중동',['중동','','중동']]],['14','15','16'])+'</div><p style="font-size:11.5px;color:#888;margin-top:12px">되돌린 뒤 다시 앞 버전으로 갈 방법이 없음</p>';},
- af:function(a){a.innerHTML='<div class="row"><span class="ub" id="u">↩ 되돌리기 (1)</span><span class="ub" id="r">↪ 다시 앞으로</span></div><div style="margin-top:8px">'+tbl([['홍다운','중동',['중동','중동','중동']]],['14','15','16'],'ut')+'</div><div class="lbl" style="margin-top:10px" id="st">지금: AI 수정안 적용본</div>';
-  var cell=function(){return $('ut').querySelectorAll('td.c')[1];};cell().classList.add('chg');var c=cursor(a);
-  at(500,function(){moveTo(c,$('u'));});at(1300,function(){click(c);$('u').classList.add('hit');cell().textContent='';cell().classList.remove('chg');cell().className='c s-휴';$('u').textContent='↩ 되돌리기';$('r').textContent='↪ 다시 앞으로 (1)';$('st').textContent='지금: 이전 버전';});
-  at(1700,function(){$('u').classList.remove('hit');moveTo(c,$('r'));});at(2600,function(){click(c);$('r').classList.add('hit');cell().textContent='중동';cell().className='c s-중 chg';$('r').textContent='↪ 다시 앞으로';$('u').textContent='↩ 되돌리기 (1)';$('st').textContent='지금: AI 수정안 적용본 (다시 앞으로)';});
-  at(3000,function(){$('r').classList.remove('hit');});}},
-{t:'적용 중인 조건 목록',cap:'AI 요청사항 옆에 <b>지금 걸린 조건이 종류별로</b> 모이고, [해제] 한 번으로 뺄 수 있습니다',dur:7000,
- bf:function(b){b.innerHTML='<div class="lbl">AI 요청사항</div><div class="bub ai on">전 직원 연속근무 최대 4일 — ✓ 적용됨</div><div class="row" style="margin-top:8px"><span class="inp">요청사항을 적으세요</span><span class="btn">보내기</span></div><div style="margin-top:60px;background:#f4f4f6;border-radius:8px;padding:6px 8px;font-size:11.5px"><b style="color:#5b3fd6">적용 중</b> 전 직원 연속근무 최대 4일 <span class="chip" style="float:right">해제</span></div><p style="font-size:11.5px;color:#888">카톡·특이사항 조건은 다른 탭에서 따로 확인</p>';},
- af:function(a){a.innerHTML='<div class="lbl">적용 중인 조건 <span style="background:var(--vio2);color:#5b3fd6;border-radius:999px;padding:1px 8px;margin-left:4px">적용 중 <span id="cn">4</span></span></div>'+
-  '<div class="lbl" style="margin-top:6px">연속근무</div><div class="rl" style="--c:#7c5cff">↻ <span>전 직원 연속근무 최대 4일<small>전월 이월 포함</small></span><span class="x">해제</span></div>'+
-  '<div class="lbl">휴무 요청</div><div class="rl" style="--c:#e2683c">휴 <span>정유진 12/24 · 12/25<small>AI 요청사항</small></span><span class="x">해제</span></div><div class="rl" style="--c:#e2683c" id="g1">휴 <span>장대운 12/14 · 12/15<small>카톡에서 읽음</small></span><span class="x" id="x1">해제</span></div>'+
-  '<div class="lbl">근무 지정</div><div class="rl" style="--c:#2a7de1">근 <span>홍다운 12/31 중동<small>AI 요청사항</small></span><span class="x">해제</span></div>';
-  var c=cursor(a);at(700,function(){moveTo(c,$('x1'));});at(1600,function(){click(c);$('g1').classList.add('gone');$('cn').textContent='3';});}},
-{t:'편성 도구 · 표 보기',cap:'흩어져 있던 세 기능을 <b>「편성 도구」 탭 하나</b>로 묶고, 표를 옆으로 넘겨도 <b>이름·직책·소속이 고정</b>됩니다',dur:7000,
- bf:function(b){b.innerHTML='<div class="long">추가 휴무 부여 ▾</div><div class="long">긴급 결원 · 변경 반영 ▾</div><div class="long">결원 근무 분배 · 월중 재편성 ▾</div><div class="sw" style="margin-top:8px">'+tbl([['오명록','연수',['연수','','연수','연수']],['장대운','구월',['구월','구월','','구월']]],['11','12','13','14']).replace('<table','<table style="transform:translateX(-58px)"')+'</div><p style="font-size:11.5px;color:#888">옆으로 넘기면 이름이 잘려 누구 줄인지 헷갈림</p>';},
- af:function(a){a.innerHTML='<div class="lbl">편성 도구</div><div class="tabs"><span id="t1">추가 휴무</span><span id="t2">긴급 결원</span><span id="t3">월중 재편성</span></div><div class="sw" style="margin-top:8px"><table class="mt" id="sw2"><tr><th style="position:sticky;left:0;z-index:2">성명</th><th>소속</th><th>11</th><th>12</th><th>13</th><th>14</th></tr><tr><td class="n">오명록</td><td class="n" style="font-weight:400;color:#888;box-shadow:6px 0 8px -6px rgba(0,0,0,.25)">연수</td><td class="c s-연">연수</td><td class="c"></td><td class="c s-연">연수</td><td class="c s-연">연수</td></tr><tr><td class="n">장대운</td><td class="n" style="font-weight:400;color:#888;box-shadow:6px 0 8px -6px rgba(0,0,0,.25)">구월</td><td class="c s-구">구월</td><td class="c s-구">구월</td><td class="c"></td><td class="c s-구">구월</td></tr></table></div><p style="font-size:11.5px;color:#1f7a45;font-weight:700">✓ 넘겨도 이름·소속은 그대로 보임</p>';
-  at(400,function(){$('t1').classList.add('on');});at(1100,function(){$('t1').classList.remove('on');$('t2').classList.add('on');});at(1800,function(){$('t2').classList.remove('on');$('t3').classList.add('on');});}},
-{t:'생성 직후 AI 검토',cap:'초안이 나오면 <b>AI가 바로 한 번 검토</b>해 공백·연속근무·중복 몰림·주말 휴무 편중을 고친 「AI 검토안」을 띄웁니다',dur:8000,
- bf:function(b){b.innerHTML='<div class="lbl">③ 생성</div>'+tbl([['오명록','연수',['연수','연수','연수','연수','연수','연수']],['장대운','구월',['','구월','구월','','구월','구월']]],['1','2','3','4','5','6'])+'<p style="font-size:11.5px;color:#888;margin-top:12px">초안이 그대로 끝 — 6일 연속·중복 몰림은 사람이 표를 훑어보며 찾아 고침</p>';},
- af:function(a){a.innerHTML='<div class="lbl">③ 생성 <span style="background:var(--vio2);color:#5b3fd6;border-radius:999px;padding:1px 8px;margin-left:6px">✦ 생성 후 AI 검토 켬</span></div>'+tbl([['오명록','연수',['연수','연수','연수','연수','연수','연수']],['장대운','구월',['','구월','구월','','구월','구월']]],['1','2','3','4','5','6'],'rv')+
-  '<div class="bub ai" id="r1" style="margin-top:8px">✦ 초안이 나왔어요 — AI가 한 번 검토할게요</div><div class="bub ai" id="r2"><span style="display:inline-block;background:var(--vio2);color:#5b3fd6;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:700">AI 검토안 · 바뀐 칸 2개</span><br>오명록 6일 연속 → 4일째 휴무, 빈 연수는 장대운이 맡아요<div class="kp"><div>최대 연속<b class="up">6 → 5일</b></div><div>매장 공백<b>0 → 0건</b></div></div></div>';
-  at(400,function(){$('r1').classList.add('on');});at(1800,function(){$('r2').classList.add('on');var c=$('rv').querySelectorAll('td.c');c[3].textContent='';c[3].className='c s-휴 chg';c[9].textContent='연수';c[9].className='c s-연 chg';});}},
-{t:'한눈에 보는 향상',cap:'같은 설정 · 같은 휴무 요청으로 <b>10번씩 생성</b>해 비교한 실측 결과입니다',dur:7000,
- bf:function(b){b.innerHTML='<div class="lbl">기존 생성기 · 10회</div><div class="metric"><div>생성 중 확인창<div class="big">5번</div><small style="color:#888">10회 중 5회 멈춤</small></div><div>6일 이상 연속근무<div class="big">5건</div><small style="color:#888">최대 8일 연속</small></div><div>중복 근무 (회당 평균)<div class="big">15.9칸</div></div><div>매장 공백 (10회 합)<div class="big">1건</div></div></div>';},
- af:function(a){a.innerHTML='<div class="lbl">지금 · 같은 조건 10회</div><div class="metric"><div>생성 중 확인창<div class="big" style="color:#1f7a45">0번 <small style="font-size:12px">▼ 5 → 0</small></div></div><div>6일 이상 연속근무<div class="big" style="color:#1f7a45">0건 <small style="font-size:12px">▼ 5 → 0 · 최대 5일</small></div></div><div>중복 근무 (회당 평균)<div class="big">15.9칸</div><small style="color:#b3243f">초안 단계는 그대로 — 휴무 일수를 지키면 남는 인원은 줄지 않음. 생성 후 AI 검토가 중복이 몰린 날을 정리(순환은 팀장·실장만)</small></div><div>매장 공백 (10회 합)<div class="big">1건</div><small style="color:#888">같은 날 갈 수 있는 사람이 없던 경우</small></div></div>';}},
-{t:'완성도 비교',full:true,cap:'기존 생성기와 AI 적용 후를 영역별로 비교했어요 — <b>종합 45점 → 72점</b>',dur:9000,
- af:function(a){var D=[['종합 완성도',45,72,1],['입력 자동화 · 카톡·문장으로 입력',30,85],['생성 안정성 · 확인창·연속근무',45,80],['수정 편의 · AI 직접 수정·비교',35,85],['실수 방지 · 검사·보류·되돌리기',40,80],['화면 가독성 · 탭·목록·고정 칸',50,80],['구조·유지보수 · 기능을 덧붙여 복잡해짐',60,45]];
-  var h='<div class="lg"><span><i class="g"></i>기존</span><span><i class="v"></i>AI 적용 후</span><span class="u">100점 만점</span></div>';
-  D.forEach(function(d,i){h+='<div class="br'+(d[3]?' tot':'')+'"><div class="bl">'+d[0]+'</div><div class="bt"><div class="tr"><i class="f g" id="g'+i+'"></i><b id="gn'+i+'">0</b></div><div class="tr"><i class="f v'+(d[2]<d[1]?' dn':'')+'" id="v'+i+'"></i><b id="vn'+i+'">0</b></div></div><div class="dl" id="dl'+i+'">'+(d[2]>=d[1]?'▲ +':'▼ ')+(d[2]-d[1])+'</div></div>';});
-  h+='<p class="fn">점수는 Claude가 두 버전을 같은 기준으로 비교한 자체 평가입니다(실측 아님). 실측: 같은 조건 10회 생성 — 확인창 5→0번, 6일 이상 연속 5→0건, 최대 연속 8→5일, 중복 근무는 초안 기준 15.9칸 그대로(휴무 일수를 지키면 구조상 남는 인원). 구조·유지보수는 다음 정리 대상입니다.</p>';
-  a.innerHTML=h;
-  D.forEach(function(d,i){at(250+i*160,function(){$('g'+i).style.width=d[1]+'%';cnt($('gn'+i),d[1]);});at(700+i*160,function(){$('v'+i).style.width=d[2]+'%';cnt($('vn'+i),d[2]);});at(1500+i*160,function(){$('dl'+i).classList.add('on');});});}}
-
+{t:'요청 입력 한 칸',cap:'카톡 대화도, 부탁 문장도 <b>한 칸에 붙여넣기</b> — 정리되면 <b>노랗게 반짝이는 [특이사항에 추가]</b>만 누르면 끝',dur:8500,
+ bf:function(b){b.innerHTML='<div class="lbl">카톡에서 휴무 요청 가져오기</div><div class="ta" style="min-height:44px"></div><div class="lbl" style="margin-top:10px">AI 요청사항</div><div class="row"><span class="inp">요청사항을 적으세요</span><span class="btn">보내기</span></div><div class="lbl" style="margin-top:10px">적용 중인 조건 (아래 표와 같은 내용)</div><div class="out" style="opacity:.7">장대운 12/4 · 12/7 · 12/19 …<br>홍다운 12/5 · 12/6 · 12/13 …</div><p style="font-size:11.5px;color:#888;margin-top:10px">입력칸이 두 개, 같은 내용이 두 번 보여 복잡</p>';},
+ af:function(a){a.innerHTML='<div class="lbl">요청 입력</div><div class="ta" id="q1" style="min-height:58px"></div><div class="out" style="margin-top:8px"><div id="q2"><b style="color:#7c5cff;font-size:11px">휴무 요청</b> 조효정 12/11 12/12 · 홍다운 12/20 12/21</div></div><div style="margin-top:8px;display:flex;gap:8px;align-items:center"><span class="btn" id="q3">특이사항에 추가</span><span class="ok" id="q4">✓ 추가됨 · 아래 목록에 4건</span></div><p style="font-size:11.5px;color:#888;margin-top:10px">「연속근무 최대 4일」처럼 <b>문장</b>을 쓰면 AI 조건으로 들어가요</p>';
+  type($('q1'),'[조효정] [오후 3:40] 11일 12일 휴무 부탁드려요\n[다운] [오후 3:52] 저는 20, 21일이요',24);
+  at(2600,function(){$('q2').classList.add('on');$('q3').classList.add('nudge');});
+  at(6000,function(){$('q3').classList.remove('nudge');$('q3').style.background='#1f7a45';$('q3').textContent='✓ 추가됨';$('q4').classList.add('on');});}},
+{t:'요청 달력 · 몰림 경고',cap:'특이사항 제목 옆 <b>[달력]</b>을 누르면 날짜별 요청이 색으로 — <b>빨간 날</b>은 같은 날 휴무가 몰려 공백 위험',dur:7500,
+ bf:function(b){b.innerHTML='<div class="lbl">특이사항 목록</div><div class="out">장대운 4 · 7 · 14 · 19 · 25일<br>홍다운 5 · 6 · 13 · 14일<br>최민영 5 · 6 · 14 · 23일<br>차영근 14 · 22 · 25일<br>…</div><p style="font-size:11.5px;color:#888;margin-top:10px">이름별 목록만 있어서, <b>어느 날에 몇 명이 몰렸는지</b> 직접 세야 함 → 생성하고 나서야 공백 발견</p>';},
+ af:function(a){var h='<div class="lbl">특이사항 · <span style="background:#16131f;color:#fff;border-radius:99px;padding:1px 8px">달력</span></div><div class="mcal" id="c1">';['월','화','수','목','금','토','일'].forEach(function(w){h+='<b>'+w+'</b>';});h+='<i></i>';var n={2:1,4:2,5:3,6:4,7:1,10:1,11:2,13:2,14:7,15:1,19:1,20:2,22:2,23:1,25:3,26:1};for(var d=1;d<=31;d++){var k=n[d]||0,l=k>=6?4:k>=4?3:k>=3?2:k?1:0;h+='<i class="l'+l+'" data-l="'+l+'">'+d+(k?'<em>'+k+'</em>':'')+'</i>';}
+  a.innerHTML=h+'</div><div class="wr" id="c2">⚠️ 14일 7명 · 6일 4명 — 휴무 요청이 몰렸어요</div>';
+  var cs=$('c1').querySelectorAll('i[data-l]');cs.forEach(function(c,i){var l=c.className;c.className='';at(150+i*45,function(){c.className=l;});});at(2400,function(){$('c2').classList.add('on');});}},
+{t:'공백 자동 메우기',cap:'생성 마지막에 빈 매장이 있으면 <b>남는 사람 → 순환 중 팀장·실장 → 휴무 날짜 옮기기</b> 순으로 자동으로 채워요',dur:7000,
+ bf:function(b){b.innerHTML='<div class="lbl">12/25 (금)</div>'+tbl([['정유진','계산',['']],['방하연','순환',['연수']],['오명록','연수',['연수']]],['25'])+'<div class="ok on" style="background:#fdecef;color:#b3243f;margin-top:10px">계산 공백 1칸 — 손으로 찾아서 고쳐야 함</div><p style="font-size:11.5px;color:#888;margin-top:8px">랜덤 휴무 요청 40회 중 <b>17회</b> 공백</p>';},
+ af:function(a){a.innerHTML='<div class="lbl">12/25 (금)</div>'+tbl([['정유진','계산',['']],['방하연','순환',['연수']],['오명록','연수',['연수']]],['25'],'g1')+'<div class="ok" id="g2" style="margin-top:10px">✓ 공백 1칸을 자동으로 메웠어요 (25일 계산 ← 방하연)</div><p style="font-size:11.5px;color:#888;margin-top:8px">같은 조건 40회 중 <b>4회</b>로 줄었어요 (남은 건 근무 불가 설정·요청 몰림)</p>';
+  at(1400,function(){var c=$('g1').querySelector('td[data-k="방하연0"]');c.textContent='계산';c.className='c s-계 chg';$('g2').classList.add('on');});}},
+{t:'중복 근무 → 연수',cap:'한 매장에 사람이 남으면 <b>고정 매장이 없는 순환 주임</b>을 연수로 — 연수는 <b>최대 2명</b>, 팀장·실장·매니저·고정 주임은 그대로',dur:7000,
+ bf:function(b){b.innerHTML='<div class="lbl">12/5 (토)</div>'+tbl([['정유진','계산',['계산']],['안태민','순환',['계산']],['오명록','연수',['연수']]],['5'])+'<div class="ok on" style="background:#fff4e5;color:#9a4f0f;margin-top:10px">계산 2명 중복 · 연수는 1명이라 빠듯</div>';},
+ af:function(a){a.innerHTML='<div class="lbl">12/5 (토)</div>'+tbl([['정유진','계산',['계산']],['안태민','순환',['계산']],['오명록','연수',['연수']]],['5'],'y1')+'<div class="ok" id="y2" style="margin-top:10px">✓ 안태민 계산 → 연수 (연수 2명 · 무난)</div><p style="font-size:11.5px;color:#888;margin-top:8px">생성 버튼 옆 <b>「중복→연수」</b>로 켜고 끌 수 있어요</p>';
+  at(1400,function(){var c=$('y1').querySelector('td[data-k="안태민0"]');c.textContent='연수';c.className='c s-연 chg';$('y2').classList.add('on');});}},
+{t:'휴무 수 보정',cap:'휴무가 지정한 수보다 <b>줄거나 늘지 않게</b> 마지막에 맞춰요 — 모자라면 <b>순환 중인 팀장·실장이 대신 서고</b> 본인은 휴무',dur:7500,
+ bf:function(b){b.innerHTML='<div class="lbl">12/9 (수)</div>'+tbl([['정희경','로데오',['로데오']],['김형진','순환',['순환']]],['9'])+'<div class="ok on" style="background:#fdecef;color:#b3243f;margin-top:10px">정희경 휴무 9일 / 지정 10일 — 하루 모자람</div><p style="font-size:11.5px;color:#888;margin-top:8px">공백을 메우다 휴무를 깎는 경우가 있었어요 (20회 중 9회)</p>';},
+ af:function(a){a.innerHTML='<div class="lbl">12/9 (수)</div>'+tbl([['정희경','로데오',['로데오']],['김형진','순환',['순환']]],['9'],'f1')+'<div class="ok" id="f2" style="margin-top:10px">✓ 김형진 순환 → 로데오 · 정희경 휴무 10일 / 10일</div><p style="font-size:11.5px;color:#888;margin-top:8px">요청 휴무·근무지정은 건드리지 않고, 연속근무 5일 이내</p>';
+  at(1300,function(){var t=$('f1'),a1=t.querySelector('td[data-k="김형진0"]'),b1=t.querySelector('td[data-k="정희경0"]');a1.textContent='로데오';a1.className='c chg';at(700,function(){b1.textContent='';b1.className='c s-휴 chg';$('f2').classList.add('on');});});}},
+{t:'결과 숫자가 실시간으로',cap:'표를 고치면 <b>공백·휴무·연속근무 숫자가 바로 바뀌고</b>, 생성 직후보다 <b>나아졌는지</b> 함께 보여줘요',dur:7000,
+ bf:function(b){b.innerHTML='<div class="lbl">생성 결과</div><div class="kp"><div>매장 공백<b style="color:#b3243f">1건</b></div><div>휴무 ≠ 지정<b style="color:#b3243f">3명</b></div><div>최대 연속근무<b style="color:#b3243f">6일</b></div><div>휴무 요청 반영<b>14/14</b></div></div><p style="font-size:11.5px;color:#888;margin-top:10px">생성한 순간 숫자 그대로 — 표를 고쳐도 안 바뀜</p>';},
+ af:function(a){a.innerHTML='<div class="lbl">생성 결과</div><div class="kp"><div>매장 공백<b id="k1" style="color:#b3243f">1건</b><small id="k1s" style="color:#1f7a45;font-weight:700"></small></div><div>휴무 ≠ 지정<b id="k2" style="color:#b3243f">3명</b><small id="k2s" style="color:#1f7a45;font-weight:700"></small></div><div>최대 연속근무<b id="k3" style="color:#b3243f">6일</b><small id="k3s" style="color:#1f7a45;font-weight:700"></small></div><div>휴무 요청 반영<b style="color:#1f7a45">14/14</b></div></div>';
+  at(1200,function(){$('k1').textContent='0건';$('k1').style.color='#1f7a45';$('k1s').textContent='생성 직후 1건 → 나아짐';});
+  at(2200,function(){$('k2').textContent='0명';$('k2').style.color='#1f7a45';$('k2s').textContent='생성 직후 3명 → 나아짐';});
+  at(3200,function(){$('k3').textContent='5일';$('k3').style.color='#1f7a45';$('k3s').textContent='생성 직후 6일 → 나아짐';});}},
+{t:'추가 휴무 유지 · 바로 한 안',cap:'다시 생성해도 <b>추가로 준 휴무가 그대로</b> 남고, 「여러 안 비교」 없이 <b>가장 나은 안 하나</b>가 바로 나와요',dur:7000,
+ bf:function(b){b.innerHTML='<div class="lbl">추가 휴무 → 다시 생성</div><div class="out">홍다운 추가 휴무 +1 (11일)<br><span style="color:#b3243f;font-weight:700">다시 생성 → 10일로 되돌아감</span></div><div class="lbl" style="margin-top:12px">여러 안 비교</div><div class="out">1안 · 2안 · 3안 · 4안 · 5안 중 고르기<br><span style="color:#888">약 20초 · 2~4안은 요청 휴무를 줄인 안</span></div>';},
+ af:function(a){a.innerHTML='<div class="lbl">추가 휴무 → 다시 생성</div><div class="out"><div id="x1">홍다운 추가 휴무 +1 (11일)</div><div id="x2" style="color:#1f7a45;font-weight:700">다시 생성 → 11일 그대로 ✓</div></div><div class="lbl" style="margin-top:12px">생성</div><div class="out"><div id="x3">바로 한 안 · 약 1초</div><div id="x4" style="color:#1f7a45;font-weight:700">공백 메우기 → 중복→연수 → 휴무 수 보정까지 자동</div></div>';
+  at(300,function(){$('x1').classList.add('on');});at(1300,function(){$('x2').classList.add('on');});at(2300,function(){$('x3').classList.add('on');});at(3100,function(){$('x4').classList.add('on');});}},
+{t:'이렇게 쓰세요',full:true,cap:'순서는 그대로 — <b>붙여넣고 → 달력 확인 → 생성 → 숫자 확인</b>',dur:9000,
+ af:function(a){var st=[['1','② 특이사항','「요청 입력」에 카톡 대화를 붙여넣고, 노랗게 반짝이는 <b>[특이사항에 추가]</b>'],['2','② 특이사항','제목 옆 <b>[달력]</b>에서 빨간 날 확인 — 몰린 날은 미리 조정 부탁'],['3','③ 생성','<b>특이사항 입력 완료 → 생성하기</b> · 공백·중복·휴무 수는 자동으로 정리'],['4','③ 결과','카드 숫자가 모두 <b style="color:#1f7a45">초록</b>이면 끝 · 빨간 항목만 확인하고 <b>스케줄표 반영</b>']];
+  a.innerHTML='<div class="how">'+st.map(function(s,i){return '<div class="hw" id="h'+i+'"><span class="no">'+s[0]+'</span><div><small>'+s[1]+'</small><p>'+s[2]+'</p></div></div>';}).join('')+'</div>';
+  st.forEach(function(_,i){at(300+i*1100,function(){$('h'+i).classList.add('on');});});}}
 ];
 
 var cur=0,timer=null;
@@ -5822,7 +5804,13 @@ function open(){var u=$('up');u.hidden=false;setTimeout(function(){u.classList.a
 function close(){var u=$('up');u.classList.remove('on');clear();setTimeout(function(){u.hidden=true;},250);try{localStorage.setItem(KEY,VER);}catch(e){}}
 
   var CSS = '\n:host{--ink:#16131f;--sub:#6b6880;--line:#ebe9f1;--bg:#eef0f4;--navy:#1f2a5a;--vio:#7c5cff;--vio2:#f1edff;--red:#b3243f;--grn:#1f7a45;--grnb:#e9f7ee;--ease:cubic-bezier(.2,.8,.2,1);--spring:cubic-bezier(.34,1.45,.64,1)}\n*{box-sizing:border-box}#up{font:14px/1.5 -apple-system,"Pretendard","Apple SD Gothic Neo","Malgun Gothic",sans-serif;color:var(--ink)}\n\n/* 안내 창 */\n#up{position:fixed;inset:0;z-index:9700;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(20,22,40,.45);opacity:0;transition:opacity .25s ease}\n#up.on{opacity:1}#up[hidden]{display:none}\n.box{width:min(1020px,100%);max-height:100%;overflow:auto;background:#fff;border-radius:22px;padding:22px 26px 18px;box-shadow:0 24px 70px rgba(0,0,0,.25);transform:translateY(14px) scale(.98);transition:transform .45s var(--spring)}\n#up.on .box{transform:none}\n.top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}\n.step{font-size:12px;font-weight:700;color:var(--navy)}.top h2{margin:2px 0 0;font-size:21px}\n.skip{border:0;background:none;color:var(--sub);font:inherit;font-size:13px;cursor:pointer;padding:6px}\n/* 비포 · 애프터 */\n.ba{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:14px 0 10px}\n.side{border-radius:16px;padding:12px;min-height:300px;position:relative;overflow:hidden}\n.side.bf{background:#f4f4f6}.side.af{background:#f6f3ff;box-shadow:inset 0 0 0 2px #d9cffd}\n.tag{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:800;border-radius:999px;padding:3px 10px;margin-bottom:10px}\n.bf .tag{background:#e3e3e8;color:#555}.af .tag{background:var(--vio);color:#fff}\n.bf .scr{filter:grayscale(.6);opacity:.85}\n.scr{background:#fff;border-radius:12px;border:1px solid var(--line);padding:12px;font-size:12.5px;min-height:240px;position:relative}\n.cap{text-align:center;font-size:14px;margin:4px 0 12px;color:#333}.cap b{color:var(--navy)}\n.prog{display:flex;gap:6px;margin:6px 0 12px}.prog i{flex:1;height:5px;border-radius:9px;background:#e6e8ef;overflow:hidden;position:relative}\n.prog i.done{background:var(--navy)}.prog i.cur:after{content:"";position:absolute;inset:0;background:var(--navy);transform-origin:left;animation:fill var(--dur,7s) linear forwards}\n@keyframes fill{from{transform:scaleX(0)}to{transform:scaleX(1)}}\n.nav{display:flex;align-items:center;gap:8px}.nav .sp{flex:1}\n.nav button{border:0;border-radius:12px;padding:10px 18px;font:inherit;font-weight:700;cursor:pointer}\n.prev{background:#f3f4f7;color:#555}.prev:disabled{opacity:.4;cursor:default}.again{background:none;color:#333;font-weight:600!important}.next{background:var(--navy);color:#fff}\n/* 미니 화면 공용 */\n.lbl{font-size:11px;color:var(--sub);margin-bottom:6px;font-weight:700}\n.ta{border:1px solid var(--line);border-radius:8px;padding:8px;font-size:11.5px;color:#444;min-height:70px;white-space:pre-line;background:#fcfcfd}\n.row{display:flex;gap:6px;align-items:center;margin:5px 0}.chip{display:inline-block;border-radius:6px;padding:2px 7px;font-size:11.5px;background:#f0f0f4}\n.inp{border:1px solid var(--line);border-radius:7px;padding:5px 8px;font-size:11.5px;color:#999;flex:1}\n.btn{display:inline-block;border-radius:7px;padding:5px 10px;font-size:11.5px;font-weight:700;background:var(--ink);color:#fff}\n.btn.gray{background:#ececf0;color:#333}\n.out{border:1px solid #d9cffd;border-radius:8px;padding:8px;background:#fff;font-size:12px;min-height:54px}\n.out div{opacity:0;transform:translateY(6px);transition:all .35s var(--ease)}.out div.on{opacity:1;transform:none}\n.dlg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:86%;background:#fff;border:1px solid #ccc;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.18);padding:12px;font-size:12px}\n.dlg .b{display:flex;gap:6px;justify-content:flex-end;margin-top:10px}.dlg:nth-of-type(2){transform:translate(-46%,-44%)}.dlg:nth-of-type(3){transform:translate(-42%,-38%)}\n.cnt{position:absolute;right:12px;top:12px;background:var(--red);color:#fff;border-radius:999px;font-size:11px;font-weight:800;padding:2px 8px}\n.ok{background:var(--grnb);color:var(--grn);border-radius:8px;padding:6px 10px;font-weight:700;font-size:12px;opacity:0;transition:opacity .4s}.ok.on{opacity:1}\ntable.mt{border-collapse:separate;border-spacing:0;font-size:11px;width:100%}table.mt th,table.mt td{border-bottom:1px solid #f0f0f3;padding:4px 3px;text-align:center;white-space:nowrap}table.mt th{background:#23253a;color:#fff;font-weight:600}\ntable.mt td.n{text-align:left;font-weight:700;background:#fff}td.c{transition:all .35s var(--ease)}td.c.chg{background:var(--vio2);box-shadow:inset 0 0 0 2px var(--vio);color:#3d2a99;font-weight:800}\n.s-구{background:#e6f0ff}.s-연{background:#ffe9ee}.s-중{background:#e5f6ec}.s-계{background:#e3f6f8}.s-휴{color:#aaa}\n.bub{border-radius:12px;padding:7px 10px;font-size:11.5px;max-width:92%;margin:5px 0;opacity:0;transform:translateY(6px);transition:all .35s var(--ease)}.bub.on{opacity:1;transform:none}\n.bub.me{background:var(--ink);color:#fff;margin-left:auto;border-radius:12px 12px 3px 12px}.bub.ai{background:#fff;border:1px solid var(--line)}\n.pop{position:absolute;inset:10px;background:#fff;border-radius:12px;box-shadow:0 14px 40px rgba(20,16,40,.25);padding:10px;opacity:0;transform:scale(.96);transition:all .4s var(--spring);pointer-events:none}.pop.on{opacity:1;transform:none}\n.kp{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin:6px 0}.kp div{border:1px solid var(--line);border-radius:8px;padding:5px 8px;font-size:11px}.kp b{display:block;font-size:13px}.up{color:var(--grn)}\n.draft{display:inline-flex;gap:6px;align-items:center;border:1px dashed #c9bdfc;background:#faf8ff;border-radius:999px;padding:3px 10px;font-size:11.5px;color:#3d2a99;font-weight:700;opacity:0;transform:translateY(-6px);transition:all .4s var(--spring)}.draft.on{opacity:1;transform:none}\n.ub{display:inline-block;border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:700;background:#ececf0;color:#333;transition:all .2s}.ub.hit{background:var(--vio);color:#fff;transform:scale(.95)}\n.rl{display:flex;gap:8px;align-items:center;background:#fff;border:1px solid var(--line);border-left:4px solid var(--c,#7c5cff);border-radius:8px;padding:6px 8px;margin:5px 0;font-size:11.5px;transition:all .4s var(--ease)}.rl small{color:var(--sub);display:block}.rl .x{margin-left:auto;border:1px solid var(--line);border-radius:6px;padding:1px 6px;font-size:10.5px}\n.rl.gone{opacity:0;transform:translateX(60%);max-height:0;padding:0 8px;margin:0;border-width:0}\n.long{border:1px solid var(--line);border-radius:8px;padding:8px;margin:5px 0;font-size:11.5px;font-weight:700;color:#444;background:#fafafa}\n.tabs{display:flex;gap:4px;background:#f1f1f5;border-radius:999px;padding:3px;margin-bottom:8px}.tabs span{flex:1;text-align:center;border-radius:999px;padding:4px;font-size:11px;font-weight:700;color:#666;transition:all .3s}.tabs span.on{background:var(--ink);color:#fff}\n.sw{overflow:hidden;border:1px solid var(--line);border-radius:8px}.sw table{transition:transform 1.2s var(--ease)}\n.big{font-size:22px;font-weight:800;color:var(--ink)}.metric{display:grid;grid-template-columns:1fr;gap:8px}.metric>div{background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:12px}\n.cur{position:absolute;width:18px;height:18px;pointer-events:none;z-index:5;transition:transform .7s var(--ease);left:0;top:0}\n.cur svg{width:18px;height:18px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.3))}.cur.clk:after{content:"";position:absolute;left:-8px;top:-8px;width:20px;height:20px;border-radius:50%;border:2px solid var(--vio);animation:rip .45s ease-out forwards}\n@keyframes rip{from{transform:scale(.3);opacity:1}to{transform:scale(1.4);opacity:0}}\n@media (max-width:720px){.ba{grid-template-columns:1fr}.side{min-height:0}.box{padding:16px}.top h2{font-size:18px}}\n@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}\n\n#full{display:none;margin:14px 0 10px;background:#fff;border-radius:16px;border:1px solid var(--line);padding:16px 18px;min-height:0}\n#full .lg{display:flex;gap:14px;align-items:center;font-size:12px;color:var(--sub);margin-bottom:10px}#full .lg i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-1px}#full .lg .g{background:#c9cad3}#full .lg .v{background:var(--vio)}#full .lg .u{margin-left:auto}\n#full .br{display:grid;grid-template-columns:220px 1fr 64px;gap:12px;align-items:center;padding:7px 0;border-bottom:1px dashed #eee}#full .br.tot{background:#faf8ff;border-radius:12px;padding:10px;border:0;margin-bottom:6px}\n#full .bl{font-size:12.5px;font-weight:700;color:#333;line-height:1.3}#full .tot .bl{font-size:14px;color:var(--navy)}\n#full .tr{display:flex;align-items:center;gap:8px;height:16px;margin:3px 0}#full .tot .tr{height:22px}\n#full .f{display:block;height:100%;width:0;border-radius:0 8px 8px 0;transition:width 1s var(--ease)}#full .f.g{background:#c9cad3}#full .f.v{background:linear-gradient(90deg,#9b83ff,var(--vio))}#full .f.v.dn{background:#e7a3b2}\n#full .tr b{font-size:12px;font-weight:800;color:#555;min-width:22px}#full .tot .tr b{font-size:14px}\n#full .dl{font-size:12.5px;font-weight:800;color:var(--grn);opacity:0;transform:translateX(-6px);transition:all .4s var(--spring)}#full .dl.on{opacity:1;transform:none}#full .br:last-of-type .dl{color:var(--red)}\n#full .fn{font-size:11.5px;color:var(--sub);margin:10px 0 0}\n@media (max-width:720px){#full .br{grid-template-columns:1fr 54px}#full .bl{grid-column:1/-1}}\n';
-  var HTML = '<div id="up" hidden role="dialog" aria-modal="true" aria-label="업데이트 안내">\n  <div class="box">\n    <div class="top"><div><div class="step" id="stp"></div><h2>스케줄 생성기 · 이번에 바뀐 것</h2></div><button class="skip" id="skip">건너뛰기</button></div>\n    <div class="ba"><div class="side bf"><span class="tag">이전</span><div class="scr" id="bf"></div></div><div class="side af"><span class="tag">✦ 지금</span><div class="scr" id="af"></div></div></div>\n    <div id="full"></div>\n    <div class="cap" id="cap"></div>\n    <div class="prog" id="prog"></div>\n    <div class="nav"><button class="prev" id="prev">이전</button><span class="sp"></span><button class="again" id="again">↻ 이 장면 다시</button><button class="next" id="next">다음</button></div>\n  </div>\n</div>';
+  CSS += '.btn.nudge{animation:nudge 1.3s ease-in-out infinite}@keyframes nudge{0%,100%{background:var(--ink);box-shadow:0 0 0 0 rgba(242,194,48,0)}50%{background:#F2C230;color:#16131f;box-shadow:0 0 0 6px rgba(242,194,48,.3)}}' +
+    '.mcal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}.mcal b{font-size:10.5px;color:var(--sub);text-align:center}.mcal i{font-style:normal;position:relative;border:1px solid var(--line);border-radius:7px;height:32px;font-size:10.5px;font-weight:800;padding:2px 4px;background:#fff;transition:background .35s var(--ease),border-color .35s}.mcal i:empty{border:0;background:none}.mcal em{position:absolute;right:3px;bottom:2px;font-style:normal;font-size:10px;border-radius:99px;padding:0 5px;background:rgba(22,21,27,.08)}' +
+    '.mcal i.l1{background:#F3F0FF}.mcal i.l2{background:#E4DDFF}.mcal i.l3{background:#FFE9C7;border-color:#e9b277}.mcal i.l4{background:#FFD9DF;border-color:#e88a99}.mcal i.l4 em{background:#D93A55;color:#fff}.mcal i.l3 em{background:#D6731E;color:#fff}' +
+    '.wr{margin-top:8px;font-size:12px;font-weight:700;color:#a8243c;background:#fdecef;border-radius:8px;padding:6px 10px;opacity:0;transition:opacity .4s}.wr.on{opacity:1}.kp small{display:block;font-size:10.5px;min-height:14px}' +
+    '.how{display:grid;gap:10px;margin:14px 0}.hw{display:flex;gap:14px;align-items:center;background:#f6f3ff;border-radius:14px;padding:14px 16px;opacity:0;transform:translateX(-10px);transition:all .45s var(--spring)}.hw.on{opacity:1;transform:none}.hw .no{flex:none;width:34px;height:34px;border-radius:50%;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800}.hw small{font-size:11.5px;color:var(--sub);font-weight:700}.hw p{margin:2px 0 0;font-size:14px}' +
+    '@media (prefers-reduced-motion:reduce){.btn.nudge{animation:none;background:#F2C230;color:#16131f}}';
+  var HTML = '<div id="up" hidden role="dialog" aria-modal="true" aria-label="업데이트 안내">\n  <div class="box">\n    <div class="top"><div><div class="step" id="stp"></div><h2>스케줄 생성기 · 이번에 바뀐 것 (11월 26일)</h2></div><button class="skip" id="skip">건너뛰기</button></div>\n    <div class="ba"><div class="side bf"><span class="tag">이전</span><div class="scr" id="bf"></div></div><div class="side af"><span class="tag">✦ 지금</span><div class="scr" id="af"></div></div></div>\n    <div id="full"></div>\n    <div class="cap" id="cap"></div>\n    <div class="prog" id="prog"></div>\n    <div class="nav"><button class="prev" id="prev">이전</button><span class="sp"></span><button class="again" id="again">↻ 이 장면 다시</button><button class="next" id="next">다음</button></div>\n  </div>\n</div>';
   function mount(){
     if(document.getElementById('wvUpHost')) return;
     var host = document.createElement('div'); host.id = 'wvUpHost'; document.body.appendChild(host);
@@ -5975,7 +5963,7 @@ WV.module(150, 'ai12', function(){
   function s(k, v){ try{ localStorage.setItem(k, v ? '1' : '0'); }catch(e){} }
   var esc = WV.esc;
   var ITEMS = [
-    { k: 'opt', t: '여러 안 비교', d: '5가지 안을 만들어 공백·연속근무·요청 반영을 비교하고 가장 나은 안을 추천해요', m: '약 20초', get: function(){ return OPT; } },
+    // 2026-11-26 「여러 안 비교(5개 안)」 제거 — 생성 한 번에 가장 나은 안만 보여줌(사용자 결정)
     { k: 'wvReviewPatrol', t: '남는 인원 정리', d: '같은 날 인원이 남으면 연수로 보내거나, 팀장·실장을 순환 근무로 돌려 중복을 줄여요', m: '' },
     { k: 'wvUsePattern', t: '과거 패턴 반영', d: '최근 4개월 확정 스케줄을 보고, 생성 뒤 손으로 고치던 배치를 미리 반영해요', m: '' },
     { k: 'wvAutoReview', t: '생성 후 AI 검토', d: '완성된 표를 AI가 한 번 더 보고, 고칠 곳이 있으면 비교안으로 보여줘요', m: '약 30초 · 1회 30~90원' }
@@ -6017,7 +6005,7 @@ WV.module(150, 'ai12', function(){
     var m = document.createElement('div'); m.id = 'wvGenM';
     m.innerHTML = '<div class="bx" role="dialog" aria-modal="true"><h3>' + (mode === 'set' ? '생성 옵션' : mkLabel() + ' 스케줄을 생성할까요?') + '</h3><div class="sum">' + esc(summary()) + '</div>' +
       ITEMS.map(function(it, i){ var on = state(it); return '<div class="ck' + (on ? ' on' : '') + '" role="checkbox" tabindex="0" aria-checked="' + on + '" data-i="' + i + '"><span class="bx2">' + (on ? '✓' : '') + '</span><span><b>' + it.t + (it.m ? '<span class="m">' + it.m + '</span>' : '') + '</b><small>' + it.d + '</small></span></div>'; }).join('') +
-      '<div class="note" id="wvGenNote">「여러 안 비교」를 바꾸면 페이지를 한 번 다시 연 뒤 바로 생성해요. 입력한 특이사항·조건은 그대로 남아요.</div>' +
+      '<div class="note" id="wvGenNote"></div>' +
       '<div class="ft"><button type="button" class="no">' + (mode === 'set' ? '닫기' : '취소') + '</button><button type="button" class="go">' + (mode === 'set' ? '저장' : '생성하기') + '</button></div></div>';
     document.body.appendChild(m);
     var note = m.querySelector('#wvGenNote');
@@ -6030,7 +6018,7 @@ WV.module(150, 'ai12', function(){
       var want = {}; ITEMS.forEach(function(it, i){ want[it.k] = isOn(i); });
       ['wvReviewPatrol', 'wvUsePattern', 'wvAutoReview'].forEach(function(k){ s(k, want[k]); });
       close(); chip();
-      if(want.opt !== OPT){
+      if(!!want.opt !== OPT){
         // 다시 열면 시트 설정을 새로 읽으므로, 저장 안 한 직원·매장 설정은 잠깐 보관했다가 되돌림
         try{ if(document.querySelector('#wvCfgMsg.dirty')) sessionStorage.setItem('wvKeepCfg', JSON.stringify({ emps: S.emps, stores: S.stores })); }catch(e){}
         try{ if(mode !== 'set') sessionStorage.setItem('wvAutoGen', '1'); }catch(e){}
@@ -6302,6 +6290,41 @@ WV.module(180, 'reqTidy', function(){
   WV.after('renderReqs', '요청 달력 갱신(reqTidy)', function(){ cal(); });
   WV.after('save', 'AI 조건 칩 갱신(reqTidy)', function(){ clearTimeout(window.__wvRqT); window.__wvRqT = setTimeout(function(){ chips(); cal(); }, 80); });
   var n = 0; (function t(){ if(!mount() && n++ < 60) setTimeout(t, 250); })();
+});
+
+WV.module(185, 'kpiLive', function(){
+/* ===== 생성 결과 숫자·경고를 실시간으로 (2026-11-26)
+   원인: 결과 카드(공백·휴무≠지정·최대 연속·요청 반영)와 「자동으로 못 푼 항목」은 생성 직후 한 번만 계산됨
+        → 그 뒤 공백 메우기·중복→연수·과거 패턴·칸 수정·AI 적용으로 표가 바뀌어도 옛 숫자가 남음
+   조치: 표를 다시 그릴 때마다 다시 계산. 생성 직후(자동 보정 전) 값을 기준으로 「3 → 1」처럼 나아진 만큼 표시 */
+  var base0 = null, tm = null;
+  var st = document.createElement('style');
+  st.textContent = '.wvKd{display:block;margin-top:2px;font-size:11.5px;font-weight:700;color:#8E8A97}.wvKd.up{color:#119C72}.wvKd.dn{color:#D93A55}';
+  (document.head || document.documentElement).appendChild(st);
+  function num(v){ return typeof v === 'string' ? +v.split('/')[0] : +v; }
+  function put(id, txt, good, b0, now, unit, lowerBetter){
+    var el = document.getElementById(id); if(!el) return;
+    el.textContent = txt; el.style.color = good ? '#119C72' : '#D93A55';
+    var box = el.parentNode, d = box.querySelector('.wvKd'); if(!d){ d = document.createElement('span'); d.className = 'wvKd'; box.appendChild(d); }
+    if(b0 == null || b0 === now){ d.textContent = ''; d.className = 'wvKd'; return; }
+    var better = lowerBetter ? now < b0 : now > b0;
+    d.className = 'wvKd ' + (better ? 'up' : 'dn');
+    d.textContent = '생성 직후 ' + b0 + unit + (better ? ' → 나아짐' : ' → 나빠짐');
+  }
+  function refresh(){
+    if(!window.wvStats || !document.getElementById('wvK1')) return;
+    var s = window.wvStats(); if(!s) return;
+    var b = base0 && base0.key === (sched.year + '-' + sched.month) ? base0 : null;
+    put('wvK1', s.gap + '건', s.gap === 0, b && b.gap, s.gap, '건', true);
+    put('wvK2', s.mis + '명', s.mis === 0, b && b.mis, s.mis, '명', true);
+    put('wvK3', s.mx + '일', s.mx <= 5, b && b.mx, s.mx, '일', true);
+    var r = s.req.split('/'); put('wvK4', s.req, r[0] === r[1], b && num(b.req), num(s.req), '건', false);
+    var k3 = document.getElementById('wvK3'); if(k3) k3.title = s.who;
+    if(window.wvShowWarns && document.getElementById('wvWarnBox')) try{ window.wvShowWarns(); }catch(e){}
+  }
+  WV.on('generated', function(d){ try{ if(window.wvStats && typeof sched !== 'undefined' && sched){ var s = window.wvStats(); base0 = s ? { key: sched.year + '-' + sched.month, gap: s.gap, mis: s.mis, mx: s.mx, req: s.req } : null; } }catch(e){} });
+  WV.after('renderSched', '결과 숫자 실시간(kpiLive)', function(){ clearTimeout(tm); tm = setTimeout(refresh, 150); });
+  WV.after('save', '결과 숫자 실시간(kpiLive)', function(){ clearTimeout(tm); tm = setTimeout(refresh, 150); });
 });
 
 </script>
@@ -8184,6 +8207,87 @@ WV.module(165, 'fillGaps', function(){
     window.__wvFillLog = log;
     return fixed;
   };
+});
+
+WV.module(1, 'noOpt', function(){
+/* 「여러 안 비교(?opt=1)」 중단 (2026-11-26, 사용자 결정): 주소에 opt=1이 남아 있으면 빼고 다시 연다 */
+  if(/[?&]opt=1/.test(location.search)){
+    var q = location.search.replace(/([?&])opt=1(&|$)/, function(_m, a, b){ return b ? a : ''; }).replace(/^&/, '?');
+    try{ location.replace(location.pathname + (q === '?' ? '' : q) + location.hash); }catch(e){}
+  }
+});
+
+WV.module(190, 'offFix', function(){
+/* ===== 휴무 수 보정 (2026-11-26)
+   원인: 원본 「편성 최적화(wvOptimize)」가 공백을 메우려고 고정 매장 주임의 휴무를 근무로 바꿈(랜덤 20회 중 9회 −1일).
+        뒤 단계가 대부분 되돌리지만 일부는 끝까지 모자란 채로 남음
+   조치: 생성 맨 마지막(공백 메우기·중복→연수 뒤)에 직원마다 휴무 = 지정 휴무 + 추가 휴무(일괄·날짜 지정)로 맞춘다
+   · 모자라면: ① 그날 순환 중인 팀장·실장이 그 자리를 대신 서고 본인은 휴무(사용자 제안)
+              ② 그날 그 매장에 사람이 남으면 그냥 휴무  ③ 본인이 순환 근무인 날이면 휴무
+   · 많으면: 요청하지 않은 휴무 하루를 근무로(공백 매장 → 팀장·실장은 순환 → 소속 매장 → 연수 2명까지 순)
+   · 요청 휴무·근무지정·전매장 휴무일은 건드리지 않고, 연속 근무 5일을 넘기지 않는다 */
+  var H = WV.calc, MAXRUN = 5, PATROL = ['팀장', '실장'];
+  function target(e, mk){
+    var b = 0; ((S.extraLog && S.extraLog[mk]) || []).forEach(function(x){ if(!x._wvTmp && x.name === e.name && (x.bulk || x.day >= 0)) b++; });
+    return offTarget(e) + b;
+  }
+  window.wvOffFix = function(sc){
+    if(!sc || !sc.cells || typeof offTarget !== 'function') return 0;
+    var C = H.ctx(sc), cells = sc.cells, fixed = 0, log = [], left = [];
+    C.acts.forEach(function(e){
+      var a = cells[e.name], tgt = target(e, C.mk), f = a.filter(function(v){ return v === ''; }).length, guard = 0;
+      while(f < tgt && guard++ < 10){
+        var best = null;
+        for(var d = 0; d < C.nD; d++){
+          var v = a[d]; if(!H.isW(v) || C.hol[d] || C.lockWork[e.name + '|' + d]) continue;
+          var how = null, X = v === '순환' ? null : H.base(v);
+          if(!X) how = { k: 'self' };
+          else {
+            var q = C.acts.filter(function(p){ return p !== e && cells[p.name][d] === '순환' && PATROL.indexOf(String(p.title || '').trim()) >= 0 && !C.lockWork[p.name + '|' + d] && H.allowed(p, X); })[0];
+            if(q) how = { k: 'patrol', q: q };
+            else if(H.cnt(C, cells, X, d) > H.need(C, X, d)) how = { k: 'surplus' };
+          }
+          if(!how) continue;
+          var sc2 = -H.runAt(C, cells, e.name, d) + (how.k === 'surplus' ? 0 : how.k === 'self' ? 0.5 : 1);   // 긴 연속근무를 끊는 날 먼저
+          if(!best || sc2 < best.s) best = { d: d, X: X, how: how, s: sc2 };
+        }
+        if(!best) break;
+        a[best.d] = '';
+        if(best.how.k === 'patrol'){ cells[best.how.q.name][best.d] = best.X; log.push(e.name + ' ' + (best.d + 1) + '일 휴무 ← ' + best.how.q.name + ' 순환→' + best.X); }
+        else log.push(e.name + ' ' + (best.d + 1) + '일 휴무');
+        if(best.X) H.relabel(C, cells, best.X, best.d);
+        f++; fixed++;
+      }
+      while(f > tgt && guard++ < 20){
+        var pick = null;
+        for(var d2 = 0; d2 < C.nD; d2++){
+          if(a[d2] !== '' || C.hol[d2] || C.lockOff[e.name + '|' + d2]) continue;
+          a[d2] = '순환'; var L = H.runAt(C, cells, e.name, d2); a[d2] = '';
+          if(L > MAXRUN) continue;
+          var to = null;
+          S.stores.some(function(st){ if(H.cnt(C, cells, st.n, d2) < H.need(C, st.n, d2) && H.allowed(e, st.n)){ to = st.n; return true; } return false; });
+          if(!to && PATROL.indexOf(String(e.title || '').trim()) >= 0) to = '순환';
+          if(!to && e.home && e.home !== '순환' && H.allowed(e, e.home)) to = e.home;
+          if(!to && H.allowed(e, '연수') && H.cnt(C, cells, '연수', d2) < 2) to = '연수';
+          if(!to){ var ok = S.stores.filter(function(st){ return H.allowed(e, st.n); }).sort(function(x, y){ return (H.cnt(C, cells, x.n, d2) - H.need(C, x.n, d2)) - (H.cnt(C, cells, y.n, d2) - H.need(C, y.n, d2)); })[0]; if(ok) to = ok.n; }
+          if(!to) continue;
+          if(!pick || L < pick.L) pick = { d: d2, to: to, L: L };
+        }
+        if(!pick) break;
+        a[pick.d] = pick.to; if(pick.to !== '순환') H.relabel(C, cells, pick.to, pick.d);
+        log.push(e.name + ' ' + (pick.d + 1) + '일 근무(' + pick.to + ')'); f--; fixed++;
+      }
+      if(f !== tgt) left.push(e.name + ' ' + f + '/' + tgt);
+    });
+    window.__wvOffFixLog = log; window.__wvOffFixLeft = left;
+    return fixed;
+  };
+  // 공백 메우기·중복→연수가 끝난 바로 뒤에 실행
+  WV.after('wvDupToYeonsu', '휴무 수 보정(offFix)', function(_r, a){
+    var n = window.wvOffFix(a[0]);
+    if(n && !window.__wvVarBusy) setTimeout(function(){ try{ save(); }catch(e){} if(typeof renderSched === 'function') renderSched(typeof lastWarns !== 'undefined' ? lastWarns : undefined);
+      if(typeof wvToast === 'function') wvToast('휴무 수 보정 ' + n + '칸 (' + window.__wvOffFixLog.slice(0, 2).join(', ') + (n > 2 ? ' 외' : '') + ')', 'ok'); }, 0);
+  });
 });
 
 </script>
