@@ -5743,7 +5743,7 @@ WV.module(90, 'ai6', function(){
    GitHub Pages는 페이지를 브라우저에 최대 10분 저장해 두므로, 배포 직후 열면 옛 화면이 뜰 수 있다.
    열 때·탭으로 돌아올 때·10분마다 서버의 빌드 번호와 비교 → 다르면 열자마자(아직 아무것도 안 만졌으면) 자동 새로고침, 작업 중이면 아래 알림 */
 (function(){
-  var B = 'T20261126-182647';/*WVBUILD*/
+  var B = 'T20261126-193755';/*WVBUILD*/
   window.WV_BUILD = B; if(B === 'DEV') return;
   var t0 = Date.now(), touched = false, shown = false;
   ['keydown', 'input', 'pointerdown'].forEach(function(ev){ document.addEventListener(ev, function(){ touched = true; }, { capture: true, once: true }); });
@@ -6023,7 +6023,7 @@ WV.module(150, 'ai12', function(){
   function s(k, v){ try{ localStorage.setItem(k, v ? '1' : '0'); }catch(e){} }
   var esc = WV.esc;
   var ITEMS = [
-    { k: 'opt', t: '여러 안 비교', d: '5가지 안을 만들어 공백·연속근무·요청 반영을 비교하고 가장 나은 안을 추천해요', m: '약 20초', get: function(){ return OPT; } },
+    // 2026-11-26 「여러 안 비교(5개 안)」 제거 — 생성 한 번에 가장 나은 안만 보여줌(사용자 결정)
     { k: 'wvReviewPatrol', t: '남는 인원 정리', d: '같은 날 인원이 남으면 연수로 보내거나, 팀장·실장을 순환 근무로 돌려 중복을 줄여요', m: '' },
     { k: 'wvUsePattern', t: '과거 패턴 반영', d: '최근 4개월 확정 스케줄을 보고, 생성 뒤 손으로 고치던 배치를 미리 반영해요', m: '' },
     { k: 'wvAutoReview', t: '생성 후 AI 검토', d: '완성된 표를 AI가 한 번 더 보고, 고칠 곳이 있으면 비교안으로 보여줘요', m: '약 30초 · 1회 30~90원' }
@@ -6065,7 +6065,7 @@ WV.module(150, 'ai12', function(){
     var m = document.createElement('div'); m.id = 'wvGenM';
     m.innerHTML = '<div class="bx" role="dialog" aria-modal="true"><h3>' + (mode === 'set' ? '생성 옵션' : mkLabel() + ' 스케줄을 생성할까요?') + '</h3><div class="sum">' + esc(summary()) + '</div>' +
       ITEMS.map(function(it, i){ var on = state(it); return '<div class="ck' + (on ? ' on' : '') + '" role="checkbox" tabindex="0" aria-checked="' + on + '" data-i="' + i + '"><span class="bx2">' + (on ? '✓' : '') + '</span><span><b>' + it.t + (it.m ? '<span class="m">' + it.m + '</span>' : '') + '</b><small>' + it.d + '</small></span></div>'; }).join('') +
-      '<div class="note" id="wvGenNote">「여러 안 비교」를 바꾸면 페이지를 한 번 다시 연 뒤 바로 생성해요. 입력한 특이사항·조건은 그대로 남아요.</div>' +
+      '<div class="note" id="wvGenNote"></div>' +
       '<div class="ft"><button type="button" class="no">' + (mode === 'set' ? '닫기' : '취소') + '</button><button type="button" class="go">' + (mode === 'set' ? '저장' : '생성하기') + '</button></div></div>';
     document.body.appendChild(m);
     var note = m.querySelector('#wvGenNote');
@@ -6078,7 +6078,7 @@ WV.module(150, 'ai12', function(){
       var want = {}; ITEMS.forEach(function(it, i){ want[it.k] = isOn(i); });
       ['wvReviewPatrol', 'wvUsePattern', 'wvAutoReview'].forEach(function(k){ s(k, want[k]); });
       close(); chip();
-      if(want.opt !== OPT){
+      if(!!want.opt !== OPT){
         // 다시 열면 시트 설정을 새로 읽으므로, 저장 안 한 직원·매장 설정은 잠깐 보관했다가 되돌림
         try{ if(document.querySelector('#wvCfgMsg.dirty')) sessionStorage.setItem('wvKeepCfg', JSON.stringify({ emps: S.emps, stores: S.stores })); }catch(e){}
         try{ if(mode !== 'set') sessionStorage.setItem('wvAutoGen', '1'); }catch(e){}
@@ -8272,6 +8272,87 @@ WV.module(165, 'fillGaps', function(){
     window.__wvFillLog = log;
     return fixed;
   };
+});
+
+WV.module(1, 'noOpt', function(){
+/* 「여러 안 비교(?opt=1)」 중단 (2026-11-26, 사용자 결정): 주소에 opt=1이 남아 있으면 빼고 다시 연다 */
+  if(/[?&]opt=1/.test(location.search)){
+    var q = location.search.replace(/([?&])opt=1(&|$)/, function(_m, a, b){ return b ? a : ''; }).replace(/^&/, '?');
+    try{ location.replace(location.pathname + (q === '?' ? '' : q) + location.hash); }catch(e){}
+  }
+});
+
+WV.module(190, 'offFix', function(){
+/* ===== 휴무 수 보정 (2026-11-26)
+   원인: 원본 「편성 최적화(wvOptimize)」가 공백을 메우려고 고정 매장 주임의 휴무를 근무로 바꿈(랜덤 20회 중 9회 −1일).
+        뒤 단계가 대부분 되돌리지만 일부는 끝까지 모자란 채로 남음
+   조치: 생성 맨 마지막(공백 메우기·중복→연수 뒤)에 직원마다 휴무 = 지정 휴무 + 추가 휴무(일괄·날짜 지정)로 맞춘다
+   · 모자라면: ① 그날 순환 중인 팀장·실장이 그 자리를 대신 서고 본인은 휴무(사용자 제안)
+              ② 그날 그 매장에 사람이 남으면 그냥 휴무  ③ 본인이 순환 근무인 날이면 휴무
+   · 많으면: 요청하지 않은 휴무 하루를 근무로(공백 매장 → 팀장·실장은 순환 → 소속 매장 → 연수 2명까지 순)
+   · 요청 휴무·근무지정·전매장 휴무일은 건드리지 않고, 연속 근무 5일을 넘기지 않는다 */
+  var H = WV.calc, MAXRUN = 5, PATROL = ['팀장', '실장'];
+  function target(e, mk){
+    var b = 0; ((S.extraLog && S.extraLog[mk]) || []).forEach(function(x){ if(!x._wvTmp && x.name === e.name && (x.bulk || x.day >= 0)) b++; });
+    return offTarget(e) + b;
+  }
+  window.wvOffFix = function(sc){
+    if(!sc || !sc.cells || typeof offTarget !== 'function') return 0;
+    var C = H.ctx(sc), cells = sc.cells, fixed = 0, log = [], left = [];
+    C.acts.forEach(function(e){
+      var a = cells[e.name], tgt = target(e, C.mk), f = a.filter(function(v){ return v === ''; }).length, guard = 0;
+      while(f < tgt && guard++ < 10){
+        var best = null;
+        for(var d = 0; d < C.nD; d++){
+          var v = a[d]; if(!H.isW(v) || C.hol[d] || C.lockWork[e.name + '|' + d]) continue;
+          var how = null, X = v === '순환' ? null : H.base(v);
+          if(!X) how = { k: 'self' };
+          else {
+            var q = C.acts.filter(function(p){ return p !== e && cells[p.name][d] === '순환' && PATROL.indexOf(String(p.title || '').trim()) >= 0 && !C.lockWork[p.name + '|' + d] && H.allowed(p, X); })[0];
+            if(q) how = { k: 'patrol', q: q };
+            else if(H.cnt(C, cells, X, d) > H.need(C, X, d)) how = { k: 'surplus' };
+          }
+          if(!how) continue;
+          var sc2 = -H.runAt(C, cells, e.name, d) + (how.k === 'surplus' ? 0 : how.k === 'self' ? 0.5 : 1);   // 긴 연속근무를 끊는 날 먼저
+          if(!best || sc2 < best.s) best = { d: d, X: X, how: how, s: sc2 };
+        }
+        if(!best) break;
+        a[best.d] = '';
+        if(best.how.k === 'patrol'){ cells[best.how.q.name][best.d] = best.X; log.push(e.name + ' ' + (best.d + 1) + '일 휴무 ← ' + best.how.q.name + ' 순환→' + best.X); }
+        else log.push(e.name + ' ' + (best.d + 1) + '일 휴무');
+        if(best.X) H.relabel(C, cells, best.X, best.d);
+        f++; fixed++;
+      }
+      while(f > tgt && guard++ < 20){
+        var pick = null;
+        for(var d2 = 0; d2 < C.nD; d2++){
+          if(a[d2] !== '' || C.hol[d2] || C.lockOff[e.name + '|' + d2]) continue;
+          a[d2] = '순환'; var L = H.runAt(C, cells, e.name, d2); a[d2] = '';
+          if(L > MAXRUN) continue;
+          var to = null;
+          S.stores.some(function(st){ if(H.cnt(C, cells, st.n, d2) < H.need(C, st.n, d2) && H.allowed(e, st.n)){ to = st.n; return true; } return false; });
+          if(!to && PATROL.indexOf(String(e.title || '').trim()) >= 0) to = '순환';
+          if(!to && e.home && e.home !== '순환' && H.allowed(e, e.home)) to = e.home;
+          if(!to && H.allowed(e, '연수') && H.cnt(C, cells, '연수', d2) < 2) to = '연수';
+          if(!to){ var ok = S.stores.filter(function(st){ return H.allowed(e, st.n); }).sort(function(x, y){ return (H.cnt(C, cells, x.n, d2) - H.need(C, x.n, d2)) - (H.cnt(C, cells, y.n, d2) - H.need(C, y.n, d2)); })[0]; if(ok) to = ok.n; }
+          if(!to) continue;
+          if(!pick || L < pick.L) pick = { d: d2, to: to, L: L };
+        }
+        if(!pick) break;
+        a[pick.d] = pick.to; if(pick.to !== '순환') H.relabel(C, cells, pick.to, pick.d);
+        log.push(e.name + ' ' + (pick.d + 1) + '일 근무(' + pick.to + ')'); f--; fixed++;
+      }
+      if(f !== tgt) left.push(e.name + ' ' + f + '/' + tgt);
+    });
+    window.__wvOffFixLog = log; window.__wvOffFixLeft = left;
+    return fixed;
+  };
+  // 공백 메우기·중복→연수가 끝난 바로 뒤에 실행
+  WV.after('wvDupToYeonsu', '휴무 수 보정(offFix)', function(_r, a){
+    var n = window.wvOffFix(a[0]);
+    if(n && !window.__wvVarBusy) setTimeout(function(){ try{ save(); }catch(e){} if(typeof renderSched === 'function') renderSched(typeof lastWarns !== 'undefined' ? lastWarns : undefined);
+      if(typeof wvToast === 'function') wvToast('휴무 수 보정 ' + n + '칸 (' + window.__wvOffFixLog.slice(0, 2).join(', ') + (n > 2 ? ' 외' : '') + ')', 'ok'); }, 0);
+  });
 });
 
 </script>
