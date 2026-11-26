@@ -6999,7 +6999,7 @@ window.WV_TOOLS_TABS = true;
    GitHub Pages는 페이지를 브라우저에 최대 10분 저장해 두므로, 배포 직후 열면 옛 화면이 뜰 수 있다.
    열 때·탭으로 돌아올 때·10분마다 서버의 빌드 번호와 비교 → 다르면 열자마자(아직 아무것도 안 만졌으면) 자동 새로고침, 작업 중이면 아래 알림 */
 (function(){
-  var B = 'T20261124-211051';/*WVBUILD*/
+  var B = 'T20261126-154019';/*WVBUILD*/
   window.WV_BUILD = B; if(B === 'DEV') return;
   var t0 = Date.now(), touched = false, shown = false;
   ['keydown', 'input', 'pointerdown'].forEach(function(ev){ document.addEventListener(ev, function(){ touched = true; }, { capture: true, once: true }); });
@@ -7373,6 +7373,7 @@ function close(){var u=$('up');u.classList.remove('on');clear();setTimeout(funct
       '#wvXl .file .again{border:1px solid #ebe9f1;background:#fff;border-radius:8px;padding:4px 10px;font:inherit;font-size:12px;cursor:pointer}' +
       '#wvXl .can{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 0}#wvXl .can span{background:#f3f2f7;border-radius:999px;padding:3px 10px;font-size:12px;color:#555}' +
       '#wvXl .warn{margin:10px 0 0;font-size:12px;color:#8a8797}#wvXl .warn b{color:#a86400}' +
+      '#wvXl .tip{display:flex;gap:10px;align-items:flex-start;background:#eef4ff;border:1px solid #cfe0ff;color:#24406e;border-radius:12px;padding:10px 12px;margin:0 0 14px;font-size:13px;line-height:1.6}#wvXl .tip>b{flex:none;background:#2a7de1;color:#fff;border-radius:6px;padding:0 7px;font-size:11.5px;line-height:20px;margin-top:1px}' +
       '#wvXl .vh{position:absolute!important;width:1px;height:1px;opacity:0;overflow:hidden;clip:rect(0 0 0 0)}';
     (document.head || document.documentElement).appendChild(st);
     var ICO_X = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13l4 4M13 13l-4 4"/></svg>';
@@ -7380,6 +7381,7 @@ function close(){var u=$('up');u.classList.remove('on');clear();setTimeout(funct
     var box = document.createElement('div'); box.id = 'wvXl';
     box.innerHTML = '<h3><span class="ico">' + ICO_X + '</span>엑셀 스케줄 불러와서 수정</h3>' +
       '<p class="sub">이 생성기에서 내려받은 월 스케줄 엑셀을 불러오면 ③ 생성 탭에 그대로 열려요.</p>' +
+      '<div class="tip"><b>안내</b><span>④ 변경 탭은 <b>새 스케줄표를 반영하기 전, 임시 저장한 안을 고칠 때</b>만 쓰시는 것을 권장드립니다.<br>생성 탭에서 수정을 마치고 스케줄표에 반영한 뒤의 변경은 <b>스케줄 뷰어</b>에서 진행해 주세요.</span></div>' +
       '<div class="dz" tabindex="0" role="button" aria-label="엑셀 파일 고르기 또는 끌어 놓기"><div class="big">' + ICO_UP + '</div><b>엑셀 파일을 여기로 끌어 놓으세요</b><small>.xlsx · .xls — 놓으면 바로 불러와요</small><span class="pick">파일 고르기</span></div>' +
       '<div class="file"><span class="nm"></span><span class="sz"></span><span class="stt"></span><button type="button" class="again">다시 불러오기</button></div>' +
       '<div class="can"><span>칸 눌러 수정</span><span>긴급 결원 반영</span><span>월중 재편성</span><span>추가 휴무</span><span>임시 저장</span><span>엑셀 다시 내려받기</span></div>' +
@@ -7446,6 +7448,7 @@ function close(){var u=$('up');u.classList.remove('on');clear();setTimeout(funct
     S.emps.filter(isPart).forEach(function(e){ var a = sched.cells[e.name]; if(!a) return; keep[e.name] = a.slice(); sched.cells[e.name] = a.map(function(v){ return work(v) ? v + '(PT)' : v; }); });
     try{ return fn(); } finally{ setTimeout(function(){ Object.keys(keep).forEach(function(k){ sched.cells[k] = keep[k]; }); }, 0); }
   }
+  window.wvWithPT = withPT;   // 확정 점검표(test_ai12)에서 스케줄표 반영할 때 사용
   if(typeof exportXlsx === 'function'){ var _ex = exportXlsx; exportXlsx = function(){ var self = this, a = arguments; return withPT(function(){ return _ex.apply(self, a); }); }; window.exportXlsx = exportXlsx; }
   // 「스케줄표 반영」 버튼은 원본 함수를 직접 물고 있어서, 누르는 순간(먼저 도는 캡처 단계)에 붙이고 끝나면 되돌림
   document.addEventListener('click', function(ev){
@@ -7513,7 +7516,8 @@ function close(){var u=$('up');u.classList.remove('on');clear();setTimeout(funct
     var P = window.wvPattern, h = H(); if(!P || !P.months.length || !h || !sc || !sc.cells) return 0;
     try{ if(localStorage.getItem('wvUsePattern') === '0') return 0; }catch(e){}
     var C = h.ctx(sc), cells = sc.cells, moved = 0, log = {};
-    var pref = function(s, w){ return ((P.sur[s] || [])[w] || 0) * 2 + (P.tot[s] || 0) / 7; };
+    var dupOn = true; try{ dupOn = localStorage.getItem('wvReviewPatrol') !== '0'; }catch(e){}
+    var pref = function(s, w){ return ((P.sur[s] || [])[w] || 0) * 2 + (P.tot[s] || 0) / 7 + (dupOn && s === '연수' ? 4 : 0); };   // '남는 인원 정리'를 켜면 연수 우선
     var aff = function(n, s){ var a = P.aff[n] || {}, t = 0; Object.keys(a).forEach(function(k){ t += a[k]; }); return t ? (a[s] || 0) / t : 0; };
     for(var d = 0; d < C.nD; d++){
       if(C.hol[d]) continue;
@@ -7635,6 +7639,164 @@ function close(){var u=$('up');u.classList.remove('on');clear();setTimeout(funct
     '#wvEx .wvExLog{margin-top:10px;font-size:12.5px}#wvEx .wvExFoot{display:flex;align-items:center;gap:6px;margin-top:12px;padding-top:10px;border-top:1px dashed #eee;font-size:12px;color:#8a8797;flex-wrap:wrap}';
   (document.head || document.documentElement).appendChild(st);
   if(typeof renderExtra === 'function'){ var _re = renderExtra; renderExtra = function(){ var r = _re.apply(this, arguments); try{ if(!(typeof extraHidden !== 'undefined' && extraHidden)) render(); }catch(e){ console.warn('추가 휴무 화면', e); } return r; }; window.renderExtra = renderExtra; }
+})();
+
+</script>
+<script>
+/* ===== 실장님용 흐름 정리 (2026-11-26)
+   ① ② 특이사항 「입력 완료 → 생성하기」 → ③ 탭으로 넘어가며 "스케줄을 생성할까요?" 창 + 생성 옵션 체크리스트 4개
+   ② ③ 「스케줄 생성」 버튼도 같은 창을 띄움 · 생성 버튼 옆 스위치들은 「⚙ 생성 옵션」 하나로 접음
+   ③ 「스케줄표 반영」 전에 확정 점검표(요청 반영·공백·연속근무·파트 PT·설정 저장 여부)
+   ④ ⑤ 사용법 탭을 지금 기능 기준으로 새로 씀
+   옵션 1 「여러 안 비교」는 원본 최적화 묶음이 주소(?opt=1)로만 켜지므로, 켜고 끌 때 페이지를 한 번 다시 열고 자동으로 생성한다(로그인·저장 데이터는 그대로) */
+(function(){
+  var OPT = location.search.indexOf('opt=1') >= 0;
+  function g(k, d){ try{ var v = localStorage.getItem(k); return v == null ? d : v !== '0'; }catch(e){ return d; } }
+  function s(k, v){ try{ localStorage.setItem(k, v ? '1' : '0'); }catch(e){} }
+  function esc(x){ return String(x == null ? '' : x).replace(/[&<>"]/g, function(c){ return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  var ITEMS = [
+    { k: 'opt', t: '여러 안 비교', d: '5가지 안을 만들어 공백·연속근무·요청 반영을 비교하고 가장 나은 안을 추천해요', m: '약 20초', get: function(){ return OPT; } },
+    { k: 'wvReviewPatrol', t: '남는 인원 정리', d: '같은 날 인원이 남으면 연수로 보내거나, 팀장·실장을 순환 근무로 돌려 중복을 줄여요', m: '' },
+    { k: 'wvUsePattern', t: '과거 패턴 반영', d: '최근 4개월 확정 스케줄을 보고, 생성 뒤 손으로 고치던 배치를 미리 반영해요', m: '' },
+    { k: 'wvAutoReview', t: '생성 후 AI 검토', d: '완성된 표를 AI가 한 번 더 보고, 고칠 곳이 있으면 비교안으로 보여줘요', m: '약 30초 · 1회 30~90원' }
+  ];
+  function state(it){ return it.get ? it.get() : g(it.k, true); }
+  function mkLabel(){ var v = (document.getElementById('monthPick') || {}).value || '', p = v.split('-'); return p[1] ? (+p[1]) + '월' : '이번 달'; }
+  function summary(){
+    var mk = (document.getElementById('monthPick') || {}).value || '';
+    var r = ((typeof S !== 'undefined' && S.reqs && S.reqs[mk]) || []), off = r.filter(function(x){ return x.type === '휴무요청'; }).length;
+    var rules = (typeof S !== 'undefined' && Array.isArray(S.aiRules)) ? S.aiRules.length : 0;
+    return '특이사항 ' + r.length + '건(휴무 요청 ' + off + ') · AI 조건 ' + rules + '개 · 직원 ' + ((typeof S !== 'undefined' && S.emps) ? S.emps.length : 0) + '명';
+  }
+  var st = document.createElement('style');
+  st.textContent = '#wvGenM{position:fixed;inset:0;z-index:9600;background:rgba(20,16,40,.42);display:flex;align-items:center;justify-content:center;padding:16px}' +
+    '#wvGenM .bx{width:min(520px,100%);background:#fff;border-radius:18px;box-shadow:0 22px 60px rgba(20,16,40,.25);padding:22px 22px 18px;font-size:14px;color:#16131f;max-height:92vh;overflow:auto}' +
+    '#wvGenM h3{margin:0;font-size:18px}#wvGenM .sum{color:#6b6880;font-size:12.5px;margin:4px 0 14px}' +
+    '#wvGenM .ck{display:flex;gap:12px;align-items:flex-start;border:1px solid #ebe9f1;border-radius:12px;padding:11px 12px;margin-bottom:8px;cursor:pointer;transition:border-color .2s,background-color .2s}' +
+    '#wvGenM .ck:hover{border-color:#c9bdfc}#wvGenM .ck.on{border-color:#7c5cff;background:#faf8ff}' +
+    '#wvGenM .ck input{margin:3px 0 0;width:17px;height:17px;accent-color:#7c5cff;flex:none}#wvGenM .ck b{display:block;font-size:14px}#wvGenM .ck small{display:block;color:#6b6880;font-size:12.5px;line-height:1.5;margin-top:2px}' +
+    '#wvGenM .ck .m{display:inline-block;margin-left:6px;font-size:11px;font-weight:700;color:#5b3fd6;background:#f1edff;border-radius:999px;padding:1px 8px;vertical-align:1px}' +
+    '#wvGenM .note{font-size:12px;color:#a86400;background:#fff8e6;border-radius:10px;padding:8px 10px;margin:4px 0 10px;display:none}#wvGenM .note.on{display:block}' +
+    '#wvGenM .ft{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}#wvGenM .ft button{border:0;border-radius:11px;padding:10px 18px;font:inherit;font-weight:700;cursor:pointer}' +
+    '#wvGenM .ft .no{background:#f2f1f6;color:#444}#wvGenM .ft .go{background:#16131f;color:#fff}' +
+    '#wvOptChip{display:inline-flex;align-items:center;gap:6px;margin-left:10px;border:1px solid #e3e0ec;background:#fff;border-radius:999px;padding:6px 12px;font:inherit;font-size:13px;font-weight:600;color:#444;cursor:pointer;vertical-align:middle}#wvOptChip b{color:#5b3fd6}' +
+    '#wvRevTgl,#wvRevPatrol,#wvPatTgl{display:none!important}' +
+    '#wvReqDone{display:flex;justify-content:flex-end;gap:10px;align-items:center;margin:16px 0 4px}#wvReqDone span{color:#6b6880;font-size:12.5px}#wvReqDone button{border:0;border-radius:12px;padding:12px 20px;background:#16131f;color:#fff;font:inherit;font-weight:800;cursor:pointer}';
+  (document.head || document.documentElement).appendChild(st);
+
+  // 생성 창
+  function open(mode){
+    var old = document.getElementById('wvGenM'); if(old) old.remove();
+    var m = document.createElement('div'); m.id = 'wvGenM';
+    m.innerHTML = '<div class="bx" role="dialog" aria-modal="true"><h3>' + (mode === 'set' ? '생성 옵션' : mkLabel() + ' 스케줄을 생성할까요?') + '</h3><div class="sum">' + esc(summary()) + '</div>' +
+      ITEMS.map(function(it, i){ var on = state(it); return '<label class="ck' + (on ? ' on' : '') + '"><input type="checkbox" data-i="' + i + '"' + (on ? ' checked' : '') + '><span><b>' + it.t + (it.m ? '<span class="m">' + it.m + '</span>' : '') + '</b><small>' + it.d + '</small></span></label>'; }).join('') +
+      '<div class="note" id="wvGenNote">「여러 안 비교」를 바꾸면 페이지를 한 번 다시 연 뒤 바로 생성해요. 입력한 특이사항·조건은 그대로 남아요.</div>' +
+      '<div class="ft"><button type="button" class="no">' + (mode === 'set' ? '닫기' : '취소') + '</button><button type="button" class="go">' + (mode === 'set' ? '저장' : '생성하기') + '</button></div></div>';
+    document.body.appendChild(m);
+    var note = m.querySelector('#wvGenNote');
+    m.querySelectorAll('input[data-i]').forEach(function(c){ c.onchange = function(){ c.closest('.ck').classList.toggle('on', c.checked); note.classList.toggle('on', !!m.querySelector('input[data-i="0"]').checked !== OPT); }; });
+    var close = function(){ m.remove(); };
+    m.querySelector('.no').onclick = close; m.addEventListener('click', function(e){ if(e.target === m) close(); });
+    m.querySelector('.go').onclick = function(){
+      var want = {}; m.querySelectorAll('input[data-i]').forEach(function(c){ want[ITEMS[+c.dataset.i].k] = c.checked; });
+      ['wvReviewPatrol', 'wvUsePattern', 'wvAutoReview'].forEach(function(k){ s(k, want[k]); });
+      close(); chip();
+      if(want.opt !== OPT){
+        var dirty = document.querySelector('#wvCfgMsg.dirty');
+        if(dirty){ if(typeof wvToast === 'function') wvToast('① 직원·매장 설정이 저장 안 됐어요. [설정 저장] 후 다시 해 주세요', 'warn'); return; }
+        try{ if(mode !== 'set') sessionStorage.setItem('wvAutoGen', '1'); }catch(e){}
+        var q = location.search.replace(/[?&]opt=1/, '').replace(/^&/, '?'); var u = location.pathname + (want.opt ? (q ? q + '&opt=1' : '?opt=1') : q) + location.hash;
+        location.replace(u); return;
+      }
+      if(mode !== 'set') run();
+    };
+  }
+  function run(){ if(typeof generate === 'function') generate(); }
+  window.wvOpenGen = open;
+
+  // ③ 생성 버튼 → 창 · 생성 옵션 칩
+  function chip(){
+    var gb = document.querySelector('#panel2 button[onclick^="generate"]'); if(!gb) return false;
+    var c = document.getElementById('wvOptChip');
+    if(!c){ c = document.createElement('button'); c.type = 'button'; c.id = 'wvOptChip'; c.onclick = function(){ open('set'); }; gb.parentNode.insertBefore(c, gb.nextSibling); }
+    var n = ITEMS.filter(state).length; c.innerHTML = '⚙ 생성 옵션 <b>' + n + '/4</b>';
+    if(!gb.dataset.wvGen){ gb.dataset.wvGen = '1'; gb.addEventListener('click', function(e){ e.stopImmediatePropagation(); e.preventDefault(); open('gen'); }, true); }
+    return true;
+  }
+  // ② 특이사항 입력 완료 버튼
+  function done(){
+    var p = document.getElementById('panel1'); if(!p) return false;
+    if(document.getElementById('wvReqDone')) return true;
+    var d = document.createElement('div'); d.id = 'wvReqDone';
+    d.innerHTML = '<span>휴무 요청·조건을 다 넣었으면</span><button type="button">특이사항 입력 완료 → 생성하기</button>';
+    d.querySelector('button').onclick = function(){ goTab(2); setTimeout(function(){ open('gen'); }, 250); };
+    p.appendChild(d); return true;
+  }
+  function goTab(i){ var b = document.querySelectorAll('.tabs button')[i]; if(b) b.click(); }
+
+  // 확정 점검표 — 「스케줄표 반영」 누르면 먼저 확인
+  var passOnce = false;
+  document.addEventListener('click', function(e){
+    var b = e.target && e.target.closest && e.target.closest('button'); if(!b || !/스케줄표 반영/.test(b.textContent || '')) return;
+    if(passOnce){ passOnce = false; return; }
+    if(typeof sched === 'undefined' || !sched || !sched.cells) return;
+    e.stopImmediatePropagation(); e.preventDefault(); check(b);
+  }, true);
+  function check(btn){
+    var h = window.__wvH, sc = sched, mk = sc.year + '-' + String(sc.month).padStart(2, '0'), rows = [];
+    var reqs = ((S.reqs && S.reqs[mk]) || []).filter(function(r){ return r.type === '휴무요청' && r.day; }), ok = reqs.filter(function(r){ return sc.cells[r.emp] && sc.cells[r.emp][r.day - 1] === ''; }).length;
+    rows.push([ok === reqs.length, '휴무 요청 반영', ok + ' / ' + reqs.length + '건' + (ok < reqs.length ? ' — 빠진 요청: ' + reqs.filter(function(r){ return !(sc.cells[r.emp] && sc.cells[r.emp][r.day - 1] === ''); }).slice(0, 4).map(function(r){ return r.emp + ' ' + r.day + '일'; }).join(', ') : '')]);
+    if(h){ var k = h.kpi(sc, sc.cells); rows.push([k.gap === 0, '매장 공백', k.gap + '건']); rows.push([k.mx <= 5, '최대 연속근무', k.mx + '일' + (k.n6 ? ' (6일 이상 ' + k.n6 + '명)' : '')]); }
+    var parts = S.emps.filter(function(e){ return e.role === '파트' || e.type === '파트타임'; }).map(function(e){ return e.name; });
+    rows.push([true, '파트 PT 표시', parts.length ? parts.join('·') + ' 근무 칸에 (PT)로 반영' : '대상 없음']);
+    var dirty = !!document.querySelector('#wvCfgMsg.dirty'); rows.push([!dirty, '직원·매장 설정', dirty ? '시트에 저장 안 됨 — ① 탭 [설정 저장] 먼저' : '시트와 같음']);
+    var bad = rows.some(function(r){ return !r[0]; });
+    var old = document.getElementById('wvGenM'); if(old) old.remove();
+    var m = document.createElement('div'); m.id = 'wvGenM';
+    m.innerHTML = '<div class="bx" role="dialog" aria-modal="true"><h3>' + sc.month + '월 스케줄표에 반영할까요?</h3><div class="sum">반영하면 직원 뷰어에 바로 보여요. 확정 전 점검표</div>' +
+      rows.map(function(r){ return '<div class="ck' + (r[0] ? ' on' : '') + '" style="cursor:default;' + (r[0] ? '' : 'border-color:#f3c6cf;background:#fff5f7') + '"><span style="width:20px;flex:none;font-weight:800;color:' + (r[0] ? '#1f9d6a' : '#b3243f') + '">' + (r[0] ? '✓' : '!') + '</span><span><b>' + r[1] + '</b><small>' + esc(r[2]) + '</small></span></div>'; }).join('') +
+      (bad ? '<div class="note on">확인이 필요한 항목이 있어요. 그래도 반영할 수 있어요.</div>' : '') +
+      '<div class="ft"><button type="button" class="no">취소</button><button type="button" class="go">' + (bad ? '그래도 반영' : '반영하기') + '</button></div></div>';
+    document.body.appendChild(m);
+    m.querySelector('.no').onclick = function(){ m.remove(); }; m.addEventListener('click', function(e){ if(e.target === m) m.remove(); });
+    m.querySelector('.go').onclick = function(){ m.remove(); passOnce = true; btn.click(); };   // 원래 버튼을 다시 눌러 PT 표시·전송은 기존 흐름 그대로
+  }
+
+  // ⑤ 사용법 탭 새로 쓰기
+  function guide(){
+    var p = document.getElementById('panel3'); if(!p || document.getElementById('wvGuide')) return !!p;
+    Array.prototype.slice.call(p.children).forEach(function(el){ el.style.display = 'none'; });
+    var steps = [
+      ['설정', '① 직원·매장', '직원 직책·소속·근무 가능 매장(칩: 보통 → ★우선 → ✕제외)·월 휴무 수, 매장 필요 인원. 바꾼 뒤 꼭 <b>[설정 저장]</b> — 안 하면 다음에 열 때 시트 설정으로 돌아가요.'],
+      ['특이사항', '② 특이사항', '단톡방 대화를 <b>그대로 붙여넣으면</b> 휴무 요청이 자동 정리돼요. 문장 조건은 「AI 요청사항」("연속근무 최대 4일", "장대운 휴무 하루 더"). 오른쪽에서 지금 걸린 조건 확인·해제. 다 넣었으면 <b>[특이사항 입력 완료 → 생성하기]</b>.'],
+      ['생성', '③ 생성', '생성 창에서 옵션 4개(여러 안 비교 · 남는 인원 정리 · 과거 패턴 반영 · 생성 후 AI 검토)를 고르고 [생성하기]. 끝나면 위쪽 카드에 공백·연속근무·요청 반영이 나와요.'],
+      ['다듬기', '③ 생성 — AI 조언', '"홍다운 15일 연수로 바꿔"처럼 문장으로 말하면 AI가 표를 고친 <b>비교 팝업</b>을 띄워요 → 적용 · 보류(임시) · ↩ 되돌리기 · ↪ 다시 앞으로. 칸을 눌러 직접 고쳐도 돼요. 편성 도구: 추가 휴무 · 긴급 결원 · 월중 재편성.'],
+      ['반영', '③ 생성 — 스케줄표 반영', '<b>[스케줄표 반영]</b>을 누르면 확정 점검표가 먼저 떠요(요청 반영·공백·연속근무·파트 PT·설정 저장). 확인 후 반영하면 직원 뷰어에 바로 보여요. 엑셀은 [엑셀 다운로드].'],
+      ['고치기', '④ 변경 · 스케줄 뷰어', '④ 변경 탭은 <b>스케줄표 반영 전, 임시 저장한 안을 고칠 때</b>만 써요(엑셀을 끌어다 놓으면 ③ 탭에 다시 열림). 반영한 뒤의 변경은 <b>스케줄 뷰어</b>에서 진행해 주세요.']
+    ];
+    var c = document.createElement('div'); c.id = 'wvGuide'; c.className = 'card';
+    c.innerHTML = '<h3>사용법 <span class="hint">순서대로 6단계</span></h3><div class="wvGs">' + steps.map(function(x, i){ return '<div class="wvG"><span class="n">' + (i + 1) + '</span><div><b>' + x[0] + '</b><small>' + x[1] + '</small><p>' + x[2] + '</p></div></div>'; }).join('') + '</div>' +
+      '<div class="wvGb"><button type="button" class="btn small" data-a="up">▶ 이번에 바뀐 것 보기</button><button type="button" class="btn small gray" data-a="old">예전 자세한 설명 보기</button></div>' +
+      '<p class="hint" style="margin:10px 0 0">설정·임시 저장본은 이 브라우저에 저장돼요. 직원·매장 설정만 [설정 저장]으로 시트에 남아요. AI 기능은 직원 이름을 가려서 보내요.</p>';
+    p.insertBefore(c, p.firstChild);
+    var gs = document.createElement('style');
+    gs.textContent = '#wvGuide .wvGs{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;margin-top:6px}#wvGuide .wvG{display:flex;gap:10px;border:1px solid #ebe9f1;border-radius:14px;padding:12px;background:#fff}' +
+      '#wvGuide .n{width:26px;height:26px;flex:none;border-radius:50%;background:#16131f;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px}#wvGuide b{font-size:14.5px}#wvGuide small{margin-left:6px;color:#8a8797;font-size:12px}#wvGuide p{margin:4px 0 0;font-size:13px;line-height:1.6;color:#333}' +
+      '#wvGuide .wvGb{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}';
+    document.head.appendChild(gs);
+    c.querySelector('[data-a=up]').onclick = function(){ if(window.wvOpenUpdate) window.wvOpenUpdate(); };
+    c.querySelector('[data-a=old]').onclick = function(){ Array.prototype.slice.call(p.children).forEach(function(el){ if(el !== c) el.style.display = el.style.display === 'none' ? '' : 'none'; }); };
+    return true;
+  }
+
+  function boot(){
+    var a = chip(), b = done(), c = guide();
+    if(!(a && b && c)){ setTimeout(boot, 500); return; }
+    // 여러 안 비교를 바꾸느라 다시 열었으면 자동으로 ③ 탭 → 생성
+    var auto = false; try{ auto = sessionStorage.getItem('wvAutoGen') === '1'; sessionStorage.removeItem('wvAutoGen'); }catch(e){}
+    if(auto){ (function wait(n){ var lk = document.getElementById('wvLock'); if((lk && lk.isConnected && lk.offsetHeight) || !document.getElementById('wvCfgBar')){ if(n < 40){ setTimeout(function(){ wait(n + 1); }, 400); return; } } goTab(2); setTimeout(run, 900); })(0); }
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function(){ setTimeout(boot, 300); }); else setTimeout(boot, 300);
 })();
 
 </script>
