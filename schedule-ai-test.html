@@ -5740,7 +5740,7 @@ WV.module(90, 'ai6', function(){
    GitHub Pages는 페이지를 브라우저에 최대 10분 저장해 두므로, 배포 직후 열면 옛 화면이 뜰 수 있다.
    열 때·탭으로 돌아올 때·10분마다 서버의 빌드 번호와 비교 → 다르면 열자마자(아직 아무것도 안 만졌으면) 자동 새로고침, 작업 중이면 아래 알림 */
 (function(){
-  var B = 'T20261126-175250';/*WVBUILD*/
+  var B = 'T20261126-175740';/*WVBUILD*/
   window.WV_BUILD = B; if(B === 'DEV') return;
   var t0 = Date.now(), touched = false, shown = false;
   ['keydown', 'input', 'pointerdown'].forEach(function(ev){ document.addEventListener(ev, function(){ touched = true; }, { capture: true, once: true }); });
@@ -6227,7 +6227,8 @@ WV.module(180, 'reqTidy', function(){
     '#wvRqCard .ch{display:flex;align-items:center;gap:8px;margin-bottom:10px}#wvRqCard h3{margin:0}' +
     '#wvRqCard .inbox{border:1.5px solid var(--ln2);border-radius:14px;padding:4px 6px 6px 12px;display:flex;gap:8px;align-items:flex-end;background:#fff;transition:border-color .2s,box-shadow .2s}' +
     '#wvRqCard .inbox:focus-within{border-color:var(--ink);box-shadow:0 0 0 4px rgba(22,21,27,.06)}' +
-    '#wvRqCard textarea#wvRqT{flex:1;border:0!important;outline:0;resize:none;font:inherit;line-height:1.6;padding:8px 0!important;min-height:40px;height:40px;max-height:220px;transition:height .18s cubic-bezier(.2,.8,.2,1);background:transparent;box-shadow:none!important}' +
+    '#wvRqCard textarea#wvRqT{flex:1;border:0!important;outline:0;resize:none;font:inherit;line-height:1.6;padding:8px 0!important;min-height:40px;height:40px;max-height:220px;overflow:hidden;transition:height .18s cubic-bezier(.2,.8,.2,1);background:transparent;box-shadow:none!important}#wvRqCard textarea#wvRqT.tall{overflow:auto}' +
+    '#reqList table{width:100%!important}' +
     '#wvRqCard .ex{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;align-items:center;font-size:12px;color:var(--ink3)}' +
     '#wvRqCard .ex button{border:1px solid var(--ln);background:var(--s2);border-radius:99px;padding:4px 11px;font:inherit;font-size:12px;font-weight:700;color:var(--ink2);cursor:pointer}' +
     '#wvRqCard #wvTRes{margin-top:10px!important;background:var(--s2);border-radius:12px;padding:10px 12px}' +
@@ -6260,7 +6261,7 @@ WV.module(180, 'reqTidy', function(){
 
   var view = 'list';
   function mkNow(){ return (typeof monthKey === 'function' && monthKey()) || ''; }
-  function grow(t){ t.style.height = '40px'; t.style.height = Math.min(220, t.scrollHeight) + 'px'; }
+  function grow(t){ t.style.height = '40px'; t.style.height = Math.min(220, t.scrollHeight) + 'px'; t.classList.toggle('tall', t.scrollHeight > 220); }
 
   function submit(){
     var ta = document.getElementById('wvRqT'), t = ta.value.trim(); if(!t) return;
