@@ -5750,7 +5750,7 @@ WV.module(90, 'ai6', function(){
    GitHub Pages는 페이지를 브라우저에 최대 10분 저장해 두므로, 배포 직후 열면 옛 화면이 뜰 수 있다.
    열 때·탭으로 돌아올 때·10분마다 서버의 빌드 번호와 비교 → 다르면 열자마자(아직 아무것도 안 만졌으면) 자동 새로고침, 작업 중이면 아래 알림 */
 (function(){
-  var B = 'T20261126-204904';/*WVBUILD*/
+  var B = 'T20261126-205441';/*WVBUILD*/
   window.WV_BUILD = B; if(B === 'DEV') return;
   var t0 = Date.now(), touched = false, shown = false;
   ['keydown', 'input', 'pointerdown'].forEach(function(ev){ document.addEventListener(ev, function(){ touched = true; }, { capture: true, once: true }); });
@@ -7148,6 +7148,8 @@ window.WV_AI_URL = window.WV_AI_URL || 'https://script.google.com/macros/s/AKfyc
     var PT = (window.WV_PATROL_TITLES || ['팀장', '실장']), patrol = S.emps.filter(function(e){ return PT.indexOf(String(e.title || '').trim()) >= 0 && sc.cells[e.name]; }).map(function(e){ return e.name; });
     var cx = { 과거패턴: window.wvPatternText || '', 근무불가매장규칙: '사용자가 특정 직원을 근무가능 목록에 없는 매장으로 보내라고 이름·매장을 콕 집어 말하면, 거절하지 말고 그대로 edits에 넣는다(화면이 사용자에게 한 번 더 확인받는다). 사용자가 콕 집지 않은 연쇄 수정은 근무가능 매장만 쓴다.', 순환규칙: '칸 값 "순환"은 매장 순회 근무다. 팀장·실장만 가능: ' + (patrol.join(', ') || '없음') + '. 다른 직원은 절대 순환으로 바꾸지 않는다. 이미 순환인 칸을 매장으로 바꾸는 것은 가능.', y: P.y, m: P.m, nDays: P.nD, 달력: cal(P.y, P.m), 매장필요인원: need, 인원예외: ex, 특이사항: reqs, 요약: SM.rows, 지표: SM.kpi, 일별: EC.일별, rows: rows, 대화: HIST.slice(-4) };
     if(prev) cx.검사결과 = { 이전수정안: prev.edits, 문제: prev.problems };
+    // 생성기가 모든 교환을 따져 봤지만 설정상 못 메운 공백 — AI가 헛수고하지 않게(요청 글자 수 600자 제한 때문에 q가 아니라 ctx로)
+    if(isRev && window.__wvGapDiag && window.__wvGapDiag.length) cx.설정상_못_메우는_공백 = window.__wvGapDiag.slice(0, 20).map(function(g){ return g.d + '일 ' + g.st + ': ' + g.why; });
     call({ mode: 'edit', tier: tier, q: q, ctx: cx }, tier === 'opus' ? 330000 : 120000).then(function(j){
       w.remove();
       if(sched !== sc){ if(auto){ auto.fail(new Error('그사이 표가 바뀜')); return; } say('bot', '그사이 표가 바뀌었어요. 다시 요청해 주세요.'); return; }
@@ -7410,8 +7412,6 @@ WV.module(200, 'reviewAuto', function(){
   window.wvReviewRun = function(q){
     if(typeof sched === 'undefined' || !sched || !sched.cells || !window.wvAIEdit) return;
     closeBanner();
-    var dg = window.__wvGapDiag || [];
-    if(dg.length) q += ' 참고: 아래 공백은 생성기가 모든 교환을 따져 봤지만 설정상 메울 수 없었다. 이 칸은 손대지 말고 다른 문제에 집중해: ' + dg.map(function(g){ return g.d + '일 ' + g.st + '(' + g.why + ')'; }).join(', ') + '.';
     var sc = sched, before = JSON.parse(JSON.stringify(sc.cells)), t0 = Date.now(), my = { cancel: false, i: 1, opus: false };
     run = my;
     var tick = setInterval(function(){
