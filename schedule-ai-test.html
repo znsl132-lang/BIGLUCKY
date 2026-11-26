@@ -4609,6 +4609,13 @@ wvChkInit();
     for(var d = 0; d < Cx.nD; d++) S.stores.forEach(function(st){ var c = C.cnt(Cx, cells, st.n, d), n = C.need(Cx, st.n, d); if(c < n) gap += n - c; if(c > n) dup += c - n; });
     return { gap: gap, dup: dup, mx: mx, n6: n6, offs: offs };
   };
+  // 이 달 「추가 휴무」 인원별 일수 — 사용자가 직접 준 것만 센다 (2026-11-26)
+  //  · 일괄(+1)·날짜 지정·「중복을 휴무로」(ai:'alg') = 셈
+  //  · 예전 AI 수정이 휴무가 늘어난 만큼 자동으로 남긴 기록(ai:true) = 안 셈 → 이것 때문에 휴무가 늘어난 채로 굳었음
+  //  · 생성 중 임시 기록(_wvTmp) = 안 셈
+  C.validExtra = function(x){ return !!x && !x._wvTmp && x.ai !== true && (x.bulk || x.day >= 0); };
+  C.extraOf = function(mk){ var o = {}; ((S.extraLog && S.extraLog[mk]) || []).forEach(function(x){ if(C.validExtra(x)) o[x.name] = (o[x.name] || 0) + 1; }); return o; };
+  C.offGoal = function(e, mk){ return offTarget(e) + (C.extraOf(mk)[e.name] || 0); };
   window.__wvH = C;   // 예전 이름(과거 패턴·추가 휴무·점검표에서 사용) 그대로 유지
 
   /* ---------- 2) 원본 함수에 덧붙이기 ---------- */
@@ -4818,7 +4825,7 @@ th,td{border-color:var(--ln)!important}
     var ABS = ['휴가','병가','훈련','출장','전휴무','제외'], isW = function(v){ return !!v && ABS.indexOf(v) < 0; }, base = function(v){ return String(v).replace(/\((OP|CL|PT)\)$/, ''); };
     var pd = new Date(sched.year, sched.month - 2, 1), pk = pd.getFullYear() + '-' + String(pd.getMonth() + 1).padStart(2, '0');
     var gap = 0, mis = 0, mx = 0, who = '';
-    var bonus = {}; ((S.extraLog && S.extraLog[mk]) || []).forEach(function(x){ if(x._wvTmp) return; if(x.bulk || x.day >= 0) bonus[x.name] = (bonus[x.name] || 0) + 1; });   // 추가 휴무(일괄·날짜 지정)도 목표에 포함 (2026-11-26)
+    var bonus = WV.calc.extraOf(mk);   // 추가 휴무(일괄·날짜 지정)도 목표에 포함 (2026-11-26)
     S.emps.forEach(function(e){ var a = c[e.name]; if(!a) return; var p = (S.lastSched && S.lastSched[pk] && S.lastSched[pk][e.name]) || [], r = 0, off = 0;
       for(var k = p.length - 1; k >= 0 && isW(p[k]); k--) r++;
       a.forEach(function(v){ if(v === '') off++; if(isW(v)){ r++; if(r > mx){ mx = r; who = e.name; } } else r = 0; });
@@ -5743,7 +5750,7 @@ WV.module(90, 'ai6', function(){
    GitHub Pages는 페이지를 브라우저에 최대 10분 저장해 두므로, 배포 직후 열면 옛 화면이 뜰 수 있다.
    열 때·탭으로 돌아올 때·10분마다 서버의 빌드 번호와 비교 → 다르면 열자마자(아직 아무것도 안 만졌으면) 자동 새로고침, 작업 중이면 아래 알림 */
 (function(){
-  var B = 'T20261126-202011';/*WVBUILD*/
+  var B = 'T20261126-202752';/*WVBUILD*/
   window.WV_BUILD = B; if(B === 'DEV') return;
   var t0 = Date.now(), touched = false, shown = false;
   ['keydown', 'input', 'pointerdown'].forEach(function(ev){ document.addEventListener(ev, function(){ touched = true; }, { capture: true, once: true }); });
@@ -6368,7 +6375,7 @@ WV.module(185, 'kpiLive', function(){
     // 「휴무 ≠ 지정」 → 「휴무 일수 안 맞음」 + 누가 몇 일인지
     try{ var k2 = document.getElementById('wvK2'), lb = k2 && k2.parentNode.querySelector('small'); if(lb && lb.textContent !== '휴무 일수 안 맞음') lb.textContent = '휴무 일수 안 맞음';
       var mk = sched.year + '-' + String(sched.month).padStart(2, '0'), bo = {}, who = [];
-      ((S.extraLog && S.extraLog[mk]) || []).forEach(function(x){ if(!x._wvTmp && (x.bulk || x.day >= 0)) bo[x.name] = (bo[x.name] || 0) + 1; });
+      bo = WV.calc.extraOf(mk);
       S.emps.forEach(function(e){ var r0 = sched.cells[e.name]; if(!r0 || e.role === '교육') return; var f = r0.filter(function(v){ return v === ''; }).length, g = offTarget(e) + (bo[e.name] || 0); if(f !== g) who.push(e.name + ' ' + f + '/' + g + '일'); });
       var nm = k2.parentNode.querySelector('.wvKn'); if(!nm){ nm = document.createElement('span'); nm.className = 'wvKn'; k2.parentNode.appendChild(nm); }
       nm.textContent = who.length ? who.join(' · ') : ''; k2.parentNode.title = who.length ? '휴무 일수(실제/지정+추가)가 다른 사람: ' + who.join(', ') : '모든 직원 휴무 일수가 지정대로예요'; }catch(e){}
@@ -7126,7 +7133,7 @@ window.WV_AI_URL = window.WV_AI_URL || 'https://script.google.com/macros/s/AKfyc
     if(histKey !== mkS){ HIST = []; histKey = mkS; }
     var EC = window.wvEditCtx(sc);
     var rows = S.emps.filter(function(e){ return sc.cells[e.name]; }).map(function(e){
-      return { 이름: e.name, 직책: e.title || '', 소속: e.home, 근무가능: EC.근무가능[e.name] || [], 휴무지정: offTarget(e), 칸: sc.cells[e.name].map(function(v){ return v === '' ? '휴' : String(v).replace(/\((OP|CL|PT)\)$/, ''); }).join(',') };
+      return { 이름: e.name, 직책: e.title || '', 소속: e.home, 근무가능: EC.근무가능[e.name] || [], 휴무지정: WV.calc.offGoal(e, mkS), 칸: sc.cells[e.name].map(function(v){ return v === '' ? '휴' : String(v).replace(/\((OP|CL|PT)\)$/, ''); }).join(',') };
     });
     var need = S.stores.map(function(s){ return s.n + ':' + (s._need != null ? s._need : s.need); }).join(' ');
     var ex = ((S.needX && S.needX[mkS]) || []).map(function(x){ return x.store + ' ' + x.day + '일 ' + x.need + '명'; }).join(', ');
@@ -7695,7 +7702,7 @@ window.WV_TOOLS_TABS = true;
     cellHist.push(cur); if(cellHist.length > 50) cellHist.shift();
     REDO.length = 0;
     if(!S.extraLog[mk]) S.extraLog[mk] = [];
-    if(res.extraOff) diffs.forEach(function(x){ if(x.v === '' && x.o !== '') S.extraLog[mk].push({ name: x.n, day: x.d, val: x.o, ai: true }); });
+    if(res.extraOff) diffs.forEach(function(x){ if(x.v === '' && x.o !== '') S.extraLog[mk].push({ name: x.n, day: x.d, val: x.o, ai: 'alg' }); });   // 사용자가 고른 「중복을 휴무로」 = 추가 휴무로 셈
     else if(res.offDelta) Object.keys(res.offDelta).forEach(function(n){ var k = res.offDelta[n]; if(k <= 0) return; diffs.filter(function(x){ return x.n === n && x.v === '' && isW(x.o); }).slice(0, k).forEach(function(x){ S.extraLog[mk].push({ name: x.n, day: x.d, val: x.o, ai: true }); }); });
     save();
     Object.keys(cells).forEach(function(k){ if(sched.cells[k]) sched.cells[k] = cells[k].slice(); });
@@ -8232,7 +8239,7 @@ WV.module(160, 'keepOffs', function(){
     purge(mk);
     var has = {}; S.reqs[mk].forEach(function(r){ if(r.type === '휴무요청') has[r.emp + '|' + r.day] = 1; });
     S.extraLog[mk].slice().forEach(function(x){
-      if(x.bulk || !(x.day >= 0) || !x.name) return;
+      if(x.bulk || !(x.day >= 0) || !x.name || x.ai === true) return;   // 예전 AI 자동 기록은 고정하지 않음
       var day = x.day + 1; if(has[x.name + '|' + day]) return; has[x.name + '|' + day] = 1;
       S.reqs[mk].push({ emp: x.name, type: '휴무요청', day: day, store: '', _wvTmp: 1 });
       S.extraLog[mk].push({ name: x.name, day: -1, bulk: true, _wvTmp: 1 });
@@ -8411,8 +8418,7 @@ WV.module(190, 'offFix', function(){
    · 요청 휴무·근무지정·전매장 휴무일은 건드리지 않고, 연속 근무 5일을 넘기지 않는다 */
   var H = WV.calc, MAXRUN = 5, PATROL = ['팀장', '실장'];
   function target(e, mk){
-    var b = 0; ((S.extraLog && S.extraLog[mk]) || []).forEach(function(x){ if(!x._wvTmp && x.name === e.name && (x.bulk || x.day >= 0)) b++; });
-    return offTarget(e) + b;
+    return WV.calc.offGoal(e, mk);
   }
   window.wvOffFix = function(sc, opt){   // opt.lock['이름|날짜0'] = 1 → 그 칸은 건드리지 않음(AI가 방금 고친 칸 등)
     if(!sc || !sc.cells || typeof offTarget !== 'function') return 0;
@@ -8429,14 +8435,22 @@ WV.module(190, 'offFix', function(){
             var q = C.acts.filter(function(p){ return p !== e && cells[p.name][d] === '순환' && PATROL.indexOf(String(p.title || '').trim()) >= 0 && !C.lockWork[p.name + '|' + d] && !LX[p.name + '|' + d] && H.allowed(p, X); })[0];
             if(q) how = { k: 'patrol', q: q };
             else if(H.cnt(C, cells, X, d) > H.need(C, X, d)) how = { k: 'surplus' };
+            else {   // ④ 그날 다른 매장에 남는 사람이 X로 옮겨 서고 본인은 휴무
+              var mv = null;
+              S.stores.some(function(Y){ if(Y.n === X || H.cnt(C, cells, Y.n, d) <= H.need(C, Y.n, d)) return false;
+                var pp = C.acts.filter(function(p){ var w = cells[p.name][d]; return p !== e && H.isW(w) && w !== '순환' && H.base(w) === Y.n && !C.lockWork[p.name + '|' + d] && !LX[p.name + '|' + d] && H.allowed(p, X); })[0];
+                if(pp) mv = { p: pp, Y: Y.n }; return !!mv; });
+              if(mv) how = { k: 'move', q: mv.p, Y: mv.Y };
+            }
           }
           if(!how) continue;
-          var sc2 = -H.runAt(C, cells, e.name, d) + (how.k === 'surplus' ? 0 : how.k === 'self' ? 0.5 : 1);   // 긴 연속근무를 끊는 날 먼저
+          var sc2 = -H.runAt(C, cells, e.name, d) + (how.k === 'surplus' ? 0 : how.k === 'self' ? 0.5 : how.k === 'patrol' ? 1 : 1.5);   // 긴 연속근무를 끊는 날 먼저
           if(!best || sc2 < best.s) best = { d: d, X: X, how: how, s: sc2 };
         }
         if(!best) break;
         a[best.d] = '';
         if(best.how.k === 'patrol'){ cells[best.how.q.name][best.d] = best.X; log.push(e.name + ' ' + (best.d + 1) + '일 휴무 ← ' + best.how.q.name + ' 순환→' + best.X); }
+        else if(best.how.k === 'move'){ cells[best.how.q.name][best.d] = best.X; H.relabel(C, cells, best.how.Y, best.d); log.push(e.name + ' ' + (best.d + 1) + '일 휴무 ← ' + best.how.q.name + ' ' + best.how.Y + '→' + best.X); }
         else log.push(e.name + ' ' + (best.d + 1) + '일 휴무');
         if(best.X) H.relabel(C, cells, best.X, best.d);
         f++; fixed++;
@@ -8490,7 +8504,9 @@ WV.module(195, 'offGuard', function(){
     if(n) r.notes.unshift('휴무 수 맞춤 · ' + window.__wvOffFixLog.slice(0, 4).join(', ') + (n > 4 ? ' 외 ' + (n - 4) + '칸' : '') + ' (휴무 날짜만 옮기고 일수는 그대로)');
     r.notes = r.notes.filter(function(s){ return !/^휴무 수 변화:/.test(s); });
     r.offDelta = {};   // 적용할 때 '추가 휴무'로 기록하지 않음
-    var left = window.__wvOffFixLeft || [];
+    // AI가 새로 어긋나게 만든 사람만 문제로 본다(수정 전부터 어긋나 있던 사람은 막지 않음)
+    var pre = {}; Object.keys(sc.cells).forEach(function(nm){ pre[nm] = sc.cells[nm].filter(function(v){ return v === ''; }).length; });
+    var left = (window.__wvOffFixLeft || []).filter(function(s){ var nm = s.split(' ')[0], now = +s.split(' ')[1].split('/')[0]; return pre[nm] !== now; });
     if(left.length){ r.problems.push('휴무 일수를 맞추지 못함: ' + left.join(', ')); r.offLeft = left; }
     return r;
   });
