@@ -5740,7 +5740,7 @@ WV.module(90, 'ai6', function(){
    GitHub Pages는 페이지를 브라우저에 최대 10분 저장해 두므로, 배포 직후 열면 옛 화면이 뜰 수 있다.
    열 때·탭으로 돌아올 때·10분마다 서버의 빌드 번호와 비교 → 다르면 열자마자(아직 아무것도 안 만졌으면) 자동 새로고침, 작업 중이면 아래 알림 */
 (function(){
-  var B = 'T20261126-160949';/*WVBUILD*/
+  var B = 'T20261126-163117';/*WVBUILD*/
   window.WV_BUILD = B; if(B === 'DEV') return;
   var t0 = Date.now(), touched = false, shown = false;
   ['keydown', 'input', 'pointerdown'].forEach(function(ev){ document.addEventListener(ev, function(){ touched = true; }, { capture: true, once: true }); });
@@ -7876,6 +7876,68 @@ WV.module(140, 'ai11', function(){
   (document.head || document.documentElement).appendChild(st);
   WV.after('renderExtra', '추가 휴무 화면(ai11)', function(){ if(!(typeof extraHidden !== 'undefined' && extraHidden)) render(); });
 })();
+});
+
+WV.module(160, 'keepOffs', function(){
+/* ===== 휴무가 줄어드는 현상 수정 (2026-11-26)
+   ① 「생성하기」를 다시 눌러도 이번 달 추가 휴무 기록을 지우지 않는다(원본은 다시 생성하면 기록 초기화)
+   ② 날짜를 정해 준 추가 휴무(AI·칸 수정)를 생성할 때 "그날 휴무 고정 + 목표 휴무 +1"로 넣는다
+      — 원본 휴무 맞춤은 일괄(+1) 기록만 목표에 더해서, 날짜 지정 휴무를 '초과 휴무'로 보고 근무로 되돌렸음
+      — 실제 편성(__generate) 하는 동안만 임시 요청(_wvTmp)으로 넣고, 끝나면 바로 걷어낸다(5개 안도 안마다 같은 방식)
+   ③ 5개 안 비교창: 요청 휴무가 빠지는 안에 누구 몇 일이 빠지는지 표시하고, 고를 때 한 번 더 확인 */
+  function mkNow(){ return (typeof monthKey === 'function' && monthKey()) || ''; }
+  function purge(mk){
+    var hit = false;
+    if(S.reqs && S.reqs[mk]){ var a = S.reqs[mk].filter(function(r){ return !r._wvTmp; }); if(a.length !== S.reqs[mk].length){ S.reqs[mk] = a; hit = true; } }
+    if(S.extraLog && S.extraLog[mk]){ var b = S.extraLog[mk].filter(function(x){ return !x._wvTmp; }); if(b.length !== S.extraLog[mk].length){ S.extraLog[mk] = b; hit = true; } }
+    return hit;
+  }
+  // 예전에 중간에 끊겨 남은 임시 기록 정리
+  try{ var dirty = false; Object.keys(S.reqs || {}).concat(Object.keys(S.extraLog || {})).forEach(function(k){ if(purge(k)) dirty = true; }); if(dirty) save(); }catch(e){}
+
+  var pend = false;
+  // 원본 generate는 전월 시트를 먼저 받아온 뒤(비동기) 실제 편성(__generate)을 돈다 → 실제 편성 함수에 붙여야 정확
+  WV.around('__generate', '추가 휴무 유지·날짜 지정 휴무 고정(keepOffs)', function(next, args){
+    var mk = mkNow(), preset = args[1];
+    if(!mk) return next.apply(null, args);
+    if(!S.reqs) S.reqs = {}; if(!S.reqs[mk]) S.reqs[mk] = [];
+    if(!S.extraLog) S.extraLog = {}; if(!S.extraLog[mk]) S.extraLog[mk] = [];
+    purge(mk);
+    var has = {}; S.reqs[mk].forEach(function(r){ if(r.type === '휴무요청') has[r.emp + '|' + r.day] = 1; });
+    S.extraLog[mk].slice().forEach(function(x){
+      if(x.bulk || !(x.day >= 0) || !x.name) return;
+      var day = x.day + 1; if(has[x.name + '|' + day]) return; has[x.name + '|' + day] = 1;
+      S.reqs[mk].push({ emp: x.name, type: '휴무요청', day: day, store: '', _wvTmp: 1 });
+      S.extraLog[mk].push({ name: x.name, day: -1, bulk: true, _wvTmp: 1 });
+    });
+    // 편성 뒤에 붙은 후처리(휴무 맞춤·연속근무 정리·최적화)까지 같은 흐름에서 끝나므로, 그 다음 차례에 걷어낸다
+    if(!pend){ pend = true; setTimeout(function(){ pend = false; if(purge(mk)){ try{ save(); }catch(e){} } }, 0); }
+    return next(true, preset);
+  });
+
+  // 5개 안의 "요청 휴무 줄이기"가 날짜 지정 추가 휴무까지 줄이지 않도록
+  WV.around('wvTrimReqs', '날짜 지정 추가 휴무는 줄이지 않음(keepOffs)', function(next, a){
+    var reqs = a[0] || [], tmp = reqs.filter(function(r){ return r._wvTmp; });
+    if(!tmp.length) return next.apply(null, a);
+    return next(reqs.filter(function(r){ return !r._wvTmp; }), a[1], a[2], a[3]).concat(tmp);
+  });
+
+  // 비교창: 빠지는 요청 휴무 표시 + 고를 때 확인
+  WV.after('wvShowCompare', '빠지는 요청 휴무 표시(keepOffs)', function(_r, a){
+    var list = a[0], box = document.getElementById('wvCmp'); if(!box || !list || (list[0] && list[0].__wvAsync)) return;
+    var mk = mkNow(), reqs = ((S.reqs && S.reqs[mk]) || []).filter(function(r){ return r.type === '휴무요청'; });
+    var miss = list.map(function(o){ return reqs.filter(function(r){ var c = o.cells && o.cells[r.emp]; return c && c[r.day - 1] !== ''; }).map(function(r){ return r.emp + ' ' + r.day + '일'; }); });
+    box.querySelectorAll('tr[data-i]').forEach(function(tr){
+      var m = miss[+tr.getAttribute('data-i')]; if(!m || !m.length) return;
+      var td = tr.children[0]; if(!td) return;
+      td.insertAdjacentHTML('beforeend', '<div style="margin-top:3px;font-size:11.5px;font-weight:700;color:#c62828">요청 휴무 ' + m.length + '건 빠짐 · ' + WV.esc(m.slice(0, 4).join(', ') + (m.length > 4 ? ' 외' : '')) + '</div>');
+    });
+    box.addEventListener('click', function(ev){
+      var b = ev.target.closest && (ev.target.closest('[data-pick]') || ev.target.closest('tr[data-i]')); if(!b || ev.target.closest('[data-prev]')) return;
+      var i = +(b.getAttribute('data-pick') || b.getAttribute('data-i')), m = miss[i];
+      if(m && m.length && !confirm('이 안을 고르면 요청 휴무 ' + m.length + '건이 근무로 바뀝니다.\n' + m.join(', ') + '\n\n그래도 이 안으로 할까요?')){ ev.stopPropagation(); ev.preventDefault(); }
+    }, true);
+  });
 });
 
 </script>
