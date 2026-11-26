@@ -5740,7 +5740,7 @@ WV.module(90, 'ai6', function(){
    GitHub Pages는 페이지를 브라우저에 최대 10분 저장해 두므로, 배포 직후 열면 옛 화면이 뜰 수 있다.
    열 때·탭으로 돌아올 때·10분마다 서버의 빌드 번호와 비교 → 다르면 열자마자(아직 아무것도 안 만졌으면) 자동 새로고침, 작업 중이면 아래 알림 */
 (function(){
-  var B = 'T20261126-171443';/*WVBUILD*/
+  var B = 'T20261126-175250';/*WVBUILD*/
   window.WV_BUILD = B; if(B === 'DEV') return;
   var t0 = Date.now(), touched = false, shown = false;
   ['keydown', 'input', 'pointerdown'].forEach(function(ev){ document.addEventListener(ev, function(){ touched = true; }, { capture: true, once: true }); });
@@ -6176,6 +6176,176 @@ WV.module(150, 'ai12', function(){
   }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function(){ setTimeout(boot, 300); }); else setTimeout(boot, 300);
 })();
+});
+
+WV.module(175, 'nudges', function(){
+/* ===== 소소한 안내 (2026-11-26)
+   ① 카톡 대화를 붙여넣어 자동 기입이 나오면 [특이사항에 추가] 버튼이 옅은 노란색으로 반짝여 다음 할 일을 알려줌(누르면 멈춤)
+   ② 추가가 끝나면 버튼이 잠깐 「✓ 추가됨」으로 바뀌고, 특이사항 목록 테두리가 노랗게 한 번 반짝 */
+  var st = document.createElement('style');
+  st.textContent = '@keyframes wvNudge{0%,100%{background-color:var(--brand,#14151F);box-shadow:0 0 0 0 rgba(242,194,48,0)}50%{background-color:#F2C230;color:#14151F;box-shadow:0 0 0 6px rgba(242,194,48,.28)}}' +
+    '.wvNudge{animation:wvNudge 1.4s cubic-bezier(.2,.8,.2,1) infinite}' +
+    '.wvDone{background:#119C72!important;color:#fff!important;transition:background .2s}' +
+    '@keyframes wvFlash{0%{box-shadow:0 0 0 0 rgba(242,194,48,.0)}30%{box-shadow:0 0 0 4px rgba(242,194,48,.55)}100%{box-shadow:0 0 0 0 rgba(242,194,48,0)}}.wvFlash{animation:wvFlash 1.2s ease-out 2;border-radius:12px}' +
+    '@media (prefers-reduced-motion:reduce){.wvNudge{animation:none;background:#F2C230!important;color:#14151F!important}.wvFlash{animation:none}}';
+  (document.head || document.documentElement).appendChild(st);
+  var tm = null;
+  function stop(b){ b.classList.remove('wvNudge'); clearTimeout(tm); }
+  function nudge(){
+    var b = document.getElementById('wvTApply'), out = document.getElementById('wvTOut'), res = document.getElementById('wvTRes');
+    if(!b || !out || !res || res.style.display === 'none' || !out.value.trim()) return;
+    b.classList.remove('wvDone'); b.classList.add('wvNudge'); clearTimeout(tm); tm = setTimeout(function(){ stop(b); }, 12000);
+  }
+  function hook(){
+    var b = document.getElementById('wvTApply'), res = document.getElementById('wvTRes'), inp = document.getElementById('wvTIn');
+    if(!b || !res || b.__wvN) return !!b; b.__wvN = 1;
+    new MutationObserver(function(){ setTimeout(nudge, 50); }).observe(res, { attributes: true, attributeFilter: ['style'] });
+    if(inp) ['paste', 'input'].forEach(function(ev){ inp.addEventListener(ev, function(){ setTimeout(nudge, 300); }); });
+    b.addEventListener('click', function(){
+      stop(b); var txt = b.textContent;
+      setTimeout(function(){
+        b.classList.add('wvDone'); b.textContent = '✓ 추가됨';
+        var L = document.getElementById('reqList'); if(L){ L.classList.remove('wvFlash'); void L.offsetWidth; L.classList.add('wvFlash'); setTimeout(function(){ L.classList.remove('wvFlash'); }, 2600); }
+        setTimeout(function(){ b.classList.remove('wvDone'); b.textContent = txt; }, 1800);
+      }, 0);
+    });
+    return true;
+  }
+  var n = 0; (function t(){ if(!hook() && n++ < 40) setTimeout(t, 250); })();
+});
+
+WV.module(180, 'reqTidy', function(){
+/* ===== ② 특이사항 탭 정리 (2026-11-26, 시안: 00-수집함/특이사항탭-정리-시안.html)
+   · 카톡 칸 + AI 요청 칸 → 「요청 입력」 한 칸(028 늘어나는 입력창). 붙여넣은 글을 카톡 정리기에 먼저 넣어 보고, 날짜가 안 나오면 AI 조건으로 보냄
+   · 「적용 중인 조건」 옆 패널 숨김(휴무는 아래 표와 중복). 휴무 아닌 AI 조건만 표 위 칩으로
+   · 왼쪽 기능 메뉴 → 표 위 가로 알약 탭(039). 특이사항 표에 [목록 | 달력] 전환(151 격자 색 농도 = 요청 몰림)
+   기존 기능·함수는 그대로 쓰고 자리만 옮긴다 */
+  var esc = WV.esc;
+  var st = document.createElement('style');
+  st.textContent =
+    '#wvTKakao,#wvTAI{display:none!important}' +
+    '#wvRqCard .ch{display:flex;align-items:center;gap:8px;margin-bottom:10px}#wvRqCard h3{margin:0}' +
+    '#wvRqCard .inbox{border:1.5px solid var(--ln2);border-radius:14px;padding:4px 6px 6px 12px;display:flex;gap:8px;align-items:flex-end;background:#fff;transition:border-color .2s,box-shadow .2s}' +
+    '#wvRqCard .inbox:focus-within{border-color:var(--ink);box-shadow:0 0 0 4px rgba(22,21,27,.06)}' +
+    '#wvRqCard textarea#wvRqT{flex:1;border:0!important;outline:0;resize:none;font:inherit;line-height:1.6;padding:8px 0!important;min-height:40px;height:40px;max-height:220px;transition:height .18s cubic-bezier(.2,.8,.2,1);background:transparent;box-shadow:none!important}' +
+    '#wvRqCard .ex{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;align-items:center;font-size:12px;color:var(--ink3)}' +
+    '#wvRqCard .ex button{border:1px solid var(--ln);background:var(--s2);border-radius:99px;padding:4px 11px;font:inherit;font-size:12px;font-weight:700;color:var(--ink2);cursor:pointer}' +
+    '#wvRqCard #wvTRes{margin-top:10px!important;background:var(--s2);border-radius:12px;padding:10px 12px}' +
+    '#wvRqCard #wvTLog{margin-top:10px;max-height:260px;overflow:auto}#wvRqCard #wvTLog.only{display:none}' +
+    '#wvRqCard #wvTStat:empty{display:none}' +
+    /* 기능 메뉴 → 가로 탭 */
+    '#wvSide{grid-template-columns:1fr!important;gap:10px!important}' +
+    '#wvSideNav{position:static!important;display:flex!important;flex-wrap:wrap;gap:4px;padding:4px!important;background:var(--s2)!important;border:0!important;border-radius:999px!important;box-shadow:none!important;width:max-content;max-width:100%}' +
+    '#wvSideNav .cap,#wvSideHl{display:none!important}' +
+    '#wvSideNav .wvSN{width:auto!important;flex:none;padding:7px 14px!important;border-radius:999px!important;font-size:12.5px!important;gap:6px!important;transition:background .3s cubic-bezier(.2,.8,.2,1),color .2s}' +
+    '#wvSideNav .wvSN .ic{display:none!important}#wvSideNav .wvSN.on{background:var(--brand)!important;color:#fff}' +
+    /* AI 조건 칩 */
+    '#wvRqRules{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--ink3);margin:0 0 10px}#wvRqRules:empty{display:none}' +
+    '#wvRqRules .rule{display:inline-flex;align-items:center;gap:6px;background:#F1EDFF;color:#4b3bc4;border-radius:99px;padding:3px 5px 3px 11px;font-size:12px;font-weight:700}' +
+    '#wvRqRules .rule button{border:0;width:17px;height:17px;border-radius:50%;background:rgba(75,59,196,.12);color:#4b3bc4;cursor:pointer;font-size:10px;line-height:17px;padding:0}' +
+    /* 목록/달력 */
+    '.wvVw{margin-left:auto;display:inline-flex;gap:2px;padding:3px;background:var(--s2);border-radius:999px;vertical-align:middle}.wvVw button{border:0;background:none;padding:5px 12px;border-radius:999px;font:inherit;font-size:12px;font-weight:800;color:var(--ink2);cursor:pointer}.wvVw button.on{background:var(--brand);color:#fff}' +
+    '.wvRqH{display:flex!important;align-items:center;gap:8px}' +
+    '#wvRqCal{display:none;margin-top:4px}#wvRqCal .g{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}' +
+    '#wvRqCal .dw{font-size:11.5px;font-weight:800;color:var(--ink3);text-align:center}#wvRqCal .dw.su{color:#D93A55}#wvRqCal .dw.sa{color:#3b6fd8}' +
+    '#wvRqCal .d{min-height:62px;border-radius:10px;border:1px solid var(--ln);padding:5px 6px;background:#fff}#wvRqCal .d.e{border:0;background:none}' +
+    '#wvRqCal .l1{background:#F3F0FF}#wvRqCal .l2{background:#E4DDFF}#wvRqCal .l3{background:#FFE9C7;border-color:rgba(214,115,30,.45)}#wvRqCal .l4{background:#FFD9DF;border-color:rgba(217,58,85,.6)}' +
+    '#wvRqCal .n{display:flex;justify-content:space-between;font-size:12px;font-weight:800}#wvRqCal .n.su{color:#D93A55}#wvRqCal .n.sa{color:#3b6fd8}' +
+    '#wvRqCal .n span{font-size:10.5px;border-radius:99px;padding:0 6px;background:rgba(22,21,27,.07);color:var(--ink2);line-height:17px}#wvRqCal .l3 .n span{background:#D6731E;color:#fff}#wvRqCal .l4 .n span{background:#D93A55;color:#fff}' +
+    '#wvRqCal .w{font-size:10.5px;font-weight:700;color:var(--ink2);line-height:1.45;margin-top:3px}' +
+    '#wvRqCal .lg{display:flex;gap:10px;margin-top:8px;font-size:11.5px;color:var(--ink3);flex-wrap:wrap}#wvRqCal .lg i{display:inline-block;width:12px;height:12px;border-radius:3px;border:1px solid var(--ln);vertical-align:-2px;margin-right:3px}' +
+    '#wvRqCal .wr{margin-top:8px;font-size:12.5px;color:#a8243c;background:rgba(217,58,85,.06);border:1px solid rgba(217,58,85,.25);border-radius:10px;padding:8px 10px}' +
+    '@media (max-width:760px){#wvRqCal .w{display:none}#wvRqCal .d{min-height:44px}}';
+  (document.head || document.documentElement).appendChild(st);
+
+  var view = 'list';
+  function mkNow(){ return (typeof monthKey === 'function' && monthKey()) || ''; }
+  function grow(t){ t.style.height = '40px'; t.style.height = Math.min(220, t.scrollHeight) + 'px'; }
+
+  function submit(){
+    var ta = document.getElementById('wvRqT'), t = ta.value.trim(); if(!t) return;
+    var tin = document.getElementById('wvTIn'), res = document.getElementById('wvTRes'), out = document.getElementById('wvTOut');
+    // 1) 카톡 정리기에 먼저
+    tin.value = t; tin.dispatchEvent(new Event('input', { bubbles: true }));
+    setTimeout(function(){
+      var got = res && res.style.display !== 'none' && out && out.value.trim();
+      if(got){ ta.value = ''; grow(ta); return; }
+      // 2) 날짜가 안 나오면 AI 조건으로
+      tin.value = ''; tin.dispatchEvent(new Event('input', { bubbles: true }));
+      if(res) res.style.display = 'none';
+      var ask = document.getElementById('wvTAsk'), send = document.getElementById('wvTSend');
+      if(ask && send){ ask.value = t; send.click(); ta.value = ''; grow(ta); logVis(); }
+    }, 450);
+  }
+  function logVis(){ var L = document.getElementById('wvTLog'); if(L) L.classList.toggle('only', L.children.length <= 1); }
+
+  function chips(){
+    var box = document.getElementById('wvRqRules'); if(!box) return;
+    var rs = (Array.isArray(S.aiRules) ? S.aiRules : []).filter(function(r){ return !(r.type === 'offAdj' && r.mk && r.mk !== mkNow()); });
+    box.innerHTML = rs.length ? 'AI 조건 ' + rs.map(function(r){ return '<span class="rule">' + esc(r.label || r.type) + '<button type="button" title="해제" data-i="' + S.aiRules.indexOf(r) + '">✕</button></span>'; }).join('') : '';
+    box.querySelectorAll('button').forEach(function(b){ b.onclick = function(){ S.aiRules.splice(+b.dataset.i, 1); save(); try{ window.wvRenderRules && window.wvRenderRules(); }catch(e){} chips(); if(window.wvToast) wvToast('AI 조건을 해제했습니다'); }; });
+  }
+
+  function cal(){
+    var box = document.getElementById('wvRqCal'), L = document.getElementById('reqList'); if(!box || !L) return;
+    box.style.display = view === 'cal' ? 'block' : 'none'; L.style.display = view === 'cal' ? 'none' : '';
+    if(view !== 'cal') return;
+    var mk = mkNow(); if(!mk){ box.innerHTML = '<p class="hint">상단에서 대상 월을 먼저 고르세요.</p>'; return; }
+    var y = +mk.split('-')[0], m = +mk.split('-')[1], nD = new Date(y, m, 0).getDate(), by = {}, d;
+    for(d = 1; d <= nD; d++) by[d] = [];
+    ((S.reqs && S.reqs[mk]) || []).forEach(function(r){ if(['휴무요청', '휴가', '병가', '훈련', '출장'].indexOf(r.type) >= 0 && by[r.day] && by[r.day].indexOf(r.emp) < 0) by[r.day].push(r.emp); });
+    var act = S.emps.filter(function(e){ return e.role !== '교육'; }).length;
+    function slot(dd){ var need = 0; try{ S.stores.forEach(function(s){ need += WV.calc.need({ mk: mk }, s.n, dd - 1); }); }catch(e){ need = S.stores.length; } return Math.max(0, act - need); }
+    var h = '<div class="g">';
+    ['월', '화', '수', '목', '금', '토', '일'].forEach(function(w, i){ h += '<div class="dw' + (i === 6 ? ' su' : i === 5 ? ' sa' : '') + '">' + w + '</div>'; });
+    var lead = (new Date(y, m - 1, 1).getDay() + 6) % 7; for(var i = 0; i < lead; i++) h += '<div class="d e"></div>';
+    var bad = [];
+    for(d = 1; d <= nD; d++){
+      var a = by[d], n = a.length, sl = slot(d), wd = new Date(y, m - 1, d).getDay();
+      var lv = n === 0 ? 0 : n >= sl - 1 ? 4 : n >= sl - 3 ? 3 : n >= 3 ? 2 : 1;
+      if(lv >= 3) bad.push(d + '일 ' + n + '명');
+      h += '<div class="d l' + lv + '" title="' + esc(a.join(', ')) + ' · 하루 쉴 수 있는 자리 ' + sl + '명"><div class="n' + (wd === 0 ? ' su' : wd === 6 ? ' sa' : '') + '">' + d + (n ? '<span>' + n + '</span>' : '') + '</div><div class="w">' + esc(a.slice(0, 3).join(' · ')) + (n > 3 ? ' 외 ' + (n - 3) : '') + '</div></div>';
+    }
+    h += '</div><div class="lg"><span><i style="background:#F3F0FF"></i>1~2명</span><span><i style="background:#E4DDFF"></i>3명</span><span><i style="background:#FFE9C7"></i>주의</span><span><i style="background:#FFD9DF"></i>공백 위험</span></div>';
+    if(bad.length) h += '<div class="wr">⚠️ ' + bad.join(', ') + ' — 휴무 요청이 몰렸어요. 이날은 요청 안 한 직원의 정규 휴무가 들어갈 자리가 거의 없어 공백이 생길 수 있어요.</div>';
+    box.innerHTML = h;
+  }
+
+  function mount(){
+    var p1 = document.getElementById('panel1'), kak = document.getElementById('wvTKakao'), ai = document.getElementById('wvTAI'), res = document.getElementById('wvTRes');
+    var reqCard = document.getElementById('reqList') && document.getElementById('reqList').closest('.card');
+    if(!p1 || !kak || !ai || !res || !reqCard || !document.getElementById('wvTLog')) return false;
+    if(document.getElementById('wvRqCard')) return true;
+    var c = document.createElement('div'); c.className = 'card'; c.id = 'wvRqCard';
+    c.innerHTML = '<div class="ch"><h3>요청 입력</h3><button type="button" class="wvHelp" title="카톡 대화를 붙여넣으면 이름·날짜를 뽑아 휴무 요청으로, 문장(예: 연속근무 최대 4일)을 쓰면 AI 생성 조건으로 바꿉니다. 둘 다 버튼을 눌러야 들어갑니다.">?</button></div>' +
+      '<div class="inbox"><textarea id="wvRqT" rows="1" placeholder="카톡 대화를 붙여넣거나, 요청을 문장으로 적어 주세요"></textarea><button class="btn" id="wvRqGo" type="button">정리</button></div>' +
+      '<div class="ex">예시 <button type="button" data-t="6일 연속 근무 발생하지 않게 해줘">6일 연속 근무 없게</button><button type="button" data-t="연속근무 최대 4일까지">연속근무 최대 4일</button><button type="button" data-t="정유진 24·25일 쉬게">정유진 24·25일 쉬게</button></div>';
+    p1.insertBefore(c, p1.firstChild);
+    var apb = document.getElementById('wvTApply'); if(apb) apb.textContent = '특이사항에 추가';
+    c.appendChild(res); c.appendChild(document.getElementById('wvTLog'));
+    var stt = document.getElementById('wvTStat'); if(stt) c.appendChild(stt);
+    logVis(); new MutationObserver(logVis).observe(document.getElementById('wvTLog'), { childList: true });
+    var ta = document.getElementById('wvRqT');
+    ta.addEventListener('input', function(){ grow(ta); });
+    ta.addEventListener('paste', function(){ setTimeout(function(){ grow(ta); if(/\n/.test(ta.value) || /\[(오전|오후)|\d{4}[.\s년]/.test(ta.value)) submit(); }, 30); });
+    ta.addEventListener('keydown', function(e){ if(e.key === 'Enter' && !e.shiftKey && !/\n/.test(ta.value)){ e.preventDefault(); submit(); } });
+    document.getElementById('wvRqGo').onclick = submit;
+    c.querySelectorAll('.ex button').forEach(function(b){ b.onclick = function(){ ta.value = b.dataset.t; grow(ta); ta.focus(); }; });
+    // 특이사항 카드: 제목 옆 [목록|달력], 위에 AI 조건 칩
+    var h3 = reqCard.querySelector('h3');
+    if(h3){ h3.classList.add('wvRqH'); var vw = document.createElement('span'); vw.className = 'wvVw'; vw.innerHTML = '<button type="button" class="on" data-v="list">목록</button><button type="button" data-v="cal">달력</button>'; h3.appendChild(vw);
+    }
+    // 제목줄·카드는 다른 기능이 다시 만들거나 옮길 수 있어 문서 전체에 위임으로 건다
+    document.addEventListener('click', function(e){ var b = e.target.closest && e.target.closest('.wvVw button'); if(!b) return; e.stopPropagation(); e.preventDefault(); view = b.dataset.v;
+      document.querySelectorAll('.wvVw button').forEach(function(x){ x.classList.toggle('on', x.dataset.v === view); }); cal(); }, true);
+    var rr = document.createElement('div'); rr.id = 'wvRqRules'; var rowb = reqCard.querySelector('.rowbtns'); reqCard.insertBefore(rr, rowb || reqCard.children[1]);
+    var cb = document.createElement('div'); cb.id = 'wvRqCal'; document.getElementById('reqList').after(cb);
+    chips(); cal();
+    return true;
+  }
+  WV.after('renderReqs', '요청 달력 갱신(reqTidy)', function(){ cal(); });
+  WV.after('save', 'AI 조건 칩 갱신(reqTidy)', function(){ clearTimeout(window.__wvRqT); window.__wvRqT = setTimeout(function(){ chips(); cal(); }, 80); });
+  var n = 0; (function t(){ if(!mount() && n++ < 60) setTimeout(t, 250); })();
 });
 
 </script>
