@@ -4818,15 +4818,17 @@ th,td{border-color:var(--ln)!important}
     var ABS = ['휴가','병가','훈련','출장','전휴무','제외'], isW = function(v){ return !!v && ABS.indexOf(v) < 0; }, base = function(v){ return String(v).replace(/\((OP|CL|PT)\)$/, ''); };
     var pd = new Date(sched.year, sched.month - 2, 1), pk = pd.getFullYear() + '-' + String(pd.getMonth() + 1).padStart(2, '0');
     var gap = 0, mis = 0, mx = 0, who = '';
+    var bonus = {}; ((S.extraLog && S.extraLog[mk]) || []).forEach(function(x){ if(x._wvTmp) return; if(x.bulk || x.day >= 0) bonus[x.name] = (bonus[x.name] || 0) + 1; });   // 추가 휴무(일괄·날짜 지정)도 목표에 포함 (2026-11-26)
     S.emps.forEach(function(e){ var a = c[e.name]; if(!a) return; var p = (S.lastSched && S.lastSched[pk] && S.lastSched[pk][e.name]) || [], r = 0, off = 0;
       for(var k = p.length - 1; k >= 0 && isW(p[k]); k--) r++;
       a.forEach(function(v){ if(v === '') off++; if(isW(v)){ r++; if(r > mx){ mx = r; who = e.name; } } else r = 0; });
-      if(typeof offTarget === 'function' && e.role !== '교육' && off !== offTarget(e)) mis++; });
+      if(typeof offTarget === 'function' && e.role !== '교육' && off !== offTarget(e) + (bonus[e.name] || 0)) mis++; });
     for(var d = 0; d < nD; d++) S.stores.forEach(function(st){ var need = needAtN(st.n, d, mk), n = 0; S.emps.forEach(function(e){ var v = (c[e.name] || [])[d]; if(isW(v) && v !== '순환' && base(v) === st.n) n++; }); if(n < need) gap += need - n; });
     if(typeof __wvD !== 'undefined') __wvD = -1;
     var rq = ((S.reqs && S.reqs[mk]) || []).filter(function(r){ return r.type === '휴무요청'; }), ok = rq.filter(function(r){ return (c[r.emp] || [])[r.day - 1] === ''; }).length;
     return { gap: gap, mis: mis, mx: mx, who: who, req: ok + '/' + rq.length };
   }
+  window.wvStats = stats;
   var running = false;
   WV.around('generate', '생성 진행 표시·생성 완료 신호(skin)', function(_g, args){
       var self = this, s0 = (typeof sched !== 'undefined') ? sched : null;
@@ -5515,6 +5517,7 @@ WV.module(70, 'skin4', function(){
       document.getElementById('wvAdv').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }; });
   }
+  window.wvShowWarns = showWarns;
   WV.around('generate', '설정 경고 모으기(skin4)', function(_g, args){
       collected = [];
       var s0 = (typeof sched !== 'undefined') ? sched : null, r = _g.apply(null, args), t0 = Date.now();
@@ -5740,7 +5743,7 @@ WV.module(90, 'ai6', function(){
    GitHub Pages는 페이지를 브라우저에 최대 10분 저장해 두므로, 배포 직후 열면 옛 화면이 뜰 수 있다.
    열 때·탭으로 돌아올 때·10분마다 서버의 빌드 번호와 비교 → 다르면 열자마자(아직 아무것도 안 만졌으면) 자동 새로고침, 작업 중이면 아래 알림 */
 (function(){
-  var B = 'T20261126-175740';/*WVBUILD*/
+  var B = 'T20261126-182647';/*WVBUILD*/
   window.WV_BUILD = B; if(B === 'DEV') return;
   var t0 = Date.now(), touched = false, shown = false;
   ['keydown', 'input', 'pointerdown'].forEach(function(ev){ document.addEventListener(ev, function(){ touched = true; }, { capture: true, once: true }); });
@@ -6347,6 +6350,41 @@ WV.module(180, 'reqTidy', function(){
   WV.after('renderReqs', '요청 달력 갱신(reqTidy)', function(){ cal(); });
   WV.after('save', 'AI 조건 칩 갱신(reqTidy)', function(){ clearTimeout(window.__wvRqT); window.__wvRqT = setTimeout(function(){ chips(); cal(); }, 80); });
   var n = 0; (function t(){ if(!mount() && n++ < 60) setTimeout(t, 250); })();
+});
+
+WV.module(185, 'kpiLive', function(){
+/* ===== 생성 결과 숫자·경고를 실시간으로 (2026-11-26)
+   원인: 결과 카드(공백·휴무≠지정·최대 연속·요청 반영)와 「자동으로 못 푼 항목」은 생성 직후 한 번만 계산됨
+        → 그 뒤 공백 메우기·중복→연수·과거 패턴·칸 수정·AI 적용으로 표가 바뀌어도 옛 숫자가 남음
+   조치: 표를 다시 그릴 때마다 다시 계산. 생성 직후(자동 보정 전) 값을 기준으로 「3 → 1」처럼 나아진 만큼 표시 */
+  var base0 = null, tm = null;
+  var st = document.createElement('style');
+  st.textContent = '.wvKd{display:block;margin-top:2px;font-size:11.5px;font-weight:700;color:#8E8A97}.wvKd.up{color:#119C72}.wvKd.dn{color:#D93A55}';
+  (document.head || document.documentElement).appendChild(st);
+  function num(v){ return typeof v === 'string' ? +v.split('/')[0] : +v; }
+  function put(id, txt, good, b0, now, unit, lowerBetter){
+    var el = document.getElementById(id); if(!el) return;
+    el.textContent = txt; el.style.color = good ? '#119C72' : '#D93A55';
+    var box = el.parentNode, d = box.querySelector('.wvKd'); if(!d){ d = document.createElement('span'); d.className = 'wvKd'; box.appendChild(d); }
+    if(b0 == null || b0 === now){ d.textContent = ''; d.className = 'wvKd'; return; }
+    var better = lowerBetter ? now < b0 : now > b0;
+    d.className = 'wvKd ' + (better ? 'up' : 'dn');
+    d.textContent = '생성 직후 ' + b0 + unit + (better ? ' → 나아짐' : ' → 나빠짐');
+  }
+  function refresh(){
+    if(!window.wvStats || !document.getElementById('wvK1')) return;
+    var s = window.wvStats(); if(!s) return;
+    var b = base0 && base0.key === (sched.year + '-' + sched.month) ? base0 : null;
+    put('wvK1', s.gap + '건', s.gap === 0, b && b.gap, s.gap, '건', true);
+    put('wvK2', s.mis + '명', s.mis === 0, b && b.mis, s.mis, '명', true);
+    put('wvK3', s.mx + '일', s.mx <= 5, b && b.mx, s.mx, '일', true);
+    var r = s.req.split('/'); put('wvK4', s.req, r[0] === r[1], b && num(b.req), num(s.req), '건', false);
+    var k3 = document.getElementById('wvK3'); if(k3) k3.title = s.who;
+    if(window.wvShowWarns && document.getElementById('wvWarnBox')) try{ window.wvShowWarns(); }catch(e){}
+  }
+  WV.on('generated', function(d){ try{ if(window.wvStats && typeof sched !== 'undefined' && sched){ var s = window.wvStats(); base0 = s ? { key: sched.year + '-' + sched.month, gap: s.gap, mis: s.mis, mx: s.mx, req: s.req } : null; } }catch(e){} });
+  WV.after('renderSched', '결과 숫자 실시간(kpiLive)', function(){ clearTimeout(tm); tm = setTimeout(refresh, 150); });
+  WV.after('save', '결과 숫자 실시간(kpiLive)', function(){ clearTimeout(tm); tm = setTimeout(refresh, 150); });
 });
 
 </script>
